@@ -1,0 +1,92 @@
+[
+  {
+    "id": "seed-1",
+    "sessionToken": "seed-token-1",
+    "name": "מאיה (Maya)",
+    "avatar": "🌟",
+    "score": 245,
+    "streak": 8,
+    "solvedCards": 18,
+    "timestamp": 1790402123594
+  },
+  {
+    "id": "seed-2",
+    "sessionToken": "seed-token-2",
+    "name": "נועם (Noam)",
+    "avatar": "⚡",
+    "score": 210,
+    "streak": 6,
+    "solvedCards": 15,
+    "timestamp": 1790391323594
+  },
+  {
+    "id": "seed-3",
+    "sessionToken": "seed-token-3",
+    "name": "שירה (Shira)",
+    "avatar": "🦄",
+    "score": 185,
+    "streak": 5,
+    "solvedCards": 14,
+    "timestamp": 1790358923594
+  },
+  {
+    "id": "seed-4",
+    "sessionToken": "seed-token-4",
+    "name": "דניאל (Daniel)",
+    "avatar": "👑",
+    "score": 160,
+    "streak": 5,
+    "solvedCards": 12,
+    "timestamp": 1790315723594
+  },
+  {
+    "id": "seed-5",
+    "sessionToken": "seed-token-5",
+    "name": "תומר (Tomer)",
+    "avatar": "🦁",
+    "score": 145,
+    "streak": 4,
+    "solvedCards": 11,
+    "timestamp": 1790150123594
+  },
+  {
+    "id": "seed-6",
+    "sessionToken": "seed-token-6",
+    "name": "רוני (Roni)",
+    "avatar": "🍕",
+    "score": 130,
+    "streak": 4,
+    "solvedCards": 10,
+    "timestamp": 1790063723594
+  },
+  {
+    "id": "seed-7",
+    "sessionToken": "seed-token-7",
+    "name": "ליאור (Lior)",
+    "avatar": "🦊",
+    "score": 115,
+    "streak": 3,
+    "solvedCards": 9,
+    "timestamp": 1789718123594
+  },
+  {
+    "id": "seed-8",
+    "sessionToken": "seed-token-8",
+    "name": "איתי (Itai)",
+    "avatar": "🎸",
+    "score": 100,
+    "streak": 3,
+    "solvedCards": 8,
+    "timestamp": 1789545323594
+  },
+  {
+    "id": "seed-9",
+    "sessionToken": "seed-token-9",
+    "name": "גל (Gal)",
+    "avatar": "🚀",
+    "score": 90,
+    "streak": 2,
+    "solvedCards": 7,
+    "timestamp": 1789372523594
+  }
+]
