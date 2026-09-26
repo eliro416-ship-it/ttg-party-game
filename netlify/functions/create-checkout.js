@@ -1,6 +1,5 @@
-// netlify/functions/create-checkout.cjs
+// netlify/functions/create-checkout.js
 
-```javascript
 import Stripe from 'stripe';
 
 export const handler = async (event) => {
