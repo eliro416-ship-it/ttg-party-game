@@ -28,7 +28,7 @@ export interface Player {
   isOnline?: boolean;
 }
 
-export type GameScreen = 'welcome' | 'host' | 'player-join' | 'player-lobby' | 'game' | 'game-over';
+export type GameScreen = 'welcome' | 'host' | 'player-join' | 'join' | 'player-lobby' | 'game' | 'game-over';
 
 export interface RoomSettings {
   turnDuration: number; // in seconds, e.g. 15

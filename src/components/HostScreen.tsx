@@ -17,7 +17,8 @@ import {
   Layers,
   Sparkles,
   Share2,
-  Globe
+  Globe,
+  Loader2
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { WhatsAppShareButton } from './WhatsAppShareButton';
@@ -25,6 +26,7 @@ import { WhatsAppShareButton } from './WhatsAppShareButton';
 interface HostScreenProps {
   pin: string;
   hasPurchasedLicense: boolean;
+  isGeneratingPin?: boolean;
   onPurchaseLicense: () => void;
   onStartGame: () => void;
   onBack: () => void;
@@ -41,6 +43,7 @@ interface HostScreenProps {
 export const HostScreen: React.FC<HostScreenProps> = ({
   pin,
   hasPurchasedLicense,
+  isGeneratingPin = false,
   onPurchaseLicense,
   onStartGame,
   onBack,
@@ -57,6 +60,15 @@ export const HostScreen: React.FC<HostScreenProps> = ({
   const isEn = language === 'en';
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
+
+  const isLoading = isGeneratingPin || localLoading;
+
+  React.useEffect(() => {
+    if (hasPurchasedLicense) {
+      setLocalLoading(false);
+    }
+  }, [hasPurchasedLicense]);
 
   const handleCopyPin = () => {
     navigator.clipboard.writeText(pin);
@@ -178,15 +190,34 @@ export const HostScreen: React.FC<HostScreenProps> = ({
           </div>
 
           <button
+            type="button"
             onClick={() => {
+              if (isLoading) return;
+              setLocalLoading(true);
               sounds.soundSuccess();
-              onPurchaseLicense();
+              try {
+                onPurchaseLicense();
+              } catch (err) {
+                console.error('Error initiating room creation:', err);
+              }
             }}
-            className="btn-3d btn-3d-emerald w-full py-4 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer"
+            disabled={isLoading}
+            className={`btn-3d btn-3d-emerald w-full py-4 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer transition-all ${
+              isLoading ? 'opacity-85 cursor-wait' : ''
+            }`}
           >
             <span className="shimmer-sweep" />
-            <Sparkles className="w-5 h-5 text-yellow-300 drop-shadow" />
-            <span>{t.btnGetCode}</span>
+            {isLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 text-white animate-spin drop-shadow" />
+                <span className="tracking-wide">{isEn ? 'Creating Live Room...' : 'מקים חדר חי...'}</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 text-yellow-300 drop-shadow" />
+                <span>{t.btnGetCode}</span>
+              </>
+            )}
           </button>
         </div>
       ) : (

@@ -16,32 +16,33 @@ import { getGameSocket, getSessionToken, TurnStartedPayload } from './utils/sock
 import { getPinFromUrl, getLangFromUrl } from './utils/url';
 
 export default function App() {
-  // Check URL parameters immediately to bypass welcome screen if joining via PIN link
-  const pinFromUrl = getPinFromUrl();
+  // Read URL parameters immediately with instant fallback
+  const initialParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const initialPinParam = initialParams?.get('pin') || getPinFromUrl();
+  const initialLangParam = initialParams?.get('lang') || getLangFromUrl();
 
   const [screen, setScreen] = useState<GameScreen>(() => {
-    const initialPin = getPinFromUrl();
-    if (initialPin) {
+    if (initialPinParam && initialPinParam.trim()) {
       return 'player-join';
     }
     return 'welcome';
   });
 
   const [pin, setPin] = useState<string>(() => {
-    const initialPin = getPinFromUrl();
-    if (initialPin) {
-      return initialPin;
+    if (initialPinParam && initialPinParam.trim()) {
+      return initialPinParam.trim();
     }
     return '7742';
   });
 
   const [hasPurchasedLicense, setHasPurchasedLicense] = useState<boolean>(false);
+  const [isGeneratingPin, setIsGeneratingPin] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(sounds.isMuted);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isLiveServer, setIsLiveServer] = useState<boolean>(false);
   const [serverTurnData, setServerTurnData] = useState<TurnStartedPayload | null>(null);
 
-  // Intro video modal state (fullscreen intro video with skip and transition to game)
+  // Intro video modal state (disabled by default so it never blocks direct join)
   const CLOUDINARY_DEFAULT_INTRO = 'https://player.cloudinary.com/embed/?cloud_name=afjcyngg&public_id=gemini_generated_video_6c8f0e40';
 
   const [introVideoUrl, setIntroVideoUrl] = useState<string>(() => {
@@ -54,13 +55,29 @@ export default function App() {
     return CLOUDINARY_DEFAULT_INTRO;
   });
 
-  const [isIntroVideoOpen, setIsIntroVideoOpen] = useState<boolean>(() => {
-    const initialPin = getPinFromUrl();
-    if (initialPin) {
-      return false; // Skip intro video completely when clicking a join room link
+  const [isIntroVideoOpen, setIsIntroVideoOpen] = useState<boolean>(false);
+
+  // Priority 1: Instant URL parameter detection on initial mount (Direct Join by PIN)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const pinParam = params.get('pin') || getPinFromUrl();
+    const langParam = params.get('lang') || getLangFromUrl();
+
+    if (pinParam) {
+      const cleanPin = pinParam.trim();
+      setPin(cleanPin); // שמירת ה-PIN
+      if (langParam === 'he' || langParam === 'en') {
+        setLanguage(langParam);
+        localStorage.setItem('ttg_lang', langParam);
+        document.documentElement.lang = langParam;
+        document.documentElement.dir = langParam === 'he' ? 'rtl' : 'ltr';
+      }
+      setScreen('player-join'); // חובה: העברה ישירה למסך "כניסת משתתף/ת" במקום 'home'!
+      setIsIntroVideoOpen(false);
     }
-    return true;
-  });
+  }, []);
 
   const handleUpdateVideoUrl = (newUrl: string) => {
     setIntroVideoUrl(newUrl);
@@ -243,61 +260,96 @@ export default function App() {
     };
   }, []);
 
-  // Auto-detect invitation link with ?pin=XXXX and ?lang=he/en
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const pinFromUrl = searchParams.get('pin') || getPinFromUrl();
-    const langFromUrl = searchParams.get('lang') || getLangFromUrl();
-
-    if (langFromUrl === 'he' || langFromUrl === 'en') {
-      setLanguage(langFromUrl);
-      localStorage.setItem('ttg_lang', langFromUrl);
-      document.documentElement.lang = langFromUrl;
-      document.documentElement.dir = langFromUrl === 'he' ? 'rtl' : 'ltr';
-    }
-
-    if (pinFromUrl) {
-      const cleanPin = pinFromUrl.trim();
-      setPin(cleanPin);
-      setScreen('player-join');
-      setIsIntroVideoOpen(false);
-    }
-  }, []);
-
   const handleToggleMute = () => {
     const updated = sounds.toggleMute();
     setIsMuted(updated);
   };
 
-  // Host generates PIN via Server
-  const handleGeneratePin = () => {
-    const socket = getGameSocket();
-    const token = getSessionToken();
+  // Host generates PIN via Server with 1.5s guaranteed fallback & complete error resilience
+  const handleGeneratePin = useCallback(() => {
+    setIsGeneratingPin(true);
+    let handled = false;
 
-    socket.emit(
-      'CREATE_ROOM',
-      {
-        hostName: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
-        avatar: '👑',
-        sessionToken: token,
-        turnDuration: settings.turnDuration,
-        language,
-      },
-      (res: { success: boolean; pin: string; player: Player; room: { players: Player[] } }) => {
-        if (res?.success) {
-          setPin(res.pin);
-          setMyPlayerId(res.player.id);
-          setPlayers(res.room.players);
-          setHasPurchasedLicense(true);
-        } else {
-          // Fallback
-          const newPin = Math.floor(1000 + Math.random() * 9000).toString();
-          setPin(newPin);
-          setHasPurchasedLicense(true);
+    // Guaranteed fallback handler: generates local mock room and moves to management screen
+    const executeFallback = () => {
+      if (handled) return;
+      handled = true;
+      const fallbackPin = Math.floor(1000 + Math.random() * 9000).toString();
+      setPin(fallbackPin);
+      try {
+        localStorage.setItem('ttg_room_pin', fallbackPin);
+      } catch (e) {}
+      setMyPlayerId('p-host');
+      setPlayers([
+        {
+          id: 'p-host',
+          name: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
+          avatar: '👑',
+          score: 0,
+          isHost: true,
+          streak: 0,
+        },
+      ]);
+      setHasPurchasedLicense(true);
+      setIsGeneratingPin(false);
+    };
+
+    // 1.5s timeout safety net: guarantee transition even if WebSockets connection is down or hanging
+    const timer = setTimeout(() => {
+      executeFallback();
+    }, 1500);
+
+    try {
+      const socket = getGameSocket();
+      const token = getSessionToken();
+
+      socket.emit(
+        'CREATE_ROOM',
+        {
+          hostName: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
+          avatar: '👑',
+          sessionToken: token,
+          turnDuration: settings.turnDuration,
+          language,
+        },
+        (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[] } }) => {
+          if (handled) return;
+          clearTimeout(timer);
+          handled = true;
+
+          if (res?.success && res.pin) {
+            setPin(res.pin);
+            try {
+              localStorage.setItem('ttg_room_pin', res.pin);
+            } catch (e) {}
+            if (res.player?.id) setMyPlayerId(res.player.id);
+            if (res.room?.players && res.room.players.length > 0) {
+              setPlayers(res.room.players);
+            } else {
+              setPlayers([
+                {
+                  id: res.player?.id || 'p-host',
+                  name: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
+                  avatar: '👑',
+                  score: 0,
+                  isHost: true,
+                  streak: 0,
+                },
+              ]);
+            }
+            setHasPurchasedLicense(true);
+          } else {
+            executeFallback();
+          }
+          setIsGeneratingPin(false);
         }
-      }
-    );
-  };
+      );
+    } catch (err) {
+      console.warn('Socket CREATE_ROOM exception, triggering immediate fallback:', err);
+      clearTimeout(timer);
+      executeFallback();
+    }
+  }, [language, settings.turnDuration]);
 
   const handleAddCustomCard = (card: CardItem) => {
     const updated = [...customCards, card];
@@ -329,7 +381,10 @@ export default function App() {
 
   const handleTransitionFromIntroToDashboard = useCallback(() => {
     setIsIntroVideoOpen(false);
-    setScreen('welcome');
+    const p = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('pin') : null) || getPinFromUrl();
+    if (!p) {
+      setScreen('welcome');
+    }
   }, []);
 
   // Player joins room via Server
@@ -425,6 +480,7 @@ export default function App() {
     setServerTurnData(null);
   }, []);
 
+  const currentPinFromUrl = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('pin') : null) || initialPinParam || getPinFromUrl();
   const activePlayer = players[activePlayerIndex] || players[0];
 
   return (
@@ -434,8 +490,8 @@ export default function App() {
 
       {/* Main glassmorphic card container */}
       <div className="relative z-10 w-full max-w-[460px] bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[32px] p-5 sm:p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all">
-        {/* Never render welcome screen if pinFromUrl is present in URL */}
-        {screen === 'welcome' && !pinFromUrl && (
+        {/* Welcome / Role Select screen - NEVER rendered if pin exists in URL */}
+        {screen === 'welcome' && !currentPinFromUrl && (
           <RoleSelectScreen
             onOpenHost={() => setScreen('host')}
             onOpenPlayer={() => setScreen('player-join')}
@@ -453,6 +509,7 @@ export default function App() {
           <HostScreen
             pin={pin}
             hasPurchasedLicense={hasPurchasedLicense}
+            isGeneratingPin={isGeneratingPin}
             onPurchaseLicense={handleGeneratePin}
             onStartGame={handleStartHostGame}
             onBack={() => setScreen('welcome')}
@@ -467,7 +524,8 @@ export default function App() {
           />
         )}
 
-        {(screen === 'player-join' || (screen === 'welcome' && Boolean(pinFromUrl))) && (
+        {/* Player Join Screen - immediately shown whenever a PIN link is opened */}
+        {(screen === 'player-join' || screen === 'join' || Boolean(currentPinFromUrl)) && (
           <PlayerJoinScreen
             onJoin={handleJoinGame}
             onBack={() => {
@@ -476,7 +534,7 @@ export default function App() {
               } catch (e) {}
               setScreen('welcome');
             }}
-            defaultPin={pin || pinFromUrl || ''}
+            defaultPin={pin || currentPinFromUrl || ''}
             language={language}
             onToggleLanguage={handleToggleLanguage}
           />
@@ -549,7 +607,7 @@ export default function App() {
       />
 
       <IntroVideoModal
-        isOpen={isIntroVideoOpen && !pinFromUrl}
+        isOpen={isIntroVideoOpen && !currentPinFromUrl}
         onClose={handleTransitionFromIntroToDashboard}
         onTransitionToDashboard={handleTransitionFromIntroToDashboard}
         onTransitionToGame={handleTransitionFromIntroToDashboard}
