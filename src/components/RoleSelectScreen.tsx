@@ -169,6 +169,25 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
           <span>{isEn ? 'Instant PIN Room' : 'הצטרפות מהירה'}</span>
         </span>
       </div>
+
+      {/* Floating button in the corner to re-watch the intro video at any time */}
+      {onOpenVideo && (
+        <button
+          type="button"
+          onClick={() => {
+            sounds.soundKeypress();
+            onOpenVideo();
+          }}
+          className="fixed bottom-4 sm:bottom-6 start-4 sm:start-6 z-40 group btn-3d btn-3d-dark px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-xs font-black text-pink-300 hover:text-white border border-pink-500/40 backdrop-blur-xl shadow-[0_8px_25px_rgba(0,0,0,0.6)] flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95"
+          title={isEn ? 'Watch Intro Video' : 'צפייה חוזרת בסרטון הפתיחה'}
+        >
+          <div className="w-5 h-5 rounded-full bg-pink-500/20 flex items-center justify-center border border-pink-400/40 group-hover:scale-110 transition-transform">
+            <Film className="w-3 h-3 text-pink-300" strokeWidth={2.4} />
+          </div>
+          <span className="tracking-wide">{isEn ? 'Intro Video' : 'סרטון פתיחה'}</span>
+          <span className="text-[11px]">🎬</span>
+        </button>
+      )}
     </div>
   );
 };

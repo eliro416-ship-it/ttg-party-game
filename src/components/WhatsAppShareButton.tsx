@@ -24,13 +24,16 @@ export const WhatsAppShareButton: React.FC<WhatsAppShareButtonProps> = ({
   onShared,
 }) => {
   const isEn = language === 'en';
+  const currentLang = language;
 
-  // Always use the official Netlify production domain so WhatsApp scrapers can fetch OG tags & users can join seamlessly
-  const inviteUrl = `https://time-to-guess.netlify.app/?pin=${pin}&lang=${language}`;
+  // Use the dynamic real URL where the application is currently running
+  const shareUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}${window.location.pathname}?pin=${pin}&lang=${currentLang}`
+    : `/?pin=${pin}&lang=${currentLang}`;
 
   const shareText = isEn
-    ? `🎮 *Invitation to "Time To Guess" Live Game!* ⏱️\n\nHey! I just opened a live room.\n🔑 *Room PIN Code:* *${pin}*\n\n👇 *Click here to join instantly:*\n${inviteUrl}\n\nJoin now and let's play! 🚀`
-    : `🎮 *הזמנה למשחק ״הזמן לנחש״ (Time To Guess)!* ⏱️\n\nהיי! פתחתי חדר משחק רשת חי ומגניב.\n🔑 *קוד ה-PIN של החדר:* *${pin}*\n\n👇 *להצטרפות מהירה בלחיצה אחת:*\n${inviteUrl}\n\nמחכים לך, כנס/י עכשיו! 🚀`;
+    ? `🎮 *Invitation to "Time To Guess" Live Game!* ⏱️\n\nHey! I just opened a live room.\n🔑 *Room PIN Code:* *${pin}*\n\n👇 *Click here to join instantly:*\n${shareUrl}\n\nJoin now and let's play! 🚀`
+    : `🎮 *הזמנה למשחק ״הזמן לנחש״ (Time To Guess)!* ⏱️\n\nהיי! פתחתי חדר משחק רשת חי ומגניב.\n🔑 *קוד ה-PIN של החדר:* *${pin}*\n\n👇 *להצטרפות מהירה בלחיצה אחת:*\n${shareUrl}\n\nמחכים לך, כנס/י עכשיו! 🚀`;
 
   const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
 

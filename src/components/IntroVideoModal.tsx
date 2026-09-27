@@ -119,7 +119,7 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
 }) => {
   const isEn = language === 'en';
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(true);
   const [needsSoundTap, setNeedsSoundTap] = useState<boolean>(false);
 
   const parsed = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
@@ -159,22 +159,24 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
 
     video.currentTime = 0;
     video.muted = isMuted;
+    video.defaultMuted = true;
 
     const playPromise = video.play();
     if (playPromise !== undefined) {
       playPromise
         .then(() => {
-          setNeedsSoundTap(false);
+          // Autoplay started successfully
         })
         .catch(() => {
-          // Autoplay with audio was blocked by browser policy; play muted and show tap to unmute
+          // Autoplay was blocked by browser policy; ensure muted and try again
           video.muted = true;
+          video.defaultMuted = true;
           setIsMuted(true);
           setNeedsSoundTap(true);
           video.play().catch(() => {});
         });
     }
-  }, [isOpen, videoUrl, parsed.directSrc]);
+  }, [isOpen, videoUrl, parsed.directSrc, isMuted]);
 
   // Fallback timer for iframe embeds (e.g. YouTube) where onEnded doesn't fire across origins
   useEffect(() => {
@@ -225,9 +227,11 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
       {parsed.directSrc ? (
         <video
           ref={videoRef}
-          src={parsed.directSrc}
           autoPlay
           playsInline
+          muted={isMuted}
+          loop={false}
+          src={parsed.directSrc}
           preload="auto"
           onEnded={handleTransition}
           className="w-full h-full object-cover block absolute inset-0"
@@ -283,9 +287,9 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
           type="button"
           onClick={handleSkip}
           className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-black/70 hover:bg-black/90 active:scale-95 text-white font-extrabold text-xs sm:text-sm border border-white/25 shadow-[0_4px_20px_rgba(0,0,0,0.6)] backdrop-blur-md flex items-center gap-1.5 cursor-pointer transition-all hover:border-pink-500/60 hover:text-pink-200"
-          title="Skip"
+          title={isEn ? 'Skip' : 'דלג'}
         >
-          <span>Skip</span>
+          <span>{isEn ? 'Skip' : 'דלג'}</span>
           <SkipForward className="w-3.5 h-3.5 fill-white" />
         </button>
       </div>

@@ -66,3 +66,17 @@ export function getLangFromUrl(): Language | null {
 
   return null;
 }
+
+/**
+ * Builds the dynamic share/invitation URL based on the real current app URL.
+ * Avoids any hardcoded domain so it works dynamically everywhere.
+ */
+export function getShareUrl(pin: string, lang: Language = 'he'): string {
+  if (typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    return `${origin}${pathname}?pin=${encodeURIComponent(pin)}&lang=${encodeURIComponent(lang)}`;
+  }
+  return `/?pin=${encodeURIComponent(pin)}&lang=${encodeURIComponent(lang)}`;
+}
+

@@ -42,8 +42,8 @@ export default function App() {
   const [isLiveServer, setIsLiveServer] = useState<boolean>(false);
   const [serverTurnData, setServerTurnData] = useState<TurnStartedPayload | null>(null);
 
-  // Intro video modal state (disabled by default so it never blocks direct join)
-  const CLOUDINARY_DEFAULT_INTRO = 'https://player.cloudinary.com/embed/?cloud_name=afjcyngg&public_id=gemini_generated_video_6c8f0e40';
+  // Intro video modal state (direct mp4 for mobile-optimized native HTML5 video autoplay)
+  const CLOUDINARY_DEFAULT_INTRO = 'https://res.cloudinary.com/afjcyngg/video/upload/gemini_generated_video_6c8f0e40.mp4';
 
   const [introVideoUrl, setIntroVideoUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -55,9 +55,15 @@ export default function App() {
     return CLOUDINARY_DEFAULT_INTRO;
   });
 
-  const [isIntroVideoOpen, setIsIntroVideoOpen] = useState<boolean>(false);
+  // Regular entry (no PIN) -> always show full intro video with Skip option.
+  // Direct PIN entry (?pin=XXXX) -> skip video directly to participant join screen.
+  const [isIntroVideoOpen, setIsIntroVideoOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const pinInUrl = getPinFromUrl();
+    return !pinInUrl;
+  });
 
-  // Priority 1: Instant URL parameter detection on initial mount (Direct Join by PIN)
+  // Priority 1: Instant URL parameter detection on initial mount (Direct Join by PIN vs Regular entry)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -75,7 +81,10 @@ export default function App() {
         document.documentElement.dir = langParam === 'he' ? 'rtl' : 'ltr';
       }
       setScreen('player-join'); // חובה: העברה ישירה למסך "כניסת משתתף/ת" במקום 'home'!
-      setIsIntroVideoOpen(false);
+      setIsIntroVideoOpen(false); // דילוג על הסרטון בכניסה עם PIN
+    } else {
+      // כניסה רגילה לאתר – הצגת סרטון הפתיחה המלא עם אפשרות דילוג
+      setIsIntroVideoOpen(true);
     }
   }, []);
 

@@ -19,12 +19,16 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, pin, la
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'card' | 'qr'>('card');
 
-  // Build the direct invitation link using the official Netlify production domain
-  const inviteUrl = `https://time-to-guess.netlify.app/?pin=${pin}&lang=${language}`;
+  // Build the dynamic invitation link using the real current application URL
+  const currentLang = language;
+  const shareUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}${window.location.pathname}?pin=${pin}&lang=${currentLang}`
+    : `/?pin=${pin}&lang=${currentLang}`;
+  const inviteUrl = shareUrl;
 
   const shareText = isEn
-    ? `🃏 Join my "Time to Guess" game room!\nRoom PIN: ${pin}\nQuick join link:\n${inviteUrl}`
-    : `🃏 בואו לשחק איתי ב״הזמן לנחש״ (Time To Guess)!\nקוד החדר: ${pin}\nלהצטרפות מהירה לחצו כאן:\n${inviteUrl}`;
+    ? `🃏 Join my "Time to Guess" game room!\nRoom PIN: ${pin}\nQuick join link:\n${shareUrl}`
+    : `🃏 בואו לשחק איתי ב״הזמן לנחש״ (Time To Guess)!\nקוד החדר: ${pin}\nלהצטרפות מהירה לחצו כאן:\n${shareUrl}`;
 
   // Generate QR Code
   useEffect(() => {
