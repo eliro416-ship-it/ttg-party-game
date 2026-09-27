@@ -1,5 +1,4 @@
 export type Language = 'he' | 'en';
-export type VoiceGender = 'female' | 'male';
 
 export interface CardItem {
   id: string;

@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Volume2, VolumeX, Settings, Upload, Check, RefreshCw, Film } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, Play, Video, ExternalLink, Settings2, Check, Film } from 'lucide-react';
 import { Language } from '../types/game';
 import { sounds } from '../utils/audio';
 
@@ -19,44 +19,21 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
   language = 'he',
 }) => {
   const isEn = language === 'en';
-  const [isFadingOut, setIsFadingOut] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
+  const [isEditingUrl, setIsEditingUrl] = useState(false);
   const [inputUrl, setInputUrl] = useState(videoUrl);
   const [dontShowAgain, setDontShowAgain] = useState(false);
-  const [videoError, setVideoError] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // When opening, reset fade state and play video
-  useEffect(() => {
-    if (isOpen) {
-      setIsFadingOut(false);
-      setVideoError(false);
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(() => {
-          // Autoplay policy might catch it if not muted
-          if (videoRef.current) {
-            videoRef.current.muted = true;
-            setIsMuted(true);
-            videoRef.current.play().catch(() => {});
-          }
-        });
-      }
-    }
-  }, [isOpen, videoUrl]);
-
-  // Determine if URL is YouTube / Vimeo / Direct
+  // Convert various video URLs (YouTube, Vimeo, direct) into embeddable format
   const embedInfo = useMemo(() => {
-    const clean = (videoUrl || '/intro.mp4').trim();
+    if (!videoUrl) return { type: 'none', src: '' };
+
+    const clean = videoUrl.trim();
 
     // YouTube watch or short links
     const ytMatch = clean.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
     if (ytMatch && ytMatch[1]) {
       return {
-        type: 'youtube' as const,
+        type: 'youtube',
         src: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0&enablejsapi=1`,
       };
     }
@@ -65,14 +42,22 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
     const vimeoMatch = clean.match(/(?:vimeo\.com\/)(\d+)/i);
     if (vimeoMatch && vimeoMatch[1]) {
       return {
-        type: 'vimeo' as const,
+        type: 'vimeo',
         src: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`,
       };
     }
 
-    // Direct MP4 / WebM / blob / relative path
+    // Direct MP4 / WebM
+    if (/\.(mp4|webm|ogg)($|\?)/i.test(clean)) {
+      return {
+        type: 'direct',
+        src: clean,
+      };
+    }
+
+    // Default iframe fallback
     return {
-      type: 'direct' as const,
+      type: 'iframe',
       src: clean,
     };
   }, [videoUrl]);
@@ -81,18 +66,10 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
 
   const handleClose = () => {
     sounds.soundKeypress();
-    if (videoRef.current) {
-      videoRef.current.pause();
-    }
     if (dontShowAgain && typeof window !== 'undefined') {
       localStorage.setItem('ttg_hide_intro_video', 'true');
     }
-    // Smooth fade out transition matching CSS
-    setIsFadingOut(true);
-    setTimeout(() => {
-      onClose();
-      setIsFadingOut(false);
-    }, 600);
+    onClose();
   };
 
   const handleSaveUrl = (e: React.FormEvent) => {
@@ -100,231 +77,138 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
     if (onUpdateVideoUrl && inputUrl.trim()) {
       onUpdateVideoUrl(inputUrl.trim());
       sounds.soundSuccess();
-      setShowSettings(false);
-      setVideoError(false);
-    }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && onUpdateVideoUrl) {
-      const objectUrl = URL.createObjectURL(file);
-      onUpdateVideoUrl(objectUrl);
-      sounds.soundSuccess();
-      setShowSettings(false);
-      setVideoError(false);
-    }
-  };
-
-  const toggleMute = () => {
-    sounds.soundKeypress();
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
+      setIsEditingUrl(false);
     }
   };
 
   return (
     <div
-      id="intro-video-overlay"
-      className={isFadingOut ? 'hidden' : ''}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
       dir={isEn ? 'ltr' : 'rtl'}
     >
-      {/* כפתור דלג / Skip */}
-      <button
-        type="button"
-        className="skip-btn"
-        onClick={handleClose}
-      >
-        {isEn ? 'Skip / דלג ✕' : 'דלג / Skip ✕'}
-      </button>
-
-      {/* בקרי שליטה עליונים (קול, הגדרות, החלפת סרטון) */}
-      <div className="absolute top-6 right-5 flex items-center gap-2 z-[10001]">
-        {/* Toggle Sound */}
-        {embedInfo.type === 'direct' && (
-          <button
-            type="button"
-            onClick={toggleMute}
-            className="p-2 bg-black/65 hover:bg-white/20 text-white rounded-full border border-white/30 backdrop-blur-md transition-all active:scale-95 cursor-pointer"
-            title={isMuted ? (isEn ? 'Unmute' : 'הפעל צליל') : (isEn ? 'Mute' : 'השתק')}
-          >
-            {isMuted ? <VolumeX className="w-4 h-4 text-pink-300" /> : <Volume2 className="w-4 h-4 text-green-400" />}
-          </button>
-        )}
-
-        {/* Settings / Change Video */}
+      <div className="bg-gradient-to-b from-[#251347] via-[#1B113B] to-[#0D0B24] border border-white/20 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 w-full max-w-xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] relative text-center">
+        {/* Close Button */}
         <button
-          type="button"
-          onClick={() => setShowSettings(!showSettings)}
-          className="p-2 bg-black/65 hover:bg-white/20 text-white rounded-full border border-white/30 backdrop-blur-md transition-all active:scale-95 cursor-pointer"
-          title={isEn ? 'Change Video' : 'החלף סרטון'}
+          onClick={handleClose}
+          className={`absolute top-4 ${isEn ? 'right-4' : 'left-4'} p-2 text-slate-400 hover:text-white rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all cursor-pointer z-20`}
+          title={isEn ? 'Close' : 'סגור'}
         >
-          <Settings className="w-4 h-4 text-yellow-300" />
+          <X className="w-5 h-5" />
         </button>
-      </div>
 
-      {/* נגן הוידאו - גודל מותאם אישית למכשיר */}
-      <div className="w-full h-full max-w-[480px] flex items-center justify-center relative overflow-hidden">
-        {embedInfo.type === 'direct' ? (
-          <video
-            ref={videoRef}
-            id="intro-player"
-            playsInline
-            autoPlay
-            muted={isMuted}
-            onEnded={handleClose}
-            onError={() => {
-              // If external link fails, fallback to local downloaded copy /intro.mp4
-              if (embedInfo.src !== '/intro.mp4' && videoRef.current) {
-                videoRef.current.src = '/intro.mp4';
-                videoRef.current.play().catch(() => {});
-              } else {
-                setVideoError(true);
-              }
-            }}
-            src={embedInfo.src}
-            className="w-full h-full object-cover"
-            {...{ 'webkit-playsinline': 'true' }}
-          >
-            <source src={embedInfo.src} type="video/mp4" />
-            <source src="/intro.mp4" type="video/mp4" />
-            {isEn ? 'Your browser does not support video playback.' : 'הדפדפן שלך אינו תומך בניגון וידאו.'}
-          </video>
-        ) : (
-          <iframe
-            src={embedInfo.src}
-            title="Intro Video"
-            className="w-full h-full border-0 object-cover"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-        )}
-
-        {/* גיבוי במקרה של שגיאה בטעינת קובץ וידאו מקומי */}
-        {videoError && (
-          <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center p-6 text-center z-20">
-            <Film className="w-12 h-12 text-pink-400 mb-3 animate-pulse" />
-            <h3 className="text-lg font-bold text-white mb-2">
-              {isEn ? 'Intro Video Not Found' : 'סרטון הפתיחה לא נמצא'}
-            </h3>
-            <p className="text-xs text-slate-300 mb-4 max-w-xs">
-              {isEn
-                ? 'Upload your intro.mp4 video file or enter a YouTube/MP4 URL to play it.'
-                : 'באפשרותך להעלות קובץ וידאו intro.mp4 או להזין קישור מיוטיוב.'}
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg"
-              >
-                <Upload className="w-4 h-4" />
-                <span>{isEn ? 'Upload Video' : 'בחר קובץ מהמחשב'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white text-xs font-bold rounded-xl cursor-pointer"
-              >
-                {isEn ? 'Continue to App' : 'המשך לאפליקציה'}
-              </button>
-            </div>
+        {/* Modal Header */}
+        <div className="flex items-center justify-center gap-2 mb-1.5">
+          <div className="p-2 rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30">
+            <Film className="w-5 h-5" />
           </div>
-        )}
-      </div>
+          <h2 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-100 to-pink-300">
+            {isEn ? 'Welcome to Time to Guess!' : 'ברוכים הבאים ל-Time to Guess!'}
+          </h2>
+        </div>
 
-      {/* חלונית הגדרות להחלפת סרטון או העלאת קובץ (Overlay Settings) */}
-      {showSettings && (
-        <div className="absolute inset-x-4 top-20 max-w-md mx-auto bg-[#1a0f30]/95 border border-white/20 rounded-2xl p-4 shadow-2xl backdrop-blur-xl z-[10002] animate-fadeIn text-right">
-          <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
-            <h4 className="font-extrabold text-sm text-yellow-300">
-              {isEn ? 'Intro Video Settings' : 'הגדרות סרטון פתיחה'}
-            </h4>
-            <button
-              type="button"
-              onClick={() => setShowSettings(false)}
-              className="text-slate-400 hover:text-white text-xs cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
+        <p className="text-xs sm:text-sm text-slate-300 mb-3.5 max-w-md mx-auto">
+          {isEn
+            ? 'Watch this quick video to learn how to play and host games with your friends!'
+            : 'צפו בסרטון הקצר כדי לגלות איך משחקים, מארחים ומנחשים יחד עם חברים!'}
+        </p>
 
-          {/* העלאת קובץ וידאו */}
-          <div className="mb-3">
-            <label className="block text-xs font-bold text-slate-300 mb-1">
-              {isEn ? 'Upload video file (intro.mp4):' : 'העלה קובץ וידאו מהמכשיר (intro.mp4):'}
-            </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/mp4,video/webm,video/*"
-              onChange={handleFileUpload}
-              className="hidden"
+        {/* Video Player Frame (16:9 Aspect Ratio) */}
+        <div className="w-full relative aspect-video rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-black mb-3.5 group">
+          {embedInfo.type === 'youtube' || embedInfo.type === 'vimeo' || embedInfo.type === 'iframe' ? (
+            <iframe
+              src={embedInfo.src}
+              title="Game Intro Video"
+              className="w-full h-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full py-2.5 px-3 bg-white/10 hover:bg-white/20 border border-dashed border-white/30 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 cursor-pointer transition-all"
-            >
-              <Upload className="w-4 h-4 text-pink-400" />
-              <span>{isEn ? 'Select MP4 File...' : 'בחר קובץ סרטון מהמכשיר...'}</span>
-            </button>
-          </div>
+          ) : embedInfo.type === 'direct' ? (
+            <video
+              src={embedInfo.src}
+              controls
+              autoPlay
+              playsInline
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-slate-400 bg-white/5">
+              <Video className="w-12 h-12 mb-2 text-pink-400 opacity-60" />
+              <p className="text-xs sm:text-sm">
+                {isEn ? 'No video URL specified yet' : 'עדיין לא הוגדר קישור לסרטון'}
+              </p>
+            </div>
+          )}
+        </div>
 
-          {/* או הדבקת קישור */}
-          <form onSubmit={handleSaveUrl} className="mb-3">
-            <label className="block text-xs font-bold text-slate-300 mb-1">
-              {isEn ? 'Or paste video link (YouTube / MP4 URL):' : 'או הדבק קישור (יוטיוב או קובץ MP4):'}
+        {/* Change Video URL Form (Collapsible) */}
+        {isEditingUrl ? (
+          <form onSubmit={handleSaveUrl} className="w-full mb-3.5 p-3 bg-white/5 border border-white/10 rounded-2xl animate-fadeIn text-right">
+            <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center justify-between">
+              <span>{isEn ? 'Paste YouTube / MP4 Video URL:' : 'הדבק קישור לסרטון (יוטיוב / MP4):'}</span>
+              <button
+                type="button"
+                onClick={() => setIsEditingUrl(false)}
+                className="text-slate-400 hover:text-white text-[11px] underline cursor-pointer"
+              >
+                {isEn ? 'Cancel' : 'ביטול'}
+              </button>
             </label>
             <div className="flex gap-2">
               <input
-                type="text"
+                type="url"
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
-                placeholder="/intro.mp4 או https://..."
-                className="flex-1 px-3 py-2 bg-black/50 border border-white/20 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-pink-500"
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="flex-1 px-3 py-2 bg-black/40 border border-white/20 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-pink-500"
               />
               <button
                 type="submit"
-                className="px-3 py-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:brightness-110 text-white text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer"
+                className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold rounded-xl flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>{isEn ? 'Save' : 'שמור'}</span>
               </button>
             </div>
           </form>
-
-          {/* כפתור החזרה לסרטון ברירת מחדל */}
-          <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/10">
-            <button
-              type="button"
-              onClick={() => {
-                if (onUpdateVideoUrl) {
-                  onUpdateVideoUrl('/intro.mp4');
-                  setInputUrl('/intro.mp4');
-                  sounds.soundSuccess();
-                  setShowSettings(false);
-                }
-              }}
-              className="text-pink-300 hover:text-pink-200 flex items-center gap-1 underline cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>{isEn ? 'Reset to default intro.mp4' : 'איפוס ל-intro.mp4 ברירת מחדל'}</span>
-            </button>
-
-            <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white">
+        ) : (
+          <div className="flex items-center justify-between px-1 mb-3.5 text-xs text-slate-400">
+            {/* Don't show again toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300 hover:text-white transition-all">
               <input
                 type="checkbox"
                 checked={dontShowAgain}
                 onChange={(e) => setDontShowAgain(e.target.checked)}
-                className="w-3.5 h-3.5 rounded text-pink-500 bg-white/10 border-white/30 cursor-pointer"
+                className="w-4 h-4 rounded border-white/30 text-pink-500 focus:ring-pink-500 bg-white/10 cursor-pointer"
               />
-              <span>{isEn ? "Don't show on start" : "אל תציג בכניסה"}</span>
+              <span>{isEn ? "Don't show automatically on start" : "אל תציג אוטומטית בכניסה"}</span>
             </label>
+
+            {/* Change URL trigger */}
+            {onUpdateVideoUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setInputUrl(videoUrl);
+                  setIsEditingUrl(true);
+                }}
+                className="flex items-center gap-1 text-[11px] text-pink-300 hover:text-pink-200 underline cursor-pointer"
+              >
+                <Settings2 className="w-3 h-3" />
+                <span>{isEn ? 'Change Video' : 'החלף סרטון'}</span>
+              </button>
+            )}
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Action Button: Got It / Let's Play */}
+        <button
+          onClick={handleClose}
+          className="w-full py-3.5 px-6 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 active:scale-98 text-white font-extrabold text-base rounded-2xl shadow-xl shadow-purple-900/40 flex items-center justify-center gap-2 transition-all cursor-pointer"
+        >
+          <Play className="w-4 h-4 fill-white" />
+          <span>{isEn ? "Let's Play!" : 'הבנתי, בואו נתחיל לשחק!'}</span>
+        </button>
+      </div>
     </div>
   );
 };

@@ -1,15 +1,13 @@
 import React from 'react';
-import { Crown, Gamepad2, Volume2, VolumeX, Globe, Film, Trophy, Download } from 'lucide-react';
+import { Crown, Gamepad2, Play, Volume2, VolumeX, Globe, Film } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
 import { translations } from '../utils/translations';
-import { InstallAppButton } from './InstallAppButton';
 
 interface RoleSelectScreenProps {
   onOpenHost: () => void;
   onOpenPlayer: () => void;
-  onOpenLeaderboard?: () => void;
-  onQuickStart?: () => void;
+  onQuickStart: () => void;
   onOpenVideo?: () => void;
   turnDuration?: number;
   isMuted: boolean;
@@ -21,7 +19,7 @@ interface RoleSelectScreenProps {
 export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
   onOpenHost,
   onOpenPlayer,
-  onOpenLeaderboard,
+  onQuickStart,
   onOpenVideo,
   turnDuration = 15,
   isMuted,
@@ -78,8 +76,8 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
         {t.sub}
       </p>
 
-      {/* Quick Rules Card - Transparent Glass */}
-      <div className={`w-full max-w-sm bg-black/20 backdrop-blur-[2px] border border-white/15 rounded-2xl p-4 mb-5 shadow-lg ${isEn ? 'text-left' : 'text-right'}`}>
+      {/* Quick Rules Card */}
+      <div className={`w-full max-w-sm bg-white/[0.07] border border-white/15 rounded-2xl p-4 mb-5 shadow-lg ${isEn ? 'text-left' : 'text-right'}`}>
         <h3 className="text-xs sm:text-sm font-black text-amber-300 flex items-center gap-1.5 mb-2.5">
           <span>{t.rulesTitle}</span>
         </h3>
@@ -127,23 +125,16 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
           <span>{t.btnPlayer}</span>
         </button>
 
-        {onOpenLeaderboard && (
-          <button
-            onClick={() => {
-              sounds.soundKeypress();
-              onOpenLeaderboard();
-            }}
-            className="w-full py-3 px-5 bg-gradient-to-r from-amber-500/25 via-yellow-500/20 to-amber-500/25 hover:from-amber-500/40 hover:to-yellow-500/35 active:scale-98 text-amber-200 hover:text-white font-extrabold text-sm sm:text-base rounded-2xl border border-amber-400/40 shadow-lg shadow-amber-900/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer"
-          >
-            <Trophy className="w-5 h-5 text-amber-300 drop-shadow" />
-            <span>{isEn ? 'Leaderboard & Top Champions 🏆' : '🏆 טבלת האלופים ושיאים'}</span>
-          </button>
-        )}
-
-        {/* Direct PWA App Installation Button */}
-        <div className="pt-1">
-          <InstallAppButton language={language} variant="banner" />
-        </div>
+        <button
+          onClick={() => {
+            sounds.soundKeypress();
+            onQuickStart();
+          }}
+          className="w-full py-3 px-6 bg-gradient-to-r from-[#00B894] to-[#00CEC9] hover:from-[#00a383] hover:to-[#00b5b1] active:scale-98 text-white font-bold text-sm sm:text-base rounded-2xl border border-white/20 shadow-lg shadow-teal-900/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+        >
+          <Play className="w-4 h-4 fill-white" />
+          <span>{t.btnQuick}</span>
+        </button>
 
         {onOpenVideo && (
           <button
@@ -157,16 +148,6 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
             <span>{isEn ? 'Watch Intro Video 🎬' : '🎬 צפה בסרטון הסבר ופתיח'}</span>
           </button>
         )}
-
-        {/* Standalone Single File Download for GitHub */}
-        <a
-          href="/download-standalone"
-          download="index.html"
-          className="w-full py-2.5 px-4 bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-98 text-emerald-300 hover:text-white font-bold text-xs sm:text-sm rounded-2xl border border-emerald-500/30 shadow flex items-center justify-center gap-2 transition-all cursor-pointer"
-        >
-          <Download className="w-4 h-4 text-emerald-400" />
-          <span>{isEn ? 'Download Standalone index.html (for GitHub)' : '📥 הורד קובץ index.html עצמאי ל-GitHub'}</span>
-        </a>
       </div>
 
       {/* Bottom feature pill */}

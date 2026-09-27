@@ -42,7 +42,6 @@ export interface TurnStartedPayload {
   wordLength: number;
   turnEndTime: number;
   turnDuration: number;
-  isBonus?: boolean;
   players: (Player & { isHolder: boolean; isOnline: boolean })[];
 }
 
@@ -53,7 +52,6 @@ export interface RoundWonPayload {
   word: string;
   image: string;
   points: number;
-  isBonus?: boolean;
   scores: { id: string; name: string; score: number; streak: number }[];
 }
 

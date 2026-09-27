@@ -1,8 +1,6 @@
 import { Server, Socket } from 'socket.io';
-import { Express, Request, Response } from 'express';
 import { DEFAULT_CARDS } from '../src/data/cards';
 import { CardItem } from '../src/types/game';
-import { recordLeaderboardScore } from './leaderboardServer';
 
 interface ServerPlayer {
   id: string;
@@ -35,113 +33,17 @@ interface RoomState {
 
 const rooms = new Map<string, RoomState>();
 
-function getOrCreateRoom(pin: string, language: 'he' | 'en' = 'he', turnDuration: number = 15): RoomState {
-  let room = rooms.get(pin);
-  if (!room) {
-    const shuffledDeck = [...DEFAULT_CARDS].sort(() => 0.5 - Math.random());
-    room = {
-      pin,
-      status: 'LOBBY',
-      hostId: 'p-host-' + pin,
-      players: [],
-      deck: shuffledDeck,
-      currentCardIndex: 0,
-      currentHolderIndex: 0,
-      turnDuration: turnDuration || 15,
-      turnEndTime: 0,
-      turnTimer: null,
-      disconnectTimers: new Map(),
-      revealedHint: false,
-      language: language || 'he',
-    };
-    rooms.set(pin, room);
-  }
-  return room;
-}
-
-// Pre-initialize default room 7742 so it is immediately active and joinable at all times
-getOrCreateRoom('7742', 'he', 15);
-
-export function setupRoomRoutes(app: Express) {
-  // Query live room metadata & language
-  app.get('/api/room/:pin', (req: Request, res: Response) => {
-    const cleanPin = String(req.params.pin || '').trim();
-    const room = rooms.get(cleanPin);
-    if (!room) {
-      return res.status(404).json({ success: false, error: 'Room not found' });
-    }
-    return res.json({
-      success: true,
-      exists: true,
-      room: {
-        pin: room.pin,
-        status: room.status,
-        turnDuration: room.turnDuration,
-        language: room.language,
-        playerCount: room.players.length,
-      },
-    });
-  });
-}
-
 export function setupGameSocketServer(io: Server) {
   io.on('connection', (socket: Socket) => {
     // 1. CREATE_ROOM
-    socket.on('CREATE_ROOM', (data: { pin?: string; hostName?: string; avatar?: string; sessionToken: string; turnDuration?: number; language?: 'he' | 'en' }, callback) => {
-      const cleanPin = (data.pin && /^\d{4,6}$/.test(String(data.pin).trim()))
-        ? String(data.pin).trim()
-        : null;
-      const pin = cleanPin || Math.floor(1000 + Math.random() * 9000).toString();
-
-      let room = rooms.get(pin);
-      if (room) {
-        // Room already exists (or pre-initialized / reconnected)
-        let hostPlayer = room.players.find((p) => p.isHost || p.sessionToken === data.sessionToken);
-        if (hostPlayer) {
-          hostPlayer.socketId = socket.id;
-          hostPlayer.isOnline = true;
-          hostPlayer.lastActive = Date.now();
-          if (data.hostName) hostPlayer.name = data.hostName;
-          if (data.avatar) hostPlayer.avatar = data.avatar;
-        } else {
-          hostPlayer = {
-            id: 'p-' + Math.random().toString(36).substring(2, 9),
-            socketId: socket.id,
-            sessionToken: data.sessionToken || ('st-' + Math.random().toString(36).substring(2, 9)),
-            name: data.hostName || 'מארח/ת / Host',
-            avatar: data.avatar || '👑',
-            score: 0,
-            streak: 0,
-            isHost: true,
-            isOnline: true,
-            lastActive: Date.now(),
-          };
-          room.players.unshift(hostPlayer);
-        }
-
-        room.hostId = hostPlayer.id;
-        if (data.turnDuration) room.turnDuration = data.turnDuration;
-        if (data.language) room.language = data.language;
-
-        socket.join(pin);
-
-        callback?.({
-          success: true,
-          pin,
-          player: hostPlayer,
-          room: sanitizeRoomForClient(room),
-        });
-
-        broadcastLobbyUpdate(io, room);
-        return;
-      }
-
+    socket.on('CREATE_ROOM', (data: { hostName?: string; avatar?: string; sessionToken: string; turnDuration?: number; language?: 'he' | 'en' }, callback) => {
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
       const playerId = 'p-' + Math.random().toString(36).substring(2, 9);
       const hostPlayer: ServerPlayer = {
         id: playerId,
         socketId: socket.id,
         sessionToken: data.sessionToken || ('st-' + Math.random().toString(36).substring(2, 9)),
-        name: data.hostName || 'מארח/ת / Host',
+        name: data.hostName || 'מארח / Host',
         avatar: data.avatar || '👑',
         score: 0,
         streak: 0,
@@ -150,6 +52,7 @@ export function setupGameSocketServer(io: Server) {
         lastActive: Date.now(),
       };
 
+      // Shuffle cards for this room
       const shuffledDeck = [...DEFAULT_CARDS].sort(() => 0.5 - Math.random());
 
       const newRoom: RoomState = {
@@ -183,19 +86,9 @@ export function setupGameSocketServer(io: Server) {
 
     // 2. JOIN_ROOM
     socket.on('JOIN_ROOM', (data: { pin: string; name: string; avatar: string; sessionToken: string }, callback) => {
-      const cleanPin = String(data.pin || '').trim();
-      let room = rooms.get(cleanPin);
-
-      // Auto-recover/create room if valid 4-6 digit numeric pin was provided
-      if (!room && /^\d{4,6}$/.test(cleanPin)) {
-        room = getOrCreateRoom(cleanPin);
-      }
-
+      const room = rooms.get(data.pin);
       if (!room) {
-        return callback?.({
-          success: false,
-          error: 'חדר לא נמצא! אנא בדוק את קוד ה-PIN עם המארח/ת (Room not found)'
-        });
+        return callback?.({ success: false, error: 'Room not found. Invalid PIN!' });
       }
 
       // Check if player is reconnecting with existing sessionToken
@@ -300,8 +193,6 @@ export function setupGameSocketServer(io: Server) {
         normalizedGuess.replace(/[םןץףך]/g, (c) => ({ ם: 'מ', ן: 'נ', ץ: 'צ', ף: 'פ', ך: 'כ' }[c] || c)) ===
           targetHe.replace(/[םןץףך]/g, (c) => ({ ם: 'מ', ן: 'נ', ץ: 'צ', ף: 'פ', ך: 'כ' }[c] || c));
 
-      const isBonus = (room.currentCardIndex + 1) % 5 === 0;
-
       if (isMatch) {
         // Clear turn timer
         if (room.turnTimer) {
@@ -312,28 +203,14 @@ export function setupGameSocketServer(io: Server) {
         const msLeft = Math.max(0, room.turnEndTime - Date.now());
         const secLeft = Math.floor(msLeft / 1000);
         const bonus = Math.max(1, Math.floor(secLeft / 3));
-        // Bonus question awards 5 points; standard questions award 10 + speed bonus
-        const totalPoints = isBonus ? 5 : (10 + bonus);
+        const totalPoints = 10 + bonus;
 
         player.score += totalPoints;
         player.streak += 1;
 
-        // Persist/update player score in global leaderboard
-        try {
-          recordLeaderboardScore({
-            sessionToken: player.sessionToken,
-            name: player.name,
-            avatar: player.avatar,
-            score: player.score,
-            streak: player.streak,
-          });
-        } catch (lbErr) {
-          console.warn('[Leaderboard] Error recording round score:', lbErr);
-        }
-
         const correctWord = room.language === 'en' ? (card.word_en || card.word) : (card.word_he || card.word);
 
-        callback?.({ success: true, correct: true, isBonus });
+        callback?.({ success: true, correct: true });
 
         // Broadcast ROUND_WON to all clients
         io.to(room.pin).emit('ROUND_WON', {
@@ -343,14 +220,13 @@ export function setupGameSocketServer(io: Server) {
           word: correctWord,
           image: card.image, // Now reveal image to everyone during winner screen
           points: totalPoints,
-          isBonus,
           scores: room.players.map((p) => ({ id: p.id, name: p.name, score: p.score, streak: p.streak })),
         });
 
-        // Delay 3.0s for celebration & voice announcement, then advance to next turn
+        // Delay 2.5s for celebration, then start next turn
         setTimeout(() => {
           advanceToNextTurn(io, room);
-        }, 3000);
+        }, 2500);
       } else {
         callback?.({ success: true, correct: false });
         // Optionally notify room of incorrect guess attempt
@@ -439,21 +315,6 @@ export function setupGameSocketServer(io: Server) {
 
       room.turnDuration = data.duration;
       io.to(room.pin).emit('TIMER_DURATION_UPDATED', { duration: data.duration });
-      broadcastLobbyUpdate(io, room);
-    });
-
-    // 8.b UPDATE_ROOM_LANGUAGE (Host updates room language in real-time)
-    socket.on('UPDATE_ROOM_LANGUAGE', (data: { pin: string; language: 'he' | 'en'; sessionToken: string }) => {
-      const room = rooms.get(String(data.pin || '').trim());
-      if (!room) return;
-      const player = room.players.find((p) => p.sessionToken === data.sessionToken);
-      if (!player || !player.isHost) return;
-
-      if (data.language === 'he' || data.language === 'en') {
-        room.language = data.language;
-        io.to(room.pin).emit('LANGUAGE_UPDATED', { language: data.language });
-        broadcastLobbyUpdate(io, room);
-      }
     });
 
     // 9. DISCONNECT & HEARTBEAT HANDLING
@@ -502,24 +363,6 @@ function startNewTurn(io: Server, room: RoomState) {
   // Check if cards finished or max rounds reached
   if (room.currentCardIndex >= room.deck.length || room.currentCardIndex >= 25) {
     room.status = 'GAME_OVER';
-
-    // Record all players' final scores in global leaderboard
-    try {
-      for (const p of room.players) {
-        if (p.score > 0) {
-          recordLeaderboardScore({
-            sessionToken: p.sessionToken,
-            name: p.name,
-            avatar: p.avatar,
-            score: p.score,
-            streak: p.streak,
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('[Leaderboard] Error recording game over scores:', err);
-    }
-
     io.to(room.pin).emit('GAME_OVER', {
       players: room.players.map((p) => ({
         id: p.id,
@@ -542,10 +385,7 @@ function startNewTurn(io: Server, room: RoomState) {
     }
   }
 
-  const isBonus = (room.currentCardIndex + 1) % 5 === 0;
-  // Bonus question sets timer to 10 seconds!
-  const effectiveDuration = isBonus ? 10 : room.turnDuration;
-  const durationMs = effectiveDuration * 1000;
+  const durationMs = room.turnDuration * 1000;
   room.turnEndTime = Date.now() + durationMs;
   room.revealedHint = false;
 
@@ -569,8 +409,6 @@ function sendTurnStateToPlayer(io: Server, room: RoomState, player: ServerPlayer
 
   const targetWord = room.language === 'en' ? (card.word_en || card.word) : (card.word_he || card.word);
   const targetCategory = room.language === 'en' ? (card.category_en || card.category) : card.category;
-  const isBonus = (room.currentCardIndex + 1) % 5 === 0;
-  const effectiveDuration = isBonus ? 10 : room.turnDuration;
 
   if (isHolder) {
     // HOLDER PAYLOAD: Full image and word
@@ -588,8 +426,7 @@ function sendTurnStateToPlayer(io: Server, room: RoomState, player: ServerPlayer
       hint: room.language === 'en' ? (card.hint_en || card.hint) : card.hint,
       wordLength: targetWord.length,
       turnEndTime: room.turnEndTime,
-      turnDuration: effectiveDuration,
-      isBonus,
+      turnDuration: room.turnDuration,
       players: room.players.map((p) => ({
         id: p.id,
         name: p.name,
@@ -616,8 +453,7 @@ function sendTurnStateToPlayer(io: Server, room: RoomState, player: ServerPlayer
       hint: room.revealedHint ? (room.language === 'en' ? (card.hint_en || card.hint) : card.hint) : null,
       wordLength: targetWord.length,
       turnEndTime: room.turnEndTime,
-      turnDuration: effectiveDuration,
-      isBonus,
+      turnDuration: room.turnDuration,
       players: room.players.map((p) => ({
         id: p.id,
         name: p.name,

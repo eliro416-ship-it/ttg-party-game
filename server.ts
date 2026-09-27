@@ -3,9 +3,7 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { setupGameSocketServer, setupRoomRoutes } from './server/gameServer';
-import { setupPaymentRoutes } from './server/paymentServer';
-import { setupLeaderboardRoutes } from './server/leaderboardServer';
+import { setupGameSocketServer } from './server/gameServer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,28 +23,6 @@ async function startServer() {
   setupGameSocketServer(io);
 
   app.use(express.json());
-
-  // Room metadata & language inspection
-  setupRoomRoutes(app);
-
-  // Payment & OTP verification routes
-  setupPaymentRoutes(app);
-
-  // Leaderboard ranking & scores routes
-  setupLeaderboardRoutes(app);
-
-  // Serve static files from public directory (videos, sounds, assets)
-  app.use(express.static(path.resolve(__dirname, 'public')));
-
-  // Standalone Single-File HTML download and view endpoints
-  app.get('/standalone', (_req, res) => {
-    res.sendFile(path.resolve(process.cwd(), 'public/standalone.html'));
-  });
-
-  app.get('/download-standalone', (_req, res) => {
-    res.setHeader('Content-Disposition', 'attachment; filename="index.html"');
-    res.sendFile(path.resolve(process.cwd(), 'standalone.html'));
-  });
 
   // Health check endpoint
   app.get('/api/health', (_req, res) => {

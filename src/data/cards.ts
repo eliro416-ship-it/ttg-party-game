@@ -8,7 +8,7 @@ export const DEFAULT_CARDS: CardItem[] = [
     word_en: 'ICE',
     category: 'אוכל',
     category_en: 'Food',
-    image: 'https://images.unsplash.com/photo-1497034825429-c343d7c6a68f?auto=format&fit=crop&w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1560008511-31ca87130842?auto=format&fit=crop&w=800&q=80',
     hint: 'קינוח קר ומתוק בגביע או בכוס',
     hint_en: 'A cold sweet treat in a cone or cup'
   },
@@ -118,7 +118,7 @@ export const DEFAULT_CARDS: CardItem[] = [
     word_en: 'PIANO',
     category: 'מוזיקה',
     category_en: 'Music',
-    image: 'https://images.unsplash.com/photo-1552422535-c45813c61732?auto=format&fit=crop&w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1520523839898-5071216999be?auto=format&fit=crop&w=800&q=80',
     hint: 'כלי נגינה גדול עם קלידים שחורים ולבנים',
     hint_en: 'Keyboard instrument with black and white keys'
   },
@@ -140,7 +140,7 @@ export const DEFAULT_CARDS: CardItem[] = [
     word_en: 'ROCKET',
     category: 'חלל',
     category_en: 'Space',
-    image: 'https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?auto=format&fit=crop&w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1517976487507-5b3b4b45a9b7?auto=format&fit=crop&w=800&q=80',
     hint: 'כלי טיס שממריא אל מעבר לאטמוספרה',
     hint_en: 'Space vehicle blasting into outer space'
   },
@@ -206,7 +206,7 @@ export const DEFAULT_CARDS: CardItem[] = [
     word_en: 'SOCCER',
     category: 'ספורט',
     category_en: 'Sports',
-    image: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80',
     hint: 'המשחק הפופולרי ביותר בעולם עם שערים ורשת',
     hint_en: 'Popular sport kicked into a net'
   },

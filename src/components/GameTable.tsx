@@ -19,10 +19,7 @@ import {
   SkipForward,
   Globe,
   ShieldCheck,
-  Radio,
-  Sparkles,
-  ArrowRight,
-  ImageOff
+  Radio
 } from 'lucide-react';
 
 interface GameTableProps {
@@ -40,7 +37,6 @@ interface GameTableProps {
   onCardTimeout: () => void;
   onLeaveGame: () => void;
   onOpenShareModal?: () => void;
-  onOpenLeaderboard?: () => void;
   isMuted: boolean;
   onToggleMute: () => void;
   language?: Language;
@@ -62,7 +58,6 @@ export const GameTable: React.FC<GameTableProps> = ({
   onCardTimeout,
   onLeaveGame,
   onOpenShareModal,
-  onOpenLeaderboard,
   isMuted,
   onToggleMute,
   language = 'he',
@@ -89,14 +84,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   const activeHolderName = serverTurnData?.holderName || players.find(p => p.id === activePlayerId)?.name || 'מחזיק';
   const activeHolderAvatar = serverTurnData?.holderAvatar || players.find(p => p.id === activePlayerId)?.avatar || '👑';
 
-  // Bonus Question rule: Every 5th question is a Bonus Question (10 seconds timer, 5 points award)
-  const questionNumber = (serverTurnData?.cardIndex ?? currentCardIndex) + 1;
-  const isBonusQuestion = Boolean(serverTurnData?.isBonus ?? (questionNumber % 5 === 0));
-  const effectiveTurnDuration = isBonusQuestion ? 10 : (serverTurnData?.turnDuration || turnDuration);
-
   const [enteredLetters, setEnteredLetters] = useState<string[]>([]);
   const [activeBoxIndex, setActiveBoxIndex] = useState<number>(0);
-  const [timeLeft, setTimeLeft] = useState<number>(effectiveTurnDuration);
+  const [timeLeft, setTimeLeft] = useState<number>(turnDuration);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [showHintText, setShowHintText] = useState<boolean>(Boolean(serverTurnData?.hint));
@@ -105,14 +95,6 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [lastReaction, setLastReaction] = useState<string | null>(null);
   const [floatingReaction, setFloatingReaction] = useState<{ emoji: string; text: string; sender: string } | null>(null);
   const [winnerCelebration, setWinnerCelebration] = useState<RoundWonPayload | null>(null);
-  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>(() => sounds.getVoiceGender());
-  const [imageError, setImageError] = useState<boolean>(false);
-
-  const handleToggleVoice = (gender: 'female' | 'male') => {
-    setVoiceGender(gender);
-    sounds.setVoiceGender(gender);
-    sounds.previewVoice(gender, language);
-  };
 
   // Role Simulation toggle for single-screen / solo demo testing
   const [simulatedRole, setSimulatedRole] = useState<'holder' | 'guesser' | null>(null);
@@ -134,18 +116,20 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (data.reaction === 'yes') {
         emoji = '✅';
         text = t.btnYes;
+        sounds.soundYes();
       } else if (data.reaction === 'no') {
         emoji = '❌';
         text = t.btnNo;
+        sounds.soundNo();
       } else if (data.reaction === 'hot') {
         emoji = '🔥';
         text = t.btnHot;
+        sounds.soundHot();
       } else if (data.reaction === 'cold') {
         emoji = '❄️';
         text = t.btnCold;
+        sounds.soundCold();
       }
-
-      sounds.speakReaction(data.reaction, language);
 
       setFloatingReaction({ emoji, text, sender: data.senderName });
       setLastReaction(`${emoji} ${text}`);
@@ -158,15 +142,14 @@ export const GameTable: React.FC<GameTableProps> = ({
     };
 
     const handleRoundWon = (data: RoundWonPayload) => {
-      // Play celebratory chime fanfare & vocal announcement of winner's name
-      sounds.soundCorrectGuess(data.winnerName, language);
+      sounds.soundSuccess();
       setIsSuccess(true);
       setWinnerCelebration(data);
       isHandledRef.current = true;
       setTimeout(() => {
         setWinnerCelebration(null);
         setIsSuccess(false);
-      }, 2600);
+      }, 2500);
     };
 
     const handleTurnTimeout = (data: { word: string; image: string | null; reason: string }) => {
@@ -203,18 +186,13 @@ export const GameTable: React.FC<GameTableProps> = ({
     isHandledRef.current = false;
     setEnteredLetters(new Array(wordLength).fill(''));
     setActiveBoxIndex(0);
-    setTimeLeft(effectiveTurnDuration);
+    setTimeLeft(serverTurnData?.turnDuration || turnDuration);
     setIsSuccess(false);
     setIsShaking(false);
     setShowHintText(Boolean(serverTurnData?.hint));
     setRevealedIndices([]);
     setLastReaction(null);
     setSimulatedRole(null);
-    setImageError(false);
-
-    if (isBonusQuestion) {
-      sounds.soundBonus();
-    }
 
     const focusTimer = setTimeout(() => {
       if (inputRefs.current[0]) {
@@ -223,7 +201,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     }, 150);
 
     return () => clearTimeout(focusTimer);
-  }, [currentCardIndex, wordLength, effectiveTurnDuration, isBonusQuestion, language, serverTurnData?.turnEndTime]);
+  }, [currentCardIndex, wordLength, turnDuration, language, serverTurnData?.turnEndTime]);
 
   // Server-Synchronized Timer Countdown
   useEffect(() => {
@@ -305,13 +283,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     }
   };
 
-  const handleClearAll = () => {
-    if (isSuccess) return;
-    setEnteredLetters(Array(wordLength).fill(''));
-    setActiveBoxIndex(0);
-    inputRefs.current[0]?.focus();
-  };
-
   // Submit guess to Server (or local fallback)
   const submitGuess = (fullWord: string, currentLetters: string[]) => {
     if (isLiveServer && roomPin) {
@@ -351,32 +322,14 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
 
       if (isMatch) {
-        const bonus = isBonusQuestion ? 0 : Math.max(1, Math.floor(timeLeft / 3));
-        const winnerId = !isCurrentClientHolder ? myPlayerId : activePlayerId;
-        const winnerPlayer = players.find(p => p.id === winnerId);
-        const winnerName = winnerPlayer?.name || (isEn ? 'You' : 'אתה');
-
-        // Play celebratory chime fanfare & vocal announcement of winner's name
-        sounds.soundCorrectGuess(winnerName, language);
+        sounds.soundSuccess();
         setIsSuccess(true);
         isHandledRef.current = true;
-
-        setWinnerCelebration({
-          winnerId,
-          winnerName,
-          winnerAvatar: winnerPlayer?.avatar || '🏆',
-          word: targetWord,
-          image: currentCard.image,
-          points: isBonusQuestion ? 5 : (10 + bonus),
-          isBonus: isBonusQuestion,
-          scores: []
-        });
-
+        const bonus = Math.max(1, Math.floor(timeLeft / 3));
+        const winnerId = !isCurrentClientHolder ? myPlayerId : activePlayerId;
         setTimeout(() => {
-          setWinnerCelebration(null);
-          setIsSuccess(false);
           onCardSolved(winnerId, bonus);
-        }, 2200);
+        }, 1000);
       } else {
         sounds.soundError();
         setIsShaking(true);
@@ -451,7 +404,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Holder sends reaction to all devices via server
   const sendHolderReaction = (reaction: 'yes' | 'no' | 'hot' | 'cold', label: string) => {
-    sounds.speakReaction(reaction, language);
+    if (reaction === 'yes') sounds.soundYes();
+    if (reaction === 'no') sounds.soundNo();
+    if (reaction === 'hot') sounds.soundHot();
+    if (reaction === 'cold') sounds.soundCold();
 
     setLastReaction(label);
 
@@ -498,7 +454,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     setShowTimerPicker(false);
   };
 
-  const timerPercentage = Math.max(0, Math.min(100, (timeLeft / effectiveTurnDuration) * 100));
+  const timerPercentage = Math.max(0, Math.min(100, (timeLeft / (serverTurnData?.turnDuration || turnDuration)) * 100));
 
   return (
     <div className="w-full flex flex-col items-center animate-fadeIn select-none relative" dir={isEn ? 'ltr' : 'rtl'}>
@@ -568,21 +524,6 @@ export const GameTable: React.FC<GameTableProps> = ({
             </button>
           )}
 
-          {/* Leaderboard Button */}
-          {onOpenLeaderboard && (
-            <button
-              onClick={() => {
-                sounds.soundKeypress();
-                onOpenLeaderboard();
-              }}
-              className="flex items-center gap-1 text-xs text-amber-300 hover:text-white px-2 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/30 border border-amber-400/30 transition-all cursor-pointer"
-              title={isEn ? 'Global Leaderboard' : 'טבלת שיאים עולמית'}
-            >
-              <Trophy className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">{isEn ? 'Leaderboard' : 'שיאים'}</span>
-            </button>
-          )}
-
           {/* Sound Toggle */}
           <button
             onClick={onToggleMute}
@@ -610,36 +551,6 @@ export const GameTable: React.FC<GameTableProps> = ({
           )}
         </div>
 
-        {/* Voice Gender Switcher (Female 👩 / Male 👨) */}
-        <div className="flex items-center gap-0.5 bg-white/10 p-0.5 rounded-xl border border-white/15 text-[11px] shadow-sm">
-          <button
-            type="button"
-            onClick={() => handleToggleVoice('female')}
-            className={`px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              voiceGender === 'female'
-                ? 'bg-pink-500 text-white shadow ring-1 ring-pink-300'
-                : 'text-slate-300 hover:text-white'
-            }`}
-            title={isEn ? 'Female Voice (Carmit/Woman)' : 'קול אישה נשי'}
-          >
-            <span>👩</span>
-            <span className="hidden sm:inline">{t.voiceFemale}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleToggleVoice('male')}
-            className={`px-2 py-0.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              voiceGender === 'male'
-                ? 'bg-indigo-600 text-white shadow ring-1 ring-indigo-300'
-                : 'text-slate-300 hover:text-white'
-            }`}
-            title={isEn ? 'Male Voice (David/Guy)' : 'קול גבר גברי'}
-          >
-            <span>👨</span>
-            <span className="hidden sm:inline">{t.voiceMale}</span>
-          </button>
-        </div>
-
         {/* Demo role switch (for local testing) */}
         <button
           type="button"
@@ -655,66 +566,30 @@ export const GameTable: React.FC<GameTableProps> = ({
         </button>
       </div>
 
-      {/* Security badge: server-authoritative indicator & question counter */}
+      {/* Security badge: server-authoritative indicator */}
       <div className="w-full flex justify-between items-center px-2 py-0.5 mb-2 text-[10px] text-slate-400 bg-black/25 rounded-lg border border-white/5">
         <span className="flex items-center gap-1">
           <ShieldCheck className="w-3 h-3 text-emerald-400" />
           <span>{t.serverAuthoritative}</span>
         </span>
-        <span className="flex items-center gap-1.5 font-bold">
-          {isBonusQuestion && (
-            <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[10px] font-black animate-pulse shadow-sm shadow-amber-500/50">
-              ⭐ {isEn ? 'BONUS ROUND' : 'שאלת בונוס!'}
-            </span>
-          )}
-          <span>
-            {questionNumber} / {cards.length}
-          </span>
+        <span>
+          {currentCardIndex + 1} / {cards.length}
         </span>
       </div>
 
       {/* Main Game Display Frame */}
-      <div className={`w-full relative rounded-3xl overflow-hidden border-2 shadow-2xl bg-black mb-3 group aspect-[4/3] max-h-[220px] sm:max-h-[240px] flex items-center justify-center transition-all ${
-        isBonusQuestion
-          ? 'border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.45)] ring-2 ring-amber-400/50'
-          : 'border-white/20'
-      }`}>
-        {/* Bonus Question Golden Banner */}
-        {isBonusQuestion && (
-          <div className="absolute top-2 inset-x-0 mx-auto max-w-fit z-30 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-black px-3.5 py-1 rounded-full text-[11px] sm:text-xs font-black shadow-xl flex items-center gap-1.5 animate-bounce">
-            <span>⭐</span>
-            <span>{isEn ? 'BONUS QUESTION: 10s • 5 POINTS!' : 'שאלת בונוס: 10 שניות • 5 נקודות!'}</span>
-            <span>⭐</span>
-          </div>
-        )}
-
+      <div className="w-full relative rounded-3xl overflow-hidden border-2 border-white/20 shadow-2xl bg-black mb-3 group aspect-[4/3] max-h-[220px] sm:max-h-[240px] flex items-center justify-center">
         {isCurrentClientHolder ? (
           /* Card Holder View: Sees the photo and the word! */
           <>
-            {!imageError ? (
-              <img
-                src={serverTurnData?.image || currentCard.image}
-                alt={targetWord}
-                onError={() => setImageError(true)}
-                className={`w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 ${
-                  isSuccess ? 'scale-105 brightness-110' : ''
-                }`}
-                loading="eager"
-              />
-            ) : (
-              /* High-tech fallback banner if network/image URL drops */
-              <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 text-center animate-fadeIn">
-                <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center mb-2 shadow-inner">
-                  <span className="text-3xl">🖼️</span>
-                </div>
-                <span className="text-sm font-bold text-slate-300">
-                  {isEn ? 'Image preview unavailable' : 'תצוגת תמונה זמנית אינה זמינה'}
-                </span>
-                <span className="text-xs text-amber-300 font-semibold mt-1">
-                  {isEn ? 'Use the Secret Word below to describe!' : 'השתמש במילה הסודית למטה כדי לתאר!'}
-                </span>
-              </div>
-            )}
+            <img
+              src={serverTurnData?.image || currentCard.image}
+              alt={targetWord}
+              className={`w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 ${
+                isSuccess ? 'scale-105 brightness-110' : ''
+              }`}
+              loading="eager"
+            />
 
             {/* Category badge */}
             <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20 shadow`}>
@@ -758,80 +633,39 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         {/* Winner celebration overlay */}
         {(isSuccess || winnerCelebration) && (
-          <div className={`absolute inset-0 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn text-center p-4 z-20 ${
-            (winnerCelebration?.isBonus || isBonusQuestion)
-              ? 'bg-amber-950/92 border-2 border-amber-400'
-              : 'bg-emerald-950/90 border-2 border-emerald-400/60'
-          }`}>
-            <div className="relative mb-2">
-              <CheckCircle2 className={`w-14 h-14 animate-bounce ${
-                (winnerCelebration?.isBonus || isBonusQuestion) ? 'text-amber-300' : 'text-emerald-400'
-              }`} />
-              <Sparkles className="w-6 h-6 text-yellow-300 absolute -top-1 -right-2 animate-spin" />
-            </div>
-
-            {/* Prominent display of who answered correctly */}
-            <div className="bg-black/40 px-4 py-1.5 rounded-2xl border border-white/20 mb-2 shadow-lg">
-              <span className="text-xl sm:text-2xl font-black text-amber-300 flex items-center justify-center gap-2 drop-shadow-md">
-                <span>{winnerCelebration?.winnerAvatar || '🏆'}</span>
-                <span>{winnerCelebration?.winnerName || (isEn ? 'Correct Answer!' : 'תשובה נכונה!')}</span>
-                <span className="text-white text-base sm:text-lg font-bold">
-                  {winnerCelebration?.winnerName ? t.winnerAnswered : ''}
-                </span>
+          <div className="absolute inset-0 bg-emerald-950/85 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn text-center p-4 z-20">
+            <CheckCircle2 className="w-12 h-12 text-emerald-400 mb-1.5 animate-bounce" />
+            <span className="text-2xl sm:text-3xl font-black text-white drop-shadow-md">
+              {winnerCelebration?.winnerName ? `🎉 ${winnerCelebration.winnerName}` : t.correctAlert}
+            </span>
+            <span className="text-emerald-300 font-bold text-sm sm:text-base mt-1">
+              {isEn ? 'Word:' : 'המילה הייתה:'} <b className="text-white uppercase">{winnerCelebration?.word || targetWord}</b>
+            </span>
+            {winnerCelebration?.points ? (
+              <span className="text-xs text-amber-300 font-extrabold mt-1">
+                +{winnerCelebration.points} {t.pts}!
               </span>
-            </div>
-
-            {(winnerCelebration?.isBonus || isBonusQuestion) && (
-              <span className="text-amber-300 font-black text-xs sm:text-sm animate-pulse mb-1">
-                ⭐ {isEn ? 'Bonus Question Solved!' : 'שאלת בונוס פוצחה!'} ⭐
-              </span>
-            )}
-
-            <div className="text-emerald-200 font-bold text-sm sm:text-base mb-1">
-              {isEn ? 'The word was:' : 'המילה הייתה:'} <b className="text-white uppercase font-black px-2 py-0.5 bg-black/40 rounded-lg">{winnerCelebration?.word || targetWord}</b>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs sm:text-sm text-yellow-300 font-black px-2.5 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-400/40">
-                +{(winnerCelebration?.points || (isBonusQuestion ? 5 : 10))} {t.pts}!
-              </span>
-              <span className="text-xs text-slate-300 flex items-center gap-1 font-medium animate-pulse">
-                <ArrowRight className="w-3.5 h-3.5 text-pink-400 inline" />
-                <span>{t.movingToNext}</span>
-              </span>
-            </div>
+            ) : null}
           </div>
         )}
       </div>
 
       {/* Timer Bar & Server Countdown */}
-      <div className={`w-full mb-3 flex items-center justify-between border px-3.5 py-2 rounded-2xl transition-all ${
-        isBonusQuestion
-          ? 'bg-amber-500/15 border-amber-400/50 shadow-md shadow-amber-500/10'
-          : 'bg-white/5 border-white/10'
-      }`}>
+      <div className="w-full mb-3 flex items-center justify-between bg-white/5 border border-white/10 px-3.5 py-2 rounded-2xl">
         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
           <TimerIcon
             className={`w-4 h-4 ${
-              isBonusQuestion
-                ? 'text-amber-300 animate-pulse'
-                : timeLeft <= 4
-                ? 'text-rose-400 animate-pulse'
-                : 'text-amber-400'
+              timeLeft <= 4 ? 'text-rose-400 animate-pulse' : 'text-amber-400'
             }`}
           />
-          <span className={isBonusQuestion ? 'text-amber-300 font-extrabold' : ''}>
-            {isBonusQuestion ? (isEn ? 'Bonus Time (10s):' : 'שעון בונוס (10 שניות):') : t.timeLabel}
-          </span>
+          <span>{t.timeLabel}</span>
         </div>
 
         {/* Progress track */}
         <div className="flex-1 mx-3 h-2.5 bg-white/10 rounded-full overflow-hidden p-0.5">
           <div
             className={`h-full rounded-full transition-all duration-500 ease-linear ${
-              isBonusQuestion
-                ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500'
-                : timeLeft <= 4
+              timeLeft <= 4
                 ? 'bg-rose-500'
                 : timeLeft <= 8
                 ? 'bg-amber-400'
@@ -844,14 +678,10 @@ export const GameTable: React.FC<GameTableProps> = ({
         <div className="flex items-center gap-1.5">
           <div
             className={`font-black text-lg min-w-[28px] text-center font-mono ${
-              isBonusQuestion
-                ? 'text-yellow-300 animate-pulse'
-                : timeLeft <= 4
-                ? 'text-rose-400 animate-ping'
-                : 'text-pink-300'
+              timeLeft <= 4 ? 'text-rose-400 animate-ping' : 'text-pink-300'
             }`}
           >
-            {timeLeft}s
+            {timeLeft}
           </div>
 
           <button
@@ -912,41 +742,6 @@ export const GameTable: React.FC<GameTableProps> = ({
           </p>
 
           {/* Quick Sound/Reaction response buttons for the holder */}
-          <div className="flex justify-between items-center mb-2 px-1">
-            <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-              <span>🔊</span>
-              <span>{t.voiceType}</span>
-            </span>
-            <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-xl border border-white/15">
-              <button
-                type="button"
-                onClick={() => handleToggleVoice('female')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  voiceGender === 'female'
-                    ? 'bg-pink-500 text-white shadow-sm ring-1 ring-pink-300'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-                title={isEn ? 'Female Voice (Carmit/Woman)' : 'קול אישה נשי'}
-              >
-                <span>👩</span>
-                <span>{t.voiceFemale}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleToggleVoice('male')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  voiceGender === 'male'
-                    ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-300'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-                title={isEn ? 'Male Voice (David/Guy)' : 'קול גבר גברי'}
-              >
-                <span>👨</span>
-                <span>{t.voiceMale}</span>
-              </button>
-            </div>
-          </div>
-
           <div className="grid grid-cols-4 gap-2 mb-2.5">
             <button
               type="button"
@@ -1065,7 +860,6 @@ export const GameTable: React.FC<GameTableProps> = ({
           <VirtualKeyboard
             onLetterPress={(letter) => handleLetterInput(letter, activeBoxIndex)}
             onBackspace={() => handleBackspace(activeBoxIndex)}
-            onClearAll={handleClearAll}
             onHintClick={handleGiveHint}
             canHint={!isSuccess}
             disabled={isSuccess}
@@ -1077,24 +871,10 @@ export const GameTable: React.FC<GameTableProps> = ({
       {/* Live Leaderboard */}
       <div className={`w-full mt-3.5 bg-black/30 border border-white/10 rounded-2xl p-3.5 text-xs shadow-lg ${isEn ? 'text-left' : 'text-right'}`}>
         <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/10 font-bold">
-          <div className="flex items-center gap-2">
-            <span className="text-amber-300 flex items-center gap-1.5 text-sm">
-              <Trophy className="w-4 h-4 text-amber-400" />
-              {t.boardTitle}
-            </span>
-            {onOpenLeaderboard && (
-              <button
-                type="button"
-                onClick={() => {
-                  sounds.soundKeypress();
-                  onOpenLeaderboard();
-                }}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 cursor-pointer transition-all active:scale-95"
-              >
-                {isEn ? 'Global 🏆' : 'טבלה עולמית 🏆'}
-              </button>
-            )}
-          </div>
+          <span className="text-amber-300 flex items-center gap-1.5 text-sm">
+            <Trophy className="w-4 h-4 text-amber-400" />
+            {t.boardTitle}
+          </span>
           <span className="text-pink-300 font-bold">
             {t.holdingText} {activeHolderName} {activeHolderAvatar}
           </span>

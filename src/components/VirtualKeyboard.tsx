@@ -1,13 +1,12 @@
 import React from 'react';
 import { HEBREW_KEYBOARD_ROWS } from '../utils/hebrewKeyboard';
-import { Delete, Lightbulb, RotateCcw } from 'lucide-react';
+import { Delete, Lightbulb } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
 
 interface VirtualKeyboardProps {
   onLetterPress: (letter: string) => void;
   onBackspace: () => void;
-  onClearAll?: () => void;
   onHintClick?: () => void;
   canHint?: boolean;
   disabled?: boolean;
@@ -23,7 +22,6 @@ const ENGLISH_KEYBOARD_ROWS = [
 export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
   onLetterPress,
   onBackspace,
-  onClearAll,
   onHintClick,
   canHint = true,
   disabled = false,
@@ -44,88 +42,48 @@ export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
     onBackspace();
   };
 
-  const handleClear = () => {
-    if (disabled || !onClearAll) return;
-    sounds.soundDelete();
-    onClearAll();
-  };
-
-  // Uniform key dimensions: every single letter key has identical width and height across all rows
-  const KEY_STYLE: React.CSSProperties = {
-    width: 'calc((100% - 36px) / 10)',
-    maxWidth: '40px',
-  };
-
   return (
-    <div className="w-full max-w-[440px] mx-auto mt-2 select-none" dir={isEn ? 'ltr' : 'rtl'}>
-      {/* Top Action Bar: Hint and optional Clear button */}
-      {(onHintClick || onClearAll) && (
-        <div className="flex items-center justify-between px-1 mb-2">
-          {onHintClick && (
+    <div className="w-full max-w-lg mx-auto mt-2 select-none" dir={isEn ? 'ltr' : 'rtl'}>
+      {rows.map((row, rowIndex) => (
+        <div key={rowIndex} className="flex justify-center gap-1 sm:gap-1.5 my-1 sm:my-1.5">
+          {rowIndex === 2 && onHintClick && (
             <button
               type="button"
               onClick={onHintClick}
               disabled={!canHint || disabled}
-              title={isEn ? 'Get a hint' : 'קבל רמז'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm ${
+              title={isEn ? 'Get a hint (one letter)' : 'קבל רמז (אות אחת)'}
+              className={`flex items-center justify-center px-2.5 sm:px-3 h-10 sm:h-12 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 canHint && !disabled
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 active:scale-95 shadow-amber-500/10'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 active:scale-95'
                   : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
               }`}
             >
-              <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isEn ? 'Get Hint' : '💡 קבל רמז'}</span>
+              <Lightbulb className={`w-3.5 h-3.5 ${isEn ? 'mr-1' : 'ml-1'} text-amber-400`} />
+              <span>{isEn ? 'Hint' : 'רמז'}</span>
             </button>
           )}
 
-          {onClearAll && (
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={disabled}
-              title={isEn ? 'Clear all letters' : 'נקה הכל'}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-rose-300 bg-white/5 hover:bg-white/10 active:scale-95 transition-all cursor-pointer border border-white/10"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>{isEn ? 'Clear' : 'נקה'}</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Keyboard Rows */}
-      {rows.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex justify-center gap-1 my-1">
-          {/* Row 3 in English: Backspace on one side if needed */}
-          {isEn && rowIndex === 2 && (
-            <div style={KEY_STYLE} className="flex-none invisible" />
-          )}
-
-          {/* Letter Keys - Frosted milky glass background with black font */}
           {row.map((char) => (
             <button
               key={char}
               type="button"
               disabled={disabled}
               onClick={() => handleKey(char)}
-              style={KEY_STYLE}
-              className="flex-none h-11 sm:h-12 flex items-center justify-center bg-white/75 hover:bg-white/90 active:bg-white backdrop-blur-md border border-white/80 active:scale-90 rounded-xl text-lg sm:text-xl font-black text-slate-900 shadow-md shadow-black/15 transition-all touch-manipulation cursor-pointer"
+              className="flex-1 max-w-[34px] sm:max-w-[42px] h-10 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-90 active:bg-pink-500/30 border border-white/15 rounded-xl text-base sm:text-xl font-bold text-white shadow-sm transition-all touch-manipulation cursor-pointer"
             >
               {char}
             </button>
           ))}
 
-          {/* Backspace Key in Row 3 (Index 2): Frosted milky glass style */}
           {rowIndex === 2 && (
             <button
               type="button"
               disabled={disabled}
               onClick={handleDelete}
-              style={KEY_STYLE}
               title={isEn ? 'Backspace' : 'מחק אות'}
-              className="flex-none h-11 sm:h-12 flex items-center justify-center bg-white/75 hover:bg-rose-100/90 active:bg-rose-200 backdrop-blur-md border border-white/80 active:scale-90 rounded-xl text-rose-700 transition-all touch-manipulation cursor-pointer shadow-md shadow-black/15"
+              className="flex items-center justify-center px-2.5 sm:px-3.5 h-10 sm:h-12 bg-white/10 hover:bg-red-500/20 active:scale-95 border border-white/15 rounded-xl text-rose-300 font-bold transition-all cursor-pointer"
             >
-              <Delete className="w-5 sm:w-6 h-5 sm:h-6 stroke-[2.5]" />
+              <Delete className="w-4 sm:w-5 h-4 sm:h-5" />
             </button>
           )}
         </div>

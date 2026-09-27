@@ -10,7 +10,6 @@ interface PlayerJoinScreenProps {
   defaultPin?: string;
   language?: Language;
   onToggleLanguage?: () => void;
-  onSetLanguage?: (lang: Language) => void;
 }
 
 const AVATARS = ['🦁', '🚀', '🍕', '🎸', '🐬', '👑', '⚡', '🌟', '🦊', '🐼', '🐯', '🦄'];
@@ -21,7 +20,6 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
   defaultPin = '',
   language = 'he',
   onToggleLanguage,
-  onSetLanguage,
 }) => {
   const t = translations[language];
   const isEn = language === 'en';
@@ -39,36 +37,13 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
     if (savedAvatar) setSelectedAvatar(savedAvatar);
   }, []);
 
-  useEffect(() => {
-    if (defaultPin) {
-      setPin(defaultPin.trim());
-    }
-  }, [defaultPin]);
-
-  // Synchronize language with the room hosted on the server
-  useEffect(() => {
-    const clean = pin.trim();
-    if (/^\d{4,6}$/.test(clean)) {
-      fetch(`/api/room/${clean}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.success && data.room?.language) {
-            if (data.room.language !== language && onSetLanguage) {
-              onSetLanguage(data.room.language);
-            }
-          }
-        })
-        .catch(() => {});
-    }
-  }, [pin, language, onSetLanguage]);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isJoining) return;
 
     if (!pin.trim()) {
       sounds.soundError();
-      setError(isEn ? 'Please enter a valid room PIN' : 'אנא הזן קוד PIN תקין שקיבלת מהמארח/ת');
+      setError(isEn ? 'Please enter a valid room PIN' : 'אנא הזן קוד PIN תקין שקיבלת מהמארח');
       return;
     }
     if (!name.trim()) {
@@ -86,7 +61,7 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
     onJoin(pin.trim(), name.trim(), selectedAvatar, (errMessage: string) => {
       setIsJoining(false);
       sounds.soundError();
-      setError(errMessage || (isEn ? 'Invalid room PIN code! Ask host for PIN.' : 'קוד PIN שגוי! בקש את הקוד התקין מהמארח/ת.'));
+      setError(errMessage || (isEn ? 'Invalid room PIN code! Ask host for PIN.' : 'קוד PIN שגוי! בקש את הקוד התקין מהמארח.'));
     });
   };
 
@@ -122,7 +97,7 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
 
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 text-xs font-bold border border-pink-500/30">
             <Gamepad2 className="w-3.5 h-3.5 text-pink-400" />
-            <span>{isEn ? 'Player' : 'משתתף/ת'}</span>
+            <span>{isEn ? 'Player' : 'שחקן'}</span>
           </span>
         </div>
       </div>
@@ -182,7 +157,7 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
         {/* Avatar Selection */}
         <div>
           <label className="block text-xs font-bold text-slate-200 mb-1.5">
-            {isEn ? 'Choose Avatar:' : 'בחר דמות משתתף/ת:'}
+            {isEn ? 'Choose Avatar:' : 'בחר דמות שחקן:'}
           </label>
           <div className="grid grid-cols-6 gap-2">
             {AVATARS.map((av) => (

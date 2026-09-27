@@ -10,7 +10,6 @@ interface GameOverModalProps {
   totalCardsPlayed: number;
   onRestart: () => void;
   onHome: () => void;
-  onOpenLeaderboard?: () => void;
   language?: Language;
 }
 
@@ -20,7 +19,6 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   totalCardsPlayed,
   onRestart,
   onHome,
-  onOpenLeaderboard,
   language = 'he',
 }) => {
   const isEn = language === 'en';
@@ -114,7 +112,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   <span className="font-semibold text-sm">{player.name}</span>
                   {player.isHost && (
                     <span className="text-[10px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-full">
-                      {isEn ? 'Host' : 'מארח/ת'}
+                      {isEn ? 'Host' : 'מארח'}
                     </span>
                   )}
                 </div>
@@ -134,33 +132,21 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </div>
 
           {/* Action buttons */}
-          <div className="space-y-2.5">
-            {onOpenLeaderboard && (
-              <button
-                onClick={onOpenLeaderboard}
-                className="w-full py-3 px-4 bg-gradient-to-r from-amber-500/25 via-yellow-500/20 to-amber-500/25 hover:from-amber-500/40 hover:to-yellow-500/35 active:scale-95 text-amber-200 hover:text-white font-extrabold rounded-2xl border border-amber-400/40 shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
-              >
-                <Trophy className="w-5 h-5 text-amber-300" />
-                <span>{isEn ? 'View Global Leaderboard 🏆' : '🏆 צפה בטבלת השיאים העולמית'}</span>
-              </button>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={onRestart}
-                className="flex-1 py-3.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-95 text-white font-extrabold rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
-              >
-                <RotateCcw className="w-5 h-5" />
-                <span>{isEn ? 'Play Again' : 'שחק שוב'}</span>
-              </button>
-              <button
-                onClick={onHome}
-                className="py-3.5 px-4 bg-white/10 hover:bg-white/15 active:scale-95 text-slate-200 font-bold rounded-2xl border border-white/15 flex items-center justify-center gap-2 cursor-pointer transition-all"
-              >
-                <Home className="w-5 h-5" />
-                <span>{isEn ? 'Home' : 'תפריט'}</span>
-              </button>
-            </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onRestart}
+              className="flex-1 py-3.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-95 text-white font-extrabold rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+            >
+              <RotateCcw className="w-5 h-5" />
+              <span>{isEn ? 'Play Again' : 'שחק שוב'}</span>
+            </button>
+            <button
+              onClick={onHome}
+              className="py-3.5 px-4 bg-white/10 hover:bg-white/15 active:scale-95 text-slate-200 font-bold rounded-2xl border border-white/15 flex items-center justify-center gap-2 cursor-pointer transition-all"
+            >
+              <Home className="w-5 h-5" />
+              <span>{isEn ? 'Home' : 'תפריט'}</span>
+            </button>
           </div>
         </div>
       </div>

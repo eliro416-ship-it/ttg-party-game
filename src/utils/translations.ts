@@ -10,10 +10,10 @@ export const translations = {
     r2: "❓ <b>שואלים ומנחשים:</b> שאר השחקנים רואים קוביות ריקות וחוקרים אותו.",
     r3: "⏱️ <b>{seconds} לתור:</b> סנכרון שעון ענן מדויק! הראשון שמקליד נכון זוכה בנקודה!",
     r4: "🔄 <b>התור עובר:</b> בסיום הזמן או בניחוש מוצלח – התמונה עוברת לשחקן הבא.",
-    btnHost: "👑 כניסת מארח/ת (חדר רשת)",
-    btnPlayer: "🎮 כניסת משתתף/ת",
+    btnHost: "👑 כניסת מארח (חדר רשת)",
+    btnPlayer: "🎮 כניסת משתתף",
     btnQuick: "⚡ משחק מהיר (יחיד / אופליין)",
-    hostTitle: "ניהול מארח/ת בזמן אמת",
+    hostTitle: "ניהול מארח בזמן אמת",
     hostSub: "הפק קוד חדר מבוסס WebSockets לשיתוף עם עשרות שחקנים",
     btnGetCode: "💳 הפקת קוד חדר חי (WebSockets)",
     pinLabel: "קוד ה-PIN של החדר:",
@@ -21,7 +21,7 @@ export const translations = {
     joinTitle: "הצטרפות לחדר חי",
     joinSub: "הזן קוד ושם כדי להתחבר בסנכרון מלא",
     labelPin: "קוד PIN של החדר",
-    labelName: "שם המשתתף/ת שלך",
+    labelName: "שם המשתתף שלך",
     btnJoin: "היכנס למשחק 🎮",
     demoBtn: "🔄 הדגם מנחש/מחזיק",
     guessLabel: "הקלד את הפתרון באותיות:",
@@ -64,13 +64,7 @@ export const translations = {
     liveDisconnected: "🟠 מנסה להתחבר שוב...",
     serverAuthoritative: "🔒 סוד התמונה שמור בשרת",
     holderReaction: "תגובת המחזיק:",
-    reactionReceived: "המחזיק סימן:",
-    voiceType: "קול תגובות:",
-    voiceFemale: "נשי",
-    voiceMale: "גברי",
-    voiceSettings: "סוג קול תגובה (כן/לא/חם/קר):",
-    winnerAnswered: "ענה תשובה נכונה!",
-    movingToNext: "מעבירים את התמונה לשחקן הבא..."
+    reactionReceived: "המחזיק סימן:"
   },
   en: {
     langBtn: "עברית",
@@ -135,13 +129,7 @@ export const translations = {
     liveDisconnected: "🟠 Reconnecting to server...",
     serverAuthoritative: "🔒 Server-Authoritative Security",
     holderReaction: "Holder Reaction:",
-    reactionReceived: "Holder reacted:",
-    voiceType: "Voice type:",
-    voiceFemale: "Female",
-    voiceMale: "Male",
-    voiceSettings: "Reaction Voice Type (Yes/No/Hot/Cold):",
-    winnerAnswered: "answered correctly!",
-    movingToNext: "Passing the image to next player..."
+    reactionReceived: "Holder reacted:"
   }
 } as const;
 

@@ -8,30 +8,7 @@
     <meta property="og:title" content="Time to Guess | הזמן לנחש" />
     <meta property="og:description" content="Time To Guess - נחשו את המילה לפני שהזמן נגמר! משחק ניחוש תמונות חברתי רב-לשוני בעברית ובאנגלית" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Time to Guess" />
-    <meta property="og:image" content="/pwa-512x512.png" />
-    <meta property="og:image:secure_url" content="/pwa-512x512.png" />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="512" />
-    <meta property="og:image:height" content="512" />
-    <meta property="og:image:alt" content="Time to Guess - אייקון המשחק" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Time to Guess | הזמן לנחש" />
-    <meta name="twitter:description" content="Time To Guess - נחשו את המילה לפני שהזמן נגמר! משחק ניחוש תמונות חברתי רב-לשוני בעברית ובאנגלית" />
-    <meta name="twitter:image" content="/pwa-512x512.png" />
-    <meta name="twitter:image:alt" content="Time to Guess - אייקון המשחק" />
-
-    <!-- PWA & Mobile Web App Meta Tags -->
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#120E2E" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="TimeToGuess" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="shortcut icon" href="/favicon.ico" />
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -39,14 +16,6 @@
   <body class="bg-[#0F172A] text-slate-100 antialiased selection:bg-pink-500 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      try {
-        if ('serviceWorker' in navigator && window.self === window.top) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
-          });
-        }
-      } catch (e) {}
-    </script>
   </body>
 </html>
+

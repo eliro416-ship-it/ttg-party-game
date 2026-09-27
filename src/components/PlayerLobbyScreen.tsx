@@ -5,12 +5,12 @@ import {
   Users,
   Copy,
   Check,
+  Share2,
   LogOut,
   Radio,
   Hourglass,
   Globe,
-  Sparkles,
-  Trophy
+  Sparkles
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
@@ -20,10 +20,9 @@ interface PlayerLobbyScreenProps {
   myPlayerId: string;
   turnDuration: number;
   onLeave: () => void;
-  onOpenShareModal?: () => void;
+  onOpenShareModal: () => void;
   language?: Language;
   onToggleLanguage?: () => void;
-  onOpenLeaderboard?: () => void;
 }
 
 export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
@@ -32,9 +31,9 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
   myPlayerId,
   turnDuration,
   onLeave,
+  onOpenShareModal,
   language = 'he',
   onToggleLanguage,
-  onOpenLeaderboard,
 }) => {
   const t = translations[language];
   const isEn = language === 'en';
@@ -72,20 +71,6 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
         </button>
 
         <div className="flex items-center gap-2">
-          {onOpenLeaderboard && (
-            <button
-              onClick={() => {
-                sounds.soundKeypress();
-                onOpenLeaderboard();
-              }}
-              className="bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 border border-amber-400/40 text-amber-200 hover:text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-              title={isEn ? 'Global Leaderboard' : 'טבלת שיאים עולמית'}
-            >
-              <Trophy className="w-3.5 h-3.5 text-amber-300" />
-              <span className="hidden sm:inline">{isEn ? 'Leaderboard' : 'טבלת שיאים'}</span>
-            </button>
-          )}
-
           {onToggleLanguage && (
             <button
               onClick={() => {
@@ -123,23 +108,34 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
         <div className="flex items-center justify-center gap-2 mb-2">
           <Hourglass className="w-5 h-5 text-amber-300 animate-spin" />
           <span className="text-sm font-extrabold text-amber-300">
-            {isEn ? 'Waiting for host to start...' : 'ממתין למארח/ת שיתחיל את המשחק...'}
+            {isEn ? 'Waiting for host to start...' : 'ממתין למארח שיתחיל את המשחק...'}
           </span>
         </div>
         <p className="text-xs text-slate-300 max-w-xs mx-auto leading-relaxed">
           {isEn
             ? 'When the host clicks "Start Game", your device will automatically sync into the round!'
-            : 'ברגע שהמארח/ת ילחץ על התחלת המשחק, המכשיר שלך יכנס אוטומטית לסיבוב הראשון!'}
+            : 'ברגע שהמארח ילחץ על התחלת המשחק, המכשיר שלך יכנס אוטומטית לסיבוב הראשון!'}
         </p>
 
-        {/* PIN Copy quick button */}
-        <div className="flex justify-center mt-4">
+        {/* PIN Copy & Share quick buttons */}
+        <div className="flex justify-center gap-2 mt-4">
           <button
             onClick={handleCopyPin}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-xs font-bold text-white border border-white/15 transition-all cursor-pointer shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-xs font-bold text-white border border-white/15 transition-all cursor-pointer"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? t.pinCopied : t.copyPin}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              sounds.soundKeypress();
+              onOpenShareModal();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 active:scale-95 text-xs font-bold text-pink-200 border border-pink-400/30 transition-all cursor-pointer"
+          >
+            <Share2 className="w-3.5 h-3.5 text-pink-300" />
+            <span>{t.share}</span>
           </button>
         </div>
       </div>
