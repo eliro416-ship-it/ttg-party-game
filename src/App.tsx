@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { GameScreen, Player, RoomSettings, CardItem, Language } from './types/game';
-import { DEFAULT_CARDS } from './data/cards';
+import { GameScreen, Player, RoomSettings, CardItem, Language, VoiceGender } from './types/game';
+import { DEFAULT_CARDS, shuffleDeck } from './data/cards';
 import { RoleSelectScreen } from './components/RoleSelectScreen';
 import { HostScreen } from './components/HostScreen';
 import { PlayerJoinScreen } from './components/PlayerJoinScreen';
@@ -10,31 +10,54 @@ import { GameOverModal } from './components/GameOverModal';
 import { CustomCardModal } from './components/CustomCardModal';
 import { ShareModal } from './components/ShareModal';
 import { IntroVideoModal } from './components/IntroVideoModal';
+import { AnimatedQuestionMarksBackground } from './components/AnimatedQuestionMarksBackground';
 import { sounds } from './utils/audio';
 import { getGameSocket, getSessionToken, TurnStartedPayload } from './utils/socket';
+import { getPinFromUrl, getLangFromUrl } from './utils/url';
 
 export default function App() {
-  const [screen, setScreen] = useState<GameScreen>('welcome');
-  const [pin, setPin] = useState<string>('7742');
+  // Check URL parameters immediately to bypass welcome screen if joining via PIN link
+  const pinFromUrl = getPinFromUrl();
+
+  const [screen, setScreen] = useState<GameScreen>(() => {
+    const initialPin = getPinFromUrl();
+    if (initialPin) {
+      return 'player-join';
+    }
+    return 'welcome';
+  });
+
+  const [pin, setPin] = useState<string>(() => {
+    const initialPin = getPinFromUrl();
+    if (initialPin) {
+      return initialPin;
+    }
+    return '7742';
+  });
+
   const [hasPurchasedLicense, setHasPurchasedLicense] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(sounds.isMuted);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isLiveServer, setIsLiveServer] = useState<boolean>(false);
   const [serverTurnData, setServerTurnData] = useState<TurnStartedPayload | null>(null);
 
-  // Intro video modal state (opens on entry unless opted out)
+  // Intro video modal state (fullscreen intro video with skip and transition to game)
+  const CLOUDINARY_DEFAULT_INTRO = 'https://player.cloudinary.com/embed/?cloud_name=afjcyngg&public_id=gemini_generated_video_6c8f0e40';
+
   const [introVideoUrl, setIntroVideoUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('ttg_intro_video_url');
-      if (saved) return saved;
+      if (saved && !saved.includes('youtube.com/watch?v=lYah5-xEeck')) {
+        return saved;
+      }
     }
-    return 'https://www.youtube.com/watch?v=lYah5-xEeck';
+    return CLOUDINARY_DEFAULT_INTRO;
   });
 
   const [isIntroVideoOpen, setIsIntroVideoOpen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const hide = localStorage.getItem('ttg_hide_intro_video');
-      return hide !== 'true';
+    const initialPin = getPinFromUrl();
+    if (initialPin) {
+      return false; // Skip intro video completely when clicking a join room link
     }
     return true;
   });
@@ -49,6 +72,12 @@ export default function App() {
   // Language management (Hebrew / English)
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlLang = params.get('lang');
+      if (urlLang === 'he' || urlLang === 'en') {
+        localStorage.setItem('ttg_lang', urlLang);
+        return urlLang;
+      }
       const saved = localStorage.getItem('ttg_lang');
       if (saved === 'en' || saved === 'he') return saved;
     }
@@ -70,6 +99,20 @@ export default function App() {
       }
       return next;
     });
+  }, []);
+
+  // Voice Gender preference (Male / Female)
+  const [voiceGender, setVoiceGender] = useState<VoiceGender>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('game_voice_gender');
+      if (saved === 'male' || saved === 'female') return saved;
+    }
+    return sounds.voiceGender;
+  });
+
+  const handleChangeVoiceGender = useCallback((gender: VoiceGender) => {
+    sounds.setVoiceGender(gender);
+    setVoiceGender(gender);
   }, []);
 
   // Settings
@@ -128,14 +171,20 @@ export default function App() {
   });
 
   const [isCustomCardModalOpen, setIsCustomCardModalOpen] = useState(false);
+  const [playedCardIds, setPlayedCardIds] = useState<Set<string>>(() => new Set());
+
+  // Shuffled deck using Fisher-Yates algorithm
+  const [shuffledDeck, setShuffledDeck] = useState<CardItem[]>(() => {
+    return shuffleDeck([...DEFAULT_CARDS]);
+  });
 
   const activeDeck = useMemo(() => {
-    const all = [...DEFAULT_CARDS, ...customCards];
+    const all = [...shuffledDeck, ...customCards];
     if (settings.selectedCategories.includes('הכל')) {
       return all;
     }
     return all.filter((c) => settings.selectedCategories.includes(c.category));
-  }, [customCards, settings.selectedCategories]);
+  }, [shuffledDeck, customCards, settings.selectedCategories]);
 
   // Real-time WebSocket event listeners
   useEffect(() => {
@@ -194,15 +243,24 @@ export default function App() {
     };
   }, []);
 
-  // Auto-detect invitation link with ?pin=XXXX
+  // Auto-detect invitation link with ?pin=XXXX and ?lang=he/en
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const urlPin = params.get('pin');
-      if (urlPin) {
-        setPin(urlPin);
-        setScreen('player-join');
-      }
+    const searchParams = new URLSearchParams(window.location.search);
+    const pinFromUrl = searchParams.get('pin') || getPinFromUrl();
+    const langFromUrl = searchParams.get('lang') || getLangFromUrl();
+
+    if (langFromUrl === 'he' || langFromUrl === 'en') {
+      setLanguage(langFromUrl);
+      localStorage.setItem('ttg_lang', langFromUrl);
+      document.documentElement.lang = langFromUrl;
+      document.documentElement.dir = langFromUrl === 'he' ? 'rtl' : 'ltr';
+    }
+
+    if (pinFromUrl) {
+      const cleanPin = pinFromUrl.trim();
+      setPin(cleanPin);
+      setScreen('player-join');
+      setIsIntroVideoOpen(false);
     }
   }, []);
 
@@ -219,7 +277,7 @@ export default function App() {
     socket.emit(
       'CREATE_ROOM',
       {
-        hostName: language === 'en' ? 'Host (Danny)' : 'מארח (דני)',
+        hostName: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
         avatar: '👑',
         sessionToken: token,
         turnDuration: settings.turnDuration,
@@ -259,13 +317,20 @@ export default function App() {
     setScreen('game');
   };
 
-  const handleQuickStart = () => {
+  const handleQuickStart = useCallback(() => {
     setMyPlayerId('p-host');
     setActivePlayerIndex(0);
     setCurrentCardIndex(0);
     setTotalCardsSolved(0);
+    setPlayedCardIds(new Set());
+    setShuffledDeck(shuffleDeck([...DEFAULT_CARDS]));
     setScreen('game');
-  };
+  }, []);
+
+  const handleTransitionFromIntroToDashboard = useCallback(() => {
+    setIsIntroVideoOpen(false);
+    setScreen('welcome');
+  }, []);
 
   // Player joins room via Server
   const handleJoinGame = (
@@ -296,7 +361,7 @@ export default function App() {
             setScreen('player-lobby');
           }
         } else {
-          onError?.(res?.error || (language === 'en' ? 'Room not found! Check PIN with host.' : 'חדר לא נמצא! בדוק את קוד ה-PIN עם המארח.'));
+          onError?.(res?.error || (language === 'en' ? 'Room not found! Check PIN with host.' : 'חדר לא נמצא! בדוק/י את קוד ה-PIN עם המארח/ת.'));
         }
       }
     );
@@ -316,6 +381,11 @@ export default function App() {
       })
     );
 
+    const currentCard = activeDeck[currentCardIndex];
+    if (currentCard) {
+      setPlayedCardIds((prev) => new Set(prev).add(currentCard.id));
+    }
+
     setTotalCardsSolved((prev) => prev + 1);
 
     if (currentCardIndex + 1 >= activeDeck.length || totalCardsSolved + 1 >= 25) {
@@ -324,21 +394,27 @@ export default function App() {
       setCurrentCardIndex((prev) => (prev + 1) % activeDeck.length);
       setActivePlayerIndex((prev) => (prev + 1) % players.length);
     }
-  }, [activeDeck.length, currentCardIndex, players.length, totalCardsSolved]);
+  }, [activeDeck, currentCardIndex, players.length, totalCardsSolved]);
 
   const handleCardTimeout = useCallback(() => {
     setPlayers((prev) =>
       prev.map((p, idx) => (idx === activePlayerIndex ? { ...p, streak: 0 } : p))
     );
+    const currentCard = activeDeck[currentCardIndex];
+    if (currentCard) {
+      setPlayedCardIds((prev) => new Set(prev).add(currentCard.id));
+    }
     setCurrentCardIndex((prev) => (prev + 1) % activeDeck.length);
     setActivePlayerIndex((prev) => (prev + 1) % players.length);
-  }, [activeDeck.length, activePlayerIndex, players.length]);
+  }, [activeDeck, activePlayerIndex, currentCardIndex, players.length]);
 
   const handleRestartGame = useCallback(() => {
     setIsGameOverModalOpen(false);
     setCurrentCardIndex(0);
     setTotalCardsSolved(0);
     setActivePlayerIndex(0);
+    setPlayedCardIds(new Set());
+    setShuffledDeck(shuffleDeck([...DEFAULT_CARDS]));
     setPlayers((prev) => prev.map((p) => ({ ...p, score: 0, streak: 0 })));
     setScreen('game');
   }, []);
@@ -352,16 +428,14 @@ export default function App() {
   const activePlayer = players[activePlayerIndex] || players[0];
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-3 sm:p-5 bg-gradient-to-br from-[#120E2E] via-[#2A1045] to-[#0A0D1A] text-white">
-      {/* Background ambient blurs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-10 left-10 w-72 h-72 bg-purple-600/15 rounded-full blur-[100px]" />
-        <div className="absolute bottom-10 right-10 w-80 h-80 bg-pink-600/15 rounded-full blur-[120px]" />
-      </div>
+    <div className="min-h-screen w-full flex items-center justify-center p-3 sm:p-5 bg-gradient-to-br from-[#120E2E] via-[#2A1045] to-[#0A0D1A] text-white relative overflow-hidden">
+      {/* Colorful Animated Question Marks Background */}
+      <AnimatedQuestionMarksBackground />
 
       {/* Main glassmorphic card container */}
       <div className="relative z-10 w-full max-w-[460px] bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[32px] p-5 sm:p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all">
-        {screen === 'welcome' && (
+        {/* Never render welcome screen if pinFromUrl is present in URL */}
+        {screen === 'welcome' && !pinFromUrl && (
           <RoleSelectScreen
             onOpenHost={() => setScreen('host')}
             onOpenPlayer={() => setScreen('player-join')}
@@ -393,11 +467,16 @@ export default function App() {
           />
         )}
 
-        {screen === 'player-join' && (
+        {(screen === 'player-join' || (screen === 'welcome' && Boolean(pinFromUrl))) && (
           <PlayerJoinScreen
             onJoin={handleJoinGame}
-            onBack={() => setScreen('welcome')}
-            defaultPin={pin}
+            onBack={() => {
+              try {
+                window.history.replaceState({}, '', window.location.pathname);
+              } catch (e) {}
+              setScreen('welcome');
+            }}
+            defaultPin={pin || pinFromUrl || ''}
             language={language}
             onToggleLanguage={handleToggleLanguage}
           />
@@ -439,6 +518,8 @@ export default function App() {
             onToggleMute={handleToggleMute}
             language={language}
             onToggleLanguage={handleToggleLanguage}
+            voiceGender={voiceGender}
+            onChangeVoiceGender={handleChangeVoiceGender}
           />
         )}
       </div>
@@ -468,8 +549,10 @@ export default function App() {
       />
 
       <IntroVideoModal
-        isOpen={isIntroVideoOpen}
-        onClose={() => setIsIntroVideoOpen(false)}
+        isOpen={isIntroVideoOpen && !pinFromUrl}
+        onClose={handleTransitionFromIntroToDashboard}
+        onTransitionToDashboard={handleTransitionFromIntroToDashboard}
+        onTransitionToGame={handleTransitionFromIntroToDashboard}
         videoUrl={introVideoUrl}
         onUpdateVideoUrl={handleUpdateVideoUrl}
         language={language}

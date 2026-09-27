@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { DEFAULT_CARDS } from '../src/data/cards';
+import { DEFAULT_CARDS, shuffleDeck } from '../src/data/cards';
 import { CardItem } from '../src/types/game';
 
 interface ServerPlayer {
@@ -21,6 +21,7 @@ interface RoomState {
   hostId: string;
   players: ServerPlayer[];
   deck: CardItem[];
+  playedCardIds: Set<string>;
   currentCardIndex: number;
   currentHolderIndex: number;
   turnDuration: number;
@@ -52,8 +53,8 @@ export function setupGameSocketServer(io: Server) {
         lastActive: Date.now(),
       };
 
-      // Shuffle cards for this room
-      const shuffledDeck = [...DEFAULT_CARDS].sort(() => 0.5 - Math.random());
+      // Fisher-Yates shuffle cards for this room
+      const shuffledDeck = shuffleDeck(DEFAULT_CARDS);
 
       const newRoom: RoomState = {
         pin,
@@ -61,6 +62,7 @@ export function setupGameSocketServer(io: Server) {
         hostId: playerId,
         players: [hostPlayer],
         deck: shuffledDeck,
+        playedCardIds: new Set<string>(),
         currentCardIndex: 0,
         currentHolderIndex: 0,
         turnDuration: data.turnDuration || 15,
@@ -157,6 +159,9 @@ export function setupGameSocketServer(io: Server) {
         room.language = data.language;
       }
 
+      // Shuffle entire deck with Fisher-Yates and reset played history
+      room.deck = shuffleDeck(DEFAULT_CARDS);
+      room.playedCardIds.clear();
       room.status = 'IN_PROGRESS';
       room.currentCardIndex = 0;
       room.currentHolderIndex = 0;
@@ -182,16 +187,25 @@ export function setupGameSocketServer(io: Server) {
       const card = room.deck[room.currentCardIndex];
       if (!card) return;
 
-      const normalizedGuess = data.guess.trim().toLowerCase();
-      const targetHe = (card.word_he || card.word).trim().toLowerCase();
-      const targetEn = (card.word_en || '').trim().toLowerCase();
+      const normalize = (str: string) => {
+        return (str || '')
+          .trim()
+          .toLowerCase()
+          .replace(/[ם]/g, 'מ')
+          .replace(/[ן]/g, 'נ')
+          .replace(/[ץ]/g, 'צ')
+          .replace(/[ף]/g, 'פ')
+          .replace(/[ך]/g, 'כ')
+          .replace(/[-_'"\s]/g, '');
+      };
 
-      // Normalize letters (support both Hebrew and English variations)
+      const normalizedGuess = normalize(data.guess);
+      const targetHe = normalize(card.word_he || card.word);
+      const targetEn = normalize(card.word_en || card.wordEn || '');
+
       const isMatch =
-        normalizedGuess === targetHe ||
-        (targetEn && normalizedGuess === targetEn) ||
-        normalizedGuess.replace(/[םןץףך]/g, (c) => ({ ם: 'מ', ן: 'נ', ץ: 'צ', ף: 'פ', ך: 'כ' }[c] || c)) ===
-          targetHe.replace(/[םןץףך]/g, (c) => ({ ם: 'מ', ן: 'נ', ץ: 'צ', ף: 'פ', ך: 'כ' }[c] || c));
+        normalizedGuess.length > 0 &&
+        (normalizedGuess === targetHe || (targetEn.length > 0 && normalizedGuess === targetEn));
 
       if (isMatch) {
         // Clear turn timer
@@ -208,17 +222,17 @@ export function setupGameSocketServer(io: Server) {
         player.score += totalPoints;
         player.streak += 1;
 
-        const correctWord = room.language === 'en' ? (card.word_en || card.word) : (card.word_he || card.word);
+        const correctWord = room.language === 'en' ? (card.word_en || card.wordEn || card.word) : (card.word_he || card.word);
 
         callback?.({ success: true, correct: true });
 
-        // Broadcast ROUND_WON to all clients
+        // Broadcast ROUND_WON to all clients (now safely revealing image + word for celebration)
         io.to(room.pin).emit('ROUND_WON', {
           winnerId: player.id,
           winnerName: player.name,
           winnerAvatar: player.avatar,
           word: correctWord,
-          image: card.image, // Now reveal image to everyone during winner screen
+          image: card.imageUrl || card.image,
           points: totalPoints,
           scores: room.players.map((p) => ({ id: p.id, name: p.name, score: p.score, streak: p.streak })),
         });
@@ -229,7 +243,6 @@ export function setupGameSocketServer(io: Server) {
         }, 2500);
       } else {
         callback?.({ success: true, correct: false });
-        // Optionally notify room of incorrect guess attempt
         io.to(room.pin).emit('INCORRECT_GUESS', {
           guesserId: player.id,
           guesserName: player.name,
@@ -270,7 +283,7 @@ export function setupGameSocketServer(io: Server) {
       if (!card) return;
 
       room.revealedHint = true;
-      const hint = room.language === 'en' ? (card.hint_en || card.hint) : card.hint;
+      const hint = room.language === 'en' ? (card.hint_en || card.hintEn || card.hint) : card.hint;
 
       io.to(room.pin).emit('HINT_REVEALED', {
         hint,
@@ -293,11 +306,11 @@ export function setupGameSocketServer(io: Server) {
       }
 
       const card = room.deck[room.currentCardIndex];
-      const correctWord = room.language === 'en' ? (card.word_en || card.word) : (card.word_he || card.word);
+      const correctWord = room.language === 'en' ? (card.word_en || card.wordEn || card.word) : (card.word_he || card.word);
 
       io.to(room.pin).emit('TURN_TIMEOUT', {
         word: correctWord,
-        image: card.image,
+        image: card ? (card.imageUrl || card.image) : null,
         reason: 'skipped',
       });
 
@@ -360,8 +373,8 @@ function startNewTurn(io: Server, room: RoomState) {
     room.turnTimer = null;
   }
 
-  // Check if cards finished or max rounds reached
-  if (room.currentCardIndex >= room.deck.length || room.currentCardIndex >= 25) {
+  // Check if max rounds reached (e.g. 50 rounds)
+  if (room.currentCardIndex >= 50) {
     room.status = 'GAME_OVER';
     io.to(room.pin).emit('GAME_OVER', {
       players: room.players.map((p) => ({
@@ -390,7 +403,7 @@ function startNewTurn(io: Server, room: RoomState) {
   room.revealedHint = false;
 
   // Send tailored state to each player:
-  // SERVER AUTHORITATIVE RULE: Holder gets full image + word. Guessers get ONLY length & category!
+  // SERVER AUTHORITATIVE RULE: Holder gets full image + word. Guessers get ONLY id, category, wordLength!
   for (const player of room.players) {
     sendTurnStateToPlayer(io, room, player);
   }
@@ -407,23 +420,26 @@ function sendTurnStateToPlayer(io: Server, room: RoomState, player: ServerPlayer
   const card = room.deck[room.currentCardIndex];
   if (!card) return;
 
-  const targetWord = room.language === 'en' ? (card.word_en || card.word) : (card.word_he || card.word);
-  const targetCategory = room.language === 'en' ? (card.category_en || card.category) : card.category;
+  const targetWord = room.language === 'en' ? (card.word_en || card.wordEn || card.word) : (card.word_he || card.word);
+  const targetCategory = room.language === 'en' ? (card.category_en || card.categoryEn || card.category) : card.category;
 
   if (isHolder) {
     // HOLDER PAYLOAD: Full image and word
     io.to(player.socketId).emit('TURN_STARTED', {
       isHolder: true,
+      cardId: card.id,
       cardIndex: room.currentCardIndex,
-      totalCards: Math.min(room.deck.length, 25),
+      totalCards: Math.min(room.deck.length, 50),
       holderId: currentHolder.id,
       holderName: currentHolder.name,
       holderAvatar: currentHolder.avatar,
       // SECRET DATA: Sent ONLY to Holder!
-      image: card.image,
+      image: card.imageUrl || card.image,
+      imageUrl: card.imageUrl || card.image,
+      fallback: card.fallback,
       word: targetWord,
       category: targetCategory,
-      hint: room.language === 'en' ? (card.hint_en || card.hint) : card.hint,
+      hint: room.language === 'en' ? (card.hint_en || card.hintEn || card.hint) : card.hint,
       wordLength: targetWord.length,
       turnEndTime: room.turnEndTime,
       turnDuration: room.turnDuration,
@@ -441,16 +457,19 @@ function sendTurnStateToPlayer(io: Server, room: RoomState, player: ServerPlayer
     // GUESSER PAYLOAD: NO image, NO secret word. Inspection in browser will find zero clues!
     io.to(player.socketId).emit('TURN_STARTED', {
       isHolder: false,
+      cardId: card.id,
       cardIndex: room.currentCardIndex,
-      totalCards: Math.min(room.deck.length, 25),
+      totalCards: Math.min(room.deck.length, 50),
       holderId: currentHolder.id,
       holderName: currentHolder.name,
       holderAvatar: currentHolder.avatar,
-      // ZERO SECRETS:
+      // ZERO SECRETS (prevents DevTools cheating):
       image: null,
+      imageUrl: null,
+      fallback: null,
       word: null,
       category: targetCategory,
-      hint: room.revealedHint ? (room.language === 'en' ? (card.hint_en || card.hint) : card.hint) : null,
+      hint: room.revealedHint ? (room.language === 'en' ? (card.hint_en || card.hintEn || card.hint) : card.hint) : null,
       wordLength: targetWord.length,
       turnEndTime: room.turnEndTime,
       turnDuration: room.turnDuration,
@@ -472,7 +491,7 @@ function handleServerTurnTimeout(io: Server, room: RoomState) {
 
   const card = room.deck[room.currentCardIndex];
   const correctWord = card
-    ? (room.language === 'en' ? (card.word_en || card.word) : (card.word_he || card.word))
+    ? (room.language === 'en' ? (card.word_en || card.wordEn || card.word) : (card.word_he || card.word))
     : '';
 
   // Reset streak of current active holder
@@ -481,10 +500,10 @@ function handleServerTurnTimeout(io: Server, room: RoomState) {
     currentHolder.streak = 0;
   }
 
-  // Broadcast timeout & reveal what the word was
+  // Broadcast timeout & reveal what the word and image were
   io.to(room.pin).emit('TURN_TIMEOUT', {
     word: correctWord,
-    image: card ? card.image : null,
+    image: card ? (card.imageUrl || card.image) : null,
     reason: 'time_up',
   });
 
@@ -494,8 +513,28 @@ function handleServerTurnTimeout(io: Server, room: RoomState) {
 }
 
 function advanceToNextTurn(io: Server, room: RoomState) {
+  const currentCard = room.deck[room.currentCardIndex];
+  if (currentCard) {
+    room.playedCardIds.add(currentCard.id);
+  }
+
   room.currentCardIndex += 1;
   room.currentHolderIndex = (room.currentHolderIndex + 1) % room.players.length;
+
+  // Duplicate prevention check:
+  // If all cards in current deck were played or deck index reaches end:
+  if (room.currentCardIndex >= room.deck.length || room.playedCardIds.size >= DEFAULT_CARDS.length) {
+    const unplayed = DEFAULT_CARDS.filter((c) => !room.playedCardIds.has(c.id));
+    if (unplayed.length > 0) {
+      room.deck = [...room.deck.slice(0, room.currentCardIndex), ...shuffleDeck(unplayed)];
+    } else {
+      // All cards exhausted, start a fresh cycle with full Fisher-Yates shuffle
+      room.playedCardIds.clear();
+      room.deck = shuffleDeck(DEFAULT_CARDS);
+      room.currentCardIndex = 0;
+    }
+  }
+
   startNewTurn(io, room);
 }
 

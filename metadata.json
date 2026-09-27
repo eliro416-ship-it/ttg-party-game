@@ -1,6 +1,6 @@
 {
   "name": "משחק קלפי תמונות",
-  "description": "משחק ניחוש קלפי תמונות אינטראקטיבי וחברתי בעברית למארחים ומשתתפים עם שעון עצר, ניקוד וצלילים",
+  "description": "משחק ניחוש קלפי תמונות אינטראקטיבי וחברתי בעברית למארחים/ות ומשתתפים/ות עם שעון עצר, ניקוד וצלילים",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

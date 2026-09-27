@@ -20,6 +20,7 @@ import {
   Globe
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
+import { WhatsAppShareButton } from './WhatsAppShareButton';
 
 interface HostScreenProps {
   pin: string;
@@ -112,7 +113,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
 
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-bold border border-purple-500/30">
             <Crown className="w-3.5 h-3.5 text-yellow-300" />
-            <span>{isEn ? 'Host' : 'מארח'}</span>
+            <span>{isEn ? 'Host' : 'מארח/ת'}</span>
           </span>
         </div>
       </div>
@@ -131,12 +132,12 @@ export const HostScreen: React.FC<HostScreenProps> = ({
             <CreditCard className="w-8 h-8 text-white" />
           </div>
           <h3 className="text-base sm:text-lg font-bold text-white mb-1">
-            {isEn ? 'Open Secure Game Room' : 'הפעלת חדר משחק (מארח)'}
+            {isEn ? 'Open Secure Game Room' : 'הפעלת חדר משחק (מארח/ת)'}
           </h3>
           <p className="text-xs sm:text-sm text-slate-300 mb-4 max-w-xs mx-auto">
             {isEn
               ? 'Generate a unique room PIN and sync unlimited players across devices'
-              : 'כולל הפקת קוד PIN, סנכרון משתתפים ללא הגבלה ושליטה מלאה בקצב המשחק'}
+              : 'כולל הפקת קוד PIN, סנכרון משתתפים/ות ללא הגבלה ושליטה מלאה בקצב המשחק'}
           </p>
 
           {/* Quick Timer Selection before activation */}
@@ -181,9 +182,10 @@ export const HostScreen: React.FC<HostScreenProps> = ({
               sounds.soundSuccess();
               onPurchaseLicense();
             }}
-            className="w-full py-4 px-6 bg-gradient-to-r from-[#00B894] to-[#00CEC9] hover:from-[#02a786] hover:to-[#00b8b4] active:scale-98 text-white font-black text-base sm:text-lg rounded-2xl shadow-xl shadow-teal-900/40 flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+            className="btn-3d btn-3d-emerald w-full py-4 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer"
           >
-            <Sparkles className="w-5 h-5 text-yellow-300" />
+            <span className="shimmer-sweep" />
+            <Sparkles className="w-5 h-5 text-yellow-300 drop-shadow" />
             <span>{t.btnGetCode}</span>
           </button>
         </div>
@@ -201,10 +203,12 @@ export const HostScreen: React.FC<HostScreenProps> = ({
             </span>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-2 mt-2 mb-4">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-2 mb-4">
+            <WhatsAppShareButton pin={pin} language={language} variant="compact" />
+
             <button
               onClick={handleCopyPin}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-xs font-bold text-white border border-white/15 transition-all cursor-pointer"
+              className="btn-3d btn-3d-dark flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-white cursor-pointer"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
               <span>{copied ? t.pinCopied : t.copyPin}</span>
@@ -215,10 +219,10 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                 sounds.soundKeypress();
                 onOpenShareModal();
               }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-pink-500/25 hover:bg-pink-500/40 active:scale-95 text-xs font-bold text-pink-200 border border-pink-400/40 transition-all shadow-md shadow-pink-500/10 cursor-pointer"
+              className="btn-3d btn-3d-pink flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white cursor-pointer"
             >
-              <Share2 className="w-4 h-4 text-pink-300" />
-              <span>{isEn ? 'Share Room (QR / Link)' : 'שיתוף והזמנה (QR / קישור)'}</span>
+              <Share2 className="w-4 h-4 text-pink-100" />
+              <span>{isEn ? 'QR / Link' : 'QR וקישור'}</span>
             </button>
           </div>
 
@@ -242,7 +246,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                 >
                   <span>{p.avatar}</span>
                   <span>{p.name}</span>
-                  {p.isHost && <span className="text-[10px] text-amber-300 font-bold">{isEn ? '(Host)' : '(מארח)'}</span>}
+                  {p.isHost && <span className="text-[10px] text-amber-300 font-bold">{isEn ? '(Host)' : '(מארח/ת)'}</span>}
                 </div>
               ))}
             </div>
@@ -255,8 +259,9 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                 <Timer className="w-4 h-4 text-pink-400" />
                 <span>{t.timerSettingsTitle}</span>
               </label>
-              <span className="text-xs font-black text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-lg border border-amber-400/25">
-                ⏱️ {settings.turnDuration === 60 ? (isEn ? '1 Minute' : 'דקה') : `${settings.turnDuration} ${isEn ? 'sec' : 'שניות'}`}
+              <span className="text-xs font-black text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-lg border border-amber-400/25 flex items-center gap-1.5 shadow-sm">
+                <Timer className="w-3.5 h-3.5 text-amber-300" strokeWidth={2.2} />
+                <span>{settings.turnDuration === 60 ? (isEn ? '1 Minute' : 'דקה') : `${settings.turnDuration} ${isEn ? 'sec' : 'שניות'}`}</span>
               </span>
             </div>
 
@@ -276,16 +281,14 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                       sounds.soundKeypress();
                       onUpdateSettings({ ...settings, turnDuration: sec });
                     }}
-                    className={`py-2 px-1.5 rounded-xl border transition-all text-center flex flex-col items-center justify-center cursor-pointer active:scale-95 ${
-                      isSelected
-                        ? 'bg-gradient-to-b from-pink-500/30 to-purple-600/35 border-pink-400 text-white shadow-md shadow-pink-500/20 ring-1 ring-pink-400/40'
-                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:border-white/20 hover:text-white'
+                    className={`btn-3d py-2.5 px-1.5 rounded-xl text-center flex flex-col items-center justify-center cursor-pointer ${
+                      isSelected ? 'btn-3d-timer-active text-white' : 'btn-3d-timer-inactive text-slate-300'
                     }`}
                   >
-                    <span className={`text-xs font-black leading-tight ${isSelected ? 'text-pink-300' : 'text-slate-100'}`}>
+                    <span className={`text-xs font-black leading-tight ${isSelected ? 'text-pink-200' : 'text-slate-100'}`}>
                       {label}
                     </span>
-                    <span className={`text-[10px] mt-0.5 font-medium ${isSelected ? 'text-pink-200/90' : 'text-slate-400'}`}>
+                    <span className={`text-[10px] mt-0.5 font-bold ${isSelected ? 'text-pink-300' : 'text-slate-400'}`}>
                       {note}
                     </span>
                   </button>
@@ -322,10 +325,10 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                           key={cat}
                           type="button"
                           onClick={() => handleToggleCategory(cat)}
-                          className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer ${
+                          className={`btn-3d px-3 py-1.5 text-xs rounded-xl border cursor-pointer font-bold ${
                             isSelected
-                              ? 'bg-purple-600/40 border-purple-400 text-purple-200 font-bold'
-                              : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                              ? 'bg-purple-600/50 border-purple-400 text-purple-100 shadow-[0_3px_0_#4c1d95]'
+                              : 'btn-3d-dark text-slate-300'
                           }`}
                         >
                           {cat}
@@ -342,7 +345,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                   <button
                     type="button"
                     onClick={onOpenCustomCardModal}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40 text-pink-300 rounded-xl text-xs font-bold cursor-pointer"
+                    className="btn-3d btn-3d-pink flex items-center gap-1 px-3.5 py-1.5 text-white rounded-xl text-xs font-bold cursor-pointer"
                   >
                     <PlusCircle className="w-3.5 h-3.5" />
                     {t.customCards}
@@ -352,16 +355,17 @@ export const HostScreen: React.FC<HostScreenProps> = ({
             )}
           </div>
 
-          {/* Big Start Game Button */}
+          {/* Big Start Game Button with 3D Tactile Arcade & Shimmer Sweep */}
           <button
             onClick={() => {
               sounds.soundSuccess();
               onStartGame();
             }}
-            className="w-full py-4 px-6 bg-gradient-to-r from-[#6C5CE7] to-[#8E44AD] hover:from-[#5d4ce6] hover:to-[#8239a1] active:scale-98 text-white font-black text-base sm:text-lg rounded-2xl shadow-xl shadow-purple-900/50 flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+            className="btn-3d btn-3d-purple w-full py-4 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer"
           >
-            <Play className="w-5 h-5 fill-white" />
-            <span>{t.btnStartGame}</span>
+            <span className="shimmer-sweep" />
+            <Play className="w-5 h-5 fill-white drop-shadow" />
+            <span className="tracking-wide font-black">{t.btnStartGame}</span>
           </button>
         </div>
       )}

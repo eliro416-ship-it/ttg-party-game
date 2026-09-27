@@ -52,10 +52,10 @@ export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
               onClick={onHintClick}
               disabled={!canHint || disabled}
               title={isEn ? 'Get a hint (one letter)' : 'קבל רמז (אות אחת)'}
-              className={`flex items-center justify-center px-2.5 sm:px-3 h-10 sm:h-12 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`btn-3d flex items-center justify-center px-2.5 sm:px-3 h-10 sm:h-12 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 canHint && !disabled
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 active:scale-95'
-                  : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
+                  ? 'btn-3d-dark text-amber-300 border-amber-500/40 shadow-[0_3px_0_#78350f]'
+                  : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed opacity-50'
               }`}
             >
               <Lightbulb className={`w-3.5 h-3.5 ${isEn ? 'mr-1' : 'ml-1'} text-amber-400`} />
@@ -69,7 +69,7 @@ export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
               type="button"
               disabled={disabled}
               onClick={() => handleKey(char)}
-              className="flex-1 max-w-[34px] sm:max-w-[42px] h-10 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-90 active:bg-pink-500/30 border border-white/15 rounded-xl text-base sm:text-xl font-bold text-white shadow-sm transition-all touch-manipulation cursor-pointer"
+              className="btn-3d flex-1 max-w-[34px] sm:max-w-[42px] h-10 sm:h-12 flex items-center justify-center btn-3d-dark rounded-xl text-base sm:text-xl font-black text-white touch-manipulation cursor-pointer active:bg-pink-500/40"
             >
               {char}
             </button>
@@ -81,7 +81,7 @@ export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
               disabled={disabled}
               onClick={handleDelete}
               title={isEn ? 'Backspace' : 'מחק אות'}
-              className="flex items-center justify-center px-2.5 sm:px-3.5 h-10 sm:h-12 bg-white/10 hover:bg-red-500/20 active:scale-95 border border-white/15 rounded-xl text-rose-300 font-bold transition-all cursor-pointer"
+              className="btn-3d flex items-center justify-center px-2.5 sm:px-3.5 h-10 sm:h-12 btn-3d-dark rounded-xl text-rose-300 font-bold transition-all cursor-pointer border-rose-500/30 shadow-[0_3px_0_#881337]"
             >
               <Delete className="w-4 sm:w-5 h-4 sm:h-5" />
             </button>

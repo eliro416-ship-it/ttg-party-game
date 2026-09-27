@@ -3,6 +3,7 @@ import { ArrowRight, ArrowLeft, Sparkles, Gamepad2, User, KeyRound, Globe } from
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
 import { translations } from '../utils/translations';
+import { getPinFromUrl } from '../utils/url';
 
 interface PlayerJoinScreenProps {
   onJoin: (pin: string, name: string, avatar: string, onError: (err: string) => void) => void;
@@ -24,18 +25,47 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
   const t = translations[language];
   const isEn = language === 'en';
 
-  const [pin, setPin] = useState(defaultPin);
+  const [pin, setPin] = useState(() => {
+    const urlPin = getPinFromUrl();
+    if (urlPin) return urlPin;
+    if (defaultPin) return defaultPin;
+    return '';
+  });
   const [name, setName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('🦁');
   const [error, setError] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+
+  const nameInputRef = React.useRef<HTMLInputElement>(null);
+  const pinInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const urlPin = getPinFromUrl();
+    if (urlPin) {
+      setPin(urlPin);
+    } else if (defaultPin) {
+      setPin(defaultPin);
+    }
+  }, [defaultPin]);
 
   useEffect(() => {
     const savedName = localStorage.getItem('player_name');
     if (savedName) setName(savedName);
     const savedAvatar = localStorage.getItem('player_avatar');
     if (savedAvatar) setSelectedAvatar(savedAvatar);
-  }, []);
+
+    // If PIN is already provided (e.g. from URL), immediately focus the name input for seamless joining
+    const currentPin = getPinFromUrl() || defaultPin;
+    if (currentPin && currentPin.trim()) {
+      setTimeout(() => {
+        nameInputRef.current?.focus();
+      }, 50);
+    } else {
+      setTimeout(() => {
+        pinInputRef.current?.focus();
+      }, 50);
+    }
+  }, [defaultPin]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,12 +73,12 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
 
     if (!pin.trim()) {
       sounds.soundError();
-      setError(isEn ? 'Please enter a valid room PIN' : 'אנא הזן קוד PIN תקין שקיבלת מהמארח');
+      setError(isEn ? 'Please enter a valid room PIN' : 'אנא הזן/י קוד PIN תקין שקיבלת מהמארח/ת');
       return;
     }
     if (!name.trim()) {
       sounds.soundError();
-      setError(isEn ? 'Please enter your name' : 'אנא הזן את שמך כדי שנדע מי משחק');
+      setError(isEn ? 'Please enter your name' : 'אנא הזן/י את שמך כדי שנדע מי משחק/ת');
       return;
     }
 
@@ -61,7 +91,7 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
     onJoin(pin.trim(), name.trim(), selectedAvatar, (errMessage: string) => {
       setIsJoining(false);
       sounds.soundError();
-      setError(errMessage || (isEn ? 'Invalid room PIN code! Ask host for PIN.' : 'קוד PIN שגוי! בקש את הקוד התקין מהמארח.'));
+      setError(errMessage || (isEn ? 'Invalid room PIN code! Ask host for PIN.' : 'קוד PIN שגוי! בקש/י את הקוד התקין מהמארח/ת.'));
     });
   };
 
@@ -97,7 +127,7 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
 
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 text-xs font-bold border border-pink-500/30">
             <Gamepad2 className="w-3.5 h-3.5 text-pink-400" />
-            <span>{isEn ? 'Player' : 'שחקן'}</span>
+            <span>{isEn ? 'Player' : 'משתתף/ת'}</span>
           </span>
         </div>
       </div>
@@ -118,11 +148,19 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
         {/* PIN Input */}
         <div>
-          <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center gap-1.5">
-            <KeyRound className="w-4 h-4 text-amber-400" />
-            {t.labelPin}:
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <KeyRound className="w-4 h-4 text-amber-400" />
+              {t.labelPin}:
+            </label>
+            {pin && pin.length >= 4 && (
+              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30 animate-fadeIn">
+                {isEn ? 'PIN auto-filled ✨' : 'הוזן אוטומטית מהקישור ✨'}
+              </span>
+            )}
+          </div>
           <input
+            ref={pinInputRef}
             type="text"
             value={pin}
             onChange={(e) => {
@@ -142,6 +180,7 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
             {t.labelName}:
           </label>
           <input
+            ref={nameInputRef}
             type="text"
             value={name}
             onChange={(e) => {
@@ -157,7 +196,7 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
         {/* Avatar Selection */}
         <div>
           <label className="block text-xs font-bold text-slate-200 mb-1.5">
-            {isEn ? 'Choose Avatar:' : 'בחר דמות שחקן:'}
+            {isEn ? 'Choose Avatar:' : 'בחר/י דמות משתתף/ת:'}
           </label>
           <div className="grid grid-cols-6 gap-2">
             {AVATARS.map((av) => (
@@ -168,10 +207,10 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
                   sounds.soundKeypress();
                   setSelectedAvatar(av);
                 }}
-                className={`h-11 rounded-xl text-xl flex items-center justify-center transition-all cursor-pointer ${
+                className={`btn-3d h-12 rounded-xl text-xl flex items-center justify-center cursor-pointer ${
                   selectedAvatar === av
-                    ? 'bg-pink-500/40 border-2 border-pink-400 scale-105 shadow-md shadow-pink-500/30'
-                    : 'bg-white/5 border border-white/10 hover:bg-white/15 opacity-80 hover:opacity-100'
+                    ? 'btn-3d-pink border-2 border-pink-300 scale-105'
+                    : 'btn-3d-dark opacity-85 hover:opacity-100'
                 }`}
               >
                 {av}
@@ -184,12 +223,13 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
         <button
           type="submit"
           disabled={isJoining}
-          className="w-full mt-2 py-4 px-6 bg-gradient-to-r from-[#FD79A8] to-[#E84393] hover:from-[#fc659a] hover:to-[#d83584] active:scale-98 disabled:opacity-60 text-white font-black text-lg rounded-2xl shadow-xl shadow-pink-900/50 flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+          className="btn-3d btn-3d-pink w-full mt-3 py-4 px-6 disabled:opacity-60 text-white font-black text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer"
         >
+          <span className="shimmer-sweep" />
           {isJoining ? (
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : (
-            <Sparkles className="w-5 h-5 text-white" />
+            <Sparkles className="w-5 h-5 text-white drop-shadow" />
           )}
           <span>{isJoining ? (isEn ? 'Connecting...' : 'מתחבר לחדר...') : t.btnJoin}</span>
         </button>

@@ -1,212 +1,292 @@
-import React, { useState, useMemo } from 'react';
-import { X, Play, Video, ExternalLink, Settings2, Check, Film } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { Language } from '../types/game';
 import { sounds } from '../utils/audio';
 
-interface IntroVideoModalProps {
+export interface IntroVideoModalProps {
   isOpen: boolean;
   onClose: () => void;
   videoUrl: string;
+  onTransitionToDashboard?: () => void;
+  onTransitionToGame?: () => void;
   onUpdateVideoUrl?: (newUrl: string) => void;
   language?: Language;
+}
+
+interface ParsedVideo {
+  type: 'cloudinary' | 'direct' | 'youtube' | 'vimeo' | 'iframe' | 'none';
+  directSrc: string;
+  embedSrc: string;
+  cloudName?: string;
+  publicId?: string;
+}
+
+export function parseVideoUrl(url: string): ParsedVideo {
+  if (!url) return { type: 'none', directSrc: '', embedSrc: '' };
+
+  const clean = url.trim();
+
+  // Cloudinary embed or player url
+  try {
+    if (clean.includes('player.cloudinary.com') || clean.includes('cloudinary.com/embed')) {
+      const parsed = new URL(clean.startsWith('http') ? clean : `https://${clean}`);
+      const cloudName = parsed.searchParams.get('cloud_name');
+      const publicId = parsed.searchParams.get('public_id');
+      if (cloudName && publicId) {
+        return {
+          type: 'cloudinary',
+          cloudName,
+          publicId,
+          directSrc: `https://res.cloudinary.com/${cloudName}/video/upload/${publicId}.mp4`,
+          embedSrc: clean.includes('autoplay') ? clean : `${clean}${clean.includes('?') ? '&' : '?'}autoplay=true`,
+        };
+      }
+    }
+  } catch {
+    // fallback regex below
+  }
+
+  const cldEmbedMatch = clean.match(/player\.cloudinary\.com\/embed\/?\?(?:.*&)?cloud_name=([^&]+).*(?:&)?public_id=([^&#]+)/i);
+  if (cldEmbedMatch) {
+    const cloudName = cldEmbedMatch[1];
+    const publicId = cldEmbedMatch[2];
+    return {
+      type: 'cloudinary',
+      cloudName,
+      publicId,
+      directSrc: `https://res.cloudinary.com/${cloudName}/video/upload/${publicId}.mp4`,
+      embedSrc: clean.includes('autoplay') ? clean : `${clean}${clean.includes('?') ? '&' : '?'}autoplay=true`,
+    };
+  }
+
+  const cldUploadMatch = clean.match(/res\.cloudinary\.com\/([^/]+)\/video\/upload\/(?:v\d+\/)?([^.]+)(?:\.mp4)?/i);
+  if (cldUploadMatch) {
+    const cloudName = cldUploadMatch[1];
+    const publicId = cldUploadMatch[2];
+    return {
+      type: 'cloudinary',
+      cloudName,
+      publicId,
+      directSrc: `https://res.cloudinary.com/${cloudName}/video/upload/${publicId}.mp4`,
+      embedSrc: `https://player.cloudinary.com/embed/?cloud_name=${cloudName}&public_id=${publicId}&autoplay=true`,
+    };
+  }
+
+  // Direct MP4 / WebM / OGG
+  if (/\.(mp4|webm|ogg)($|\?)/i.test(clean)) {
+    return {
+      type: 'direct',
+      directSrc: clean,
+      embedSrc: clean,
+    };
+  }
+
+  // YouTube
+  const ytMatch = clean.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  if (ytMatch && ytMatch[1]) {
+    return {
+      type: 'youtube',
+      directSrc: '',
+      embedSrc: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0&enablejsapi=1`,
+    };
+  }
+
+  // Vimeo
+  const vimeoMatch = clean.match(/(?:vimeo\.com\/)(\d+)/i);
+  if (vimeoMatch && vimeoMatch[1]) {
+    return {
+      type: 'vimeo',
+      directSrc: '',
+      embedSrc: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`,
+    };
+  }
+
+  // Default iframe
+  return {
+    type: 'iframe',
+    directSrc: '',
+    embedSrc: clean,
+  };
 }
 
 export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
   isOpen,
   onClose,
   videoUrl,
-  onUpdateVideoUrl,
+  onTransitionToDashboard,
+  onTransitionToGame,
   language = 'he',
 }) => {
   const isEn = language === 'en';
-  const [isEditingUrl, setIsEditingUrl] = useState(false);
-  const [inputUrl, setInputUrl] = useState(videoUrl);
-  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [needsSoundTap, setNeedsSoundTap] = useState<boolean>(false);
 
-  // Convert various video URLs (YouTube, Vimeo, direct) into embeddable format
-  const embedInfo = useMemo(() => {
-    if (!videoUrl) return { type: 'none', src: '' };
+  const parsed = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
 
-    const clean = videoUrl.trim();
+  // Transition to dashboard handler (Skip button or natural onEnded)
+  const handleTransition = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+    sounds.soundSuccess();
+    if (onTransitionToDashboard) {
+      onTransitionToDashboard();
+    } else if (onTransitionToGame) {
+      onTransitionToGame();
+    } else {
+      onClose();
+    }
+  }, [onTransitionToDashboard, onTransitionToGame, onClose]);
 
-    // YouTube watch or short links
-    const ytMatch = clean.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
-    if (ytMatch && ytMatch[1]) {
-      return {
-        type: 'youtube',
-        src: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0&enablejsapi=1`,
-      };
+  const handleSkip = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    sounds.soundKeypress();
+    handleTransition();
+  }, [handleTransition]);
+
+  // Autoplay attempt when opened
+  useEffect(() => {
+    if (!isOpen) {
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+      return;
     }
 
-    // Vimeo
-    const vimeoMatch = clean.match(/(?:vimeo\.com\/)(\d+)/i);
-    if (vimeoMatch && vimeoMatch[1]) {
-      return {
-        type: 'vimeo',
-        src: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`,
-      };
-    }
+    const video = videoRef.current;
+    if (!video) return;
 
-    // Direct MP4 / WebM
-    if (/\.(mp4|webm|ogg)($|\?)/i.test(clean)) {
-      return {
-        type: 'direct',
-        src: clean,
-      };
-    }
+    video.currentTime = 0;
+    video.muted = isMuted;
 
-    // Default iframe fallback
-    return {
-      type: 'iframe',
-      src: clean,
-    };
-  }, [videoUrl]);
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          setNeedsSoundTap(false);
+        })
+        .catch(() => {
+          // Autoplay with audio was blocked by browser policy; play muted and show tap to unmute
+          video.muted = true;
+          setIsMuted(true);
+          setNeedsSoundTap(true);
+          video.play().catch(() => {});
+        });
+    }
+  }, [isOpen, videoUrl, parsed.directSrc]);
+
+  // Fallback timer for iframe embeds (e.g. YouTube) where onEnded doesn't fire across origins
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!parsed.directSrc && parsed.embedSrc) {
+      const timer = setTimeout(() => {
+        handleTransition();
+      }, 10500); // 10.5 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, parsed.directSrc, parsed.embedSrc, handleTransition]);
+
+  const handleToggleMute = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!videoRef.current) return;
+    const nextMuted = !isMuted;
+    videoRef.current.muted = nextMuted;
+    setIsMuted(nextMuted);
+    if (!nextMuted) {
+      setNeedsSoundTap(false);
+    }
+  };
+
+  const handleTapScreen = () => {
+    if (needsSoundTap && videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.play().catch(() => {});
+      setIsMuted(false);
+      setNeedsSoundTap(false);
+    }
+  };
 
   if (!isOpen) return null;
 
-  const handleClose = () => {
-    sounds.soundKeypress();
-    if (dontShowAgain && typeof window !== 'undefined') {
-      localStorage.setItem('ttg_hide_intro_video', 'true');
-    }
-    onClose();
-  };
-
-  const handleSaveUrl = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (onUpdateVideoUrl && inputUrl.trim()) {
-      onUpdateVideoUrl(inputUrl.trim());
-      sounds.soundSuccess();
-      setIsEditingUrl(false);
-    }
-  };
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
+      onClick={handleTapScreen}
+      className="fixed inset-0 z-[9999] bg-black overflow-hidden m-0 p-0 select-none cursor-pointer"
+      style={{
+        width: '100vw',
+        height: '100vh',
+        position: 'fixed',
+        inset: 0,
+      }}
       dir={isEn ? 'ltr' : 'rtl'}
     >
-      <div className="bg-gradient-to-b from-[#251347] via-[#1B113B] to-[#0D0B24] border border-white/20 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 w-full max-w-xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] relative text-center">
-        {/* Close Button */}
+      {/* TRUE 100vw 100vh FULLSCREEN VIDEO (NO FRAMES, NO MOCKUPS, NO MARGINS) */}
+      {parsed.directSrc ? (
+        <video
+          ref={videoRef}
+          src={parsed.directSrc}
+          autoPlay
+          playsInline
+          preload="auto"
+          onEnded={handleTransition}
+          className="w-full h-full object-cover block absolute inset-0"
+          style={{
+            width: '100vw',
+            height: '100vh',
+            position: 'fixed',
+            inset: 0,
+            objectFit: 'cover',
+          }}
+        />
+      ) : (
+        <iframe
+          src={parsed.embedSrc}
+          title="Cloudinary Intro Video"
+          className="w-full h-full border-0 absolute inset-0"
+          style={{
+            width: '100vw',
+            height: '100vh',
+            position: 'fixed',
+            inset: 0,
+          }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+          allowFullScreen
+        />
+      )}
+
+      {/* FLOATING CORNER CONTROLS */}
+      <div className={`fixed top-4 ${isEn ? 'right-4' : 'left-4'} z-[10000] flex items-center gap-2 pointer-events-auto`}>
+        {/* Subtle Mute / Unmute Toggle */}
         <button
-          onClick={handleClose}
-          className={`absolute top-4 ${isEn ? 'right-4' : 'left-4'} p-2 text-slate-400 hover:text-white rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all cursor-pointer z-20`}
-          title={isEn ? 'Close' : 'סגור'}
+          type="button"
+          onClick={handleToggleMute}
+          className="p-2 sm:px-3 sm:py-2 rounded-full bg-black/60 hover:bg-black/80 active:scale-95 text-white/90 border border-white/20 backdrop-blur-md shadow-lg transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+          title={isMuted ? (isEn ? 'Unmute' : 'הפעל סאונד') : (isEn ? 'Mute' : 'השתק')}
         >
-          <X className="w-5 h-5" />
+          {isMuted ? (
+            <>
+              <VolumeX className="w-4 h-4 text-rose-400" />
+              {needsSoundTap && (
+                <span className="text-[11px] font-bold text-rose-300">
+                  {isEn ? 'Tap for sound' : 'לחץ לסאונד'}
+                </span>
+              )}
+            </>
+          ) : (
+            <Volume2 className="w-4 h-4 text-emerald-400" />
+          )}
         </button>
 
-        {/* Modal Header */}
-        <div className="flex items-center justify-center gap-2 mb-1.5">
-          <div className="p-2 rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30">
-            <Film className="w-5 h-5" />
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-100 to-pink-300">
-            {isEn ? 'Welcome to Time to Guess!' : 'ברוכים הבאים ל-Time to Guess!'}
-          </h2>
-        </div>
-
-        <p className="text-xs sm:text-sm text-slate-300 mb-3.5 max-w-md mx-auto">
-          {isEn
-            ? 'Watch this quick video to learn how to play and host games with your friends!'
-            : 'צפו בסרטון הקצר כדי לגלות איך משחקים, מארחים ומנחשים יחד עם חברים!'}
-        </p>
-
-        {/* Video Player Frame (16:9 Aspect Ratio) */}
-        <div className="w-full relative aspect-video rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-black mb-3.5 group">
-          {embedInfo.type === 'youtube' || embedInfo.type === 'vimeo' || embedInfo.type === 'iframe' ? (
-            <iframe
-              src={embedInfo.src}
-              title="Game Intro Video"
-              className="w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
-          ) : embedInfo.type === 'direct' ? (
-            <video
-              src={embedInfo.src}
-              controls
-              autoPlay
-              playsInline
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-slate-400 bg-white/5">
-              <Video className="w-12 h-12 mb-2 text-pink-400 opacity-60" />
-              <p className="text-xs sm:text-sm">
-                {isEn ? 'No video URL specified yet' : 'עדיין לא הוגדר קישור לסרטון'}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Change Video URL Form (Collapsible) */}
-        {isEditingUrl ? (
-          <form onSubmit={handleSaveUrl} className="w-full mb-3.5 p-3 bg-white/5 border border-white/10 rounded-2xl animate-fadeIn text-right">
-            <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center justify-between">
-              <span>{isEn ? 'Paste YouTube / MP4 Video URL:' : 'הדבק קישור לסרטון (יוטיוב / MP4):'}</span>
-              <button
-                type="button"
-                onClick={() => setIsEditingUrl(false)}
-                className="text-slate-400 hover:text-white text-[11px] underline cursor-pointer"
-              >
-                {isEn ? 'Cancel' : 'ביטול'}
-              </button>
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="url"
-                value={inputUrl}
-                onChange={(e) => setInputUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=..."
-                className="flex-1 px-3 py-2 bg-black/40 border border-white/20 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-pink-500"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold rounded-xl flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Save' : 'שמור'}</span>
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="flex items-center justify-between px-1 mb-3.5 text-xs text-slate-400">
-            {/* Don't show again toggle */}
-            <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300 hover:text-white transition-all">
-              <input
-                type="checkbox"
-                checked={dontShowAgain}
-                onChange={(e) => setDontShowAgain(e.target.checked)}
-                className="w-4 h-4 rounded border-white/30 text-pink-500 focus:ring-pink-500 bg-white/10 cursor-pointer"
-              />
-              <span>{isEn ? "Don't show automatically on start" : "אל תציג אוטומטית בכניסה"}</span>
-            </label>
-
-            {/* Change URL trigger */}
-            {onUpdateVideoUrl && (
-              <button
-                type="button"
-                onClick={() => {
-                  setInputUrl(videoUrl);
-                  setIsEditingUrl(true);
-                }}
-                className="flex items-center gap-1 text-[11px] text-pink-300 hover:text-pink-200 underline cursor-pointer"
-              >
-                <Settings2 className="w-3 h-3" />
-                <span>{isEn ? 'Change Video' : 'החלף סרטון'}</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Action Button: Got It / Let's Play */}
+        {/* Small floating SKIP BUTTON */}
         <button
-          onClick={handleClose}
-          className="w-full py-3.5 px-6 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 active:scale-98 text-white font-extrabold text-base rounded-2xl shadow-xl shadow-purple-900/40 flex items-center justify-center gap-2 transition-all cursor-pointer"
+          type="button"
+          onClick={handleSkip}
+          className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-black/70 hover:bg-black/90 active:scale-95 text-white font-extrabold text-xs sm:text-sm border border-white/25 shadow-[0_4px_20px_rgba(0,0,0,0.6)] backdrop-blur-md flex items-center gap-1.5 cursor-pointer transition-all hover:border-pink-500/60 hover:text-pink-200"
+          title="Skip"
         >
-          <Play className="w-4 h-4 fill-white" />
-          <span>{isEn ? "Let's Play!" : 'הבנתי, בואו נתחיל לשחק!'}</span>
+          <span>Skip</span>
+          <SkipForward className="w-3.5 h-3.5 fill-white" />
         </button>
       </div>
     </div>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { X, Copy, Check, Share2, MessageCircle, Smartphone } from 'lucide-react';
+import { X, Copy, Check, Share2, Smartphone, Image as ImageIcon, QrCode } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
+import { WhatsAppShareButton } from './WhatsAppShareButton';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -16,11 +17,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, pin, la
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedPin, setCopiedPin] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'card' | 'qr'>('card');
 
-  // Build the direct invitation link
-  const inviteUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}?pin=${pin}`
-    : `https://app?pin=${pin}`;
+  // Build the direct invitation link using the official Netlify production domain
+  const inviteUrl = `https://time-to-guess.netlify.app/?pin=${pin}&lang=${language}`;
 
   const shareText = isEn
     ? `🃏 Join my "Time to Guess" game room!\nRoom PIN: ${pin}\nQuick join link:\n${inviteUrl}`
@@ -61,14 +61,31 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, pin, la
   const handleNativeShare = async () => {
     if (navigator.share) {
       try {
+        const response = await fetch('/card-preview.png');
+        if (response.ok) {
+          const blob = await response.blob();
+          const file = new File([blob], 'time-to-guess.png', { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: isEn ? 'Time to Guess 🃏' : 'הזמן לנחש 🃏',
+              text: shareText,
+              files: [file],
+            });
+            sounds.soundSuccess();
+            return;
+          }
+        }
+
         await navigator.share({
           title: isEn ? 'Time to Guess 🃏' : 'הזמן לנחש 🃏',
-          text: isEn ? `Join my game! Room PIN: ${pin}` : `בואו לשחק איתי! קוד PIN של החדר: ${pin}`,
+          text: shareText,
           url: inviteUrl,
         });
         sounds.soundSuccess();
-      } catch {
-        // User cancelled or share failed
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          handleCopyLink();
+        }
       }
     } else {
       handleCopyLink();
@@ -119,44 +136,85 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, pin, la
           </button>
         </div>
 
-        {/* QR Code Container */}
-        <div className="bg-white p-3.5 rounded-2xl inline-block shadow-lg mx-auto mb-4 border-4 border-pink-500/30">
-          {qrDataUrl ? (
-            <img
-              src={qrDataUrl}
-              alt={`QR Code for PIN ${pin}`}
-              className="w-40 h-40 object-contain rounded-lg"
-            />
-          ) : (
-            <div className="w-40 h-40 flex items-center justify-center text-slate-400 text-xs">
-              {isEn ? 'Generating QR Code...' : 'מייצר קוד QR...'}
-            </div>
-          )}
+        {/* Preview Tabs: App Card vs QR Code */}
+        <div className="flex items-center justify-center p-1 bg-black/30 rounded-xl mb-4 border border-white/10 max-w-xs mx-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab('card')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'card'
+                ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5 text-pink-200" strokeWidth={2.2} />
+            <span>{isEn ? 'App Card' : 'כרטיס האפליקציה'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('qr')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'qr'
+                ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <QrCode className="w-3.5 h-3.5 text-pink-200" strokeWidth={2.2} />
+            <span>{isEn ? 'QR Code' : 'קוד QR לסריקה'}</span>
+          </button>
         </div>
 
-        <div className="text-xs text-pink-300 flex items-center justify-center gap-1.5 mb-5 font-semibold">
-          <Smartphone className="w-4 h-4 text-pink-400" />
-          <span>{isEn ? 'Scan with your camera for instant join' : 'סרקו עם מצלמת הטלפון להצטרפות ישירה'}</span>
-        </div>
+        {/* Card or QR Code Display */}
+        {activeTab === 'card' ? (
+          <div className="relative inline-block mb-4 group">
+            <div className="w-48 h-48 sm:w-52 sm:h-52 rounded-2xl overflow-hidden shadow-2xl border-2 border-emerald-400/50 bg-[#14092A] mx-auto relative">
+              <img
+                src="/card-preview.png"
+                alt="App Card Preview"
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute bottom-1.5 inset-x-0 text-center">
+                <span className="text-[10px] font-black tracking-wide text-emerald-300 bg-black/60 px-2 py-0.5 rounded-full border border-emerald-400/30">
+                  {isEn ? 'Attached to WhatsApp' : 'מצורף להודעת WhatsApp'}
+                </span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-300 mt-2 font-medium">
+              {isEn ? 'This top card is shared directly into WhatsApp chats' : 'כרטיס זה מצורף כעת בראש ההודעה בוואטסאפ'}
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div className="bg-white p-3.5 rounded-2xl inline-block shadow-lg mx-auto mb-2 border-4 border-pink-500/30">
+              {qrDataUrl ? (
+                <img
+                  src={qrDataUrl}
+                  alt={`QR Code for PIN ${pin}`}
+                  className="w-40 h-40 object-contain rounded-lg"
+                />
+              ) : (
+                <div className="w-40 h-40 flex items-center justify-center text-slate-400 text-xs">
+                  {isEn ? 'Generating QR Code...' : 'מייצר קוד QR...'}
+                </div>
+              )}
+            </div>
+            <div className="text-xs text-pink-300 flex items-center justify-center gap-1.5 mb-3 font-semibold">
+              <Smartphone className="w-4 h-4 text-pink-400" />
+              <span>{isEn ? 'Scan with phone camera to join' : 'סרקו עם מצלמת הטלפון להצטרפות ישירה'}</span>
+            </div>
+          </div>
+        )}
 
         {/* Action Share Buttons */}
-        <div className="space-y-2.5">
-          {/* WhatsApp Share */}
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => sounds.soundSuccess()}
-            className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20ba59] active:scale-98 text-white font-bold rounded-2xl shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-          >
-            <MessageCircle className="w-5 h-5 fill-white" />
-            <span>{isEn ? 'Share via WhatsApp' : 'שתף בוואטסאפ (WhatsApp)'}</span>
-          </a>
+        <div className="space-y-3">
+          {/* WhatsApp Share with enhanced graphics and animation */}
+          <WhatsAppShareButton pin={pin} language={language} variant="large" />
 
           {/* Copy Direct Link */}
           <button
             onClick={handleCopyLink}
-            className="w-full py-3 px-4 bg-white/10 hover:bg-white/15 active:scale-98 text-white font-bold rounded-2xl border border-white/15 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            className="btn-3d btn-3d-dark w-full py-3.5 px-4 text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 cursor-pointer"
           >
             {copiedLink ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
             <span>{copiedLink ? (isEn ? 'Link copied!' : 'הקישור הועתק בהצלחה!') : (isEn ? 'Copy Direct Link' : 'העתק קישור ישיר לחדר')}</span>
@@ -166,7 +224,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, pin, la
           {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
             <button
               onClick={handleNativeShare}
-              className="w-full py-2.5 px-4 bg-purple-600/30 hover:bg-purple-600/50 active:scale-98 text-purple-200 font-bold rounded-2xl border border-purple-500/40 text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="btn-3d btn-3d-purple w-full py-3 px-4 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer"
             >
               <Share2 className="w-4 h-4" />
               <span>{isEn ? 'More Sharing Options' : 'שיתוף נוסף דרך אפליקציות המכשיר'}</span>

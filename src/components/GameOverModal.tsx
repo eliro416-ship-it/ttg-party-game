@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Player, Language } from '../types/game';
-import { Trophy, RotateCcw, Home, Flame } from 'lucide-react';
+import { Trophy, RotateCcw, Home, Flame, Sparkles, Medal } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
 interface GameOverModalProps {
@@ -65,11 +65,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         <div className="relative z-10">
           <div className="w-20 h-20 mx-auto mb-3 bg-gradient-to-tr from-amber-400 to-yellow-200 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/30 animate-bounce">
-            <Trophy className="w-10 h-10 text-slate-900" />
+            <Trophy className="w-10 h-10 text-slate-900" strokeWidth={2.2} />
           </div>
 
-          <h2 className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-pink-200 to-white mb-1">
-            {isEn ? 'Game Over! Well Played 🎉' : 'כל הכבוד! סיום משחק 🎉'}
+          <h2 className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-pink-200 to-white mb-1 flex items-center justify-center gap-2">
+            <Sparkles className="w-5 h-5 text-yellow-300 drop-shadow" strokeWidth={2.2} />
+            <span>{isEn ? 'Game Over! Well Played' : 'כל הכבוד! סיום משחק'}</span>
+            <Sparkles className="w-5 h-5 text-yellow-300 drop-shadow" strokeWidth={2.2} />
           </h2>
           <p className="text-sm text-slate-300 mb-6">
             {isEn
@@ -79,9 +81,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
           {/* Winner Spotlight */}
           {winner && (
-            <div className="p-4 mb-6 rounded-2xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-400/40 text-center">
-              <span className="text-xs font-bold text-amber-300 uppercase tracking-wider block mb-1">
-                {isEn ? '🏆 Grand Champion' : '🏆 המנצח הגדול'}
+            <div className="p-4 mb-6 rounded-2xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-400/40 text-center shadow-lg">
+              <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center justify-center gap-1.5 mb-1">
+                <Trophy className="w-3.5 h-3.5 text-amber-300" strokeWidth={2.2} />
+                <span>{isEn ? 'Grand Champion' : 'המנצח הגדול'}</span>
               </span>
               <div className="text-2xl font-black text-white flex items-center justify-center gap-2">
                 <span>{winner.avatar}</span>
@@ -105,25 +108,39 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className="w-6 text-sm font-bold text-slate-400">
-                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
-                  </span>
+                  <div className="w-6 flex items-center justify-center">
+                    {idx === 0 ? (
+                      <div className="w-6 h-6 rounded-md bg-amber-400/25 border border-amber-400/40 flex items-center justify-center text-amber-300 shadow-sm">
+                        <Trophy className="w-3.5 h-3.5" strokeWidth={2.2} />
+                      </div>
+                    ) : idx === 1 ? (
+                      <div className="w-6 h-6 rounded-md bg-slate-300/20 border border-slate-300/40 flex items-center justify-center text-slate-200 shadow-sm">
+                        <Medal className="w-3.5 h-3.5" strokeWidth={2.2} />
+                      </div>
+                    ) : idx === 2 ? (
+                      <div className="w-6 h-6 rounded-md bg-amber-700/25 border border-amber-600/40 flex items-center justify-center text-amber-400 shadow-sm">
+                        <Medal className="w-3.5 h-3.5" strokeWidth={2.2} />
+                      </div>
+                    ) : (
+                      <span className="text-sm font-bold text-slate-400 font-mono">{idx + 1}.</span>
+                    )}
+                  </div>
                   <span className="text-lg">{player.avatar}</span>
                   <span className="font-semibold text-sm">{player.name}</span>
                   {player.isHost && (
-                    <span className="text-[10px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-full">
-                      {isEn ? 'Host' : 'מארח'}
+                    <span className="text-[10px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-full font-bold">
+                      {isEn ? 'Host' : 'מארח/ת'}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
                   {player.streak > 1 && (
-                    <span className="text-xs text-orange-400 flex items-center">
-                      <Flame className="w-3.5 h-3.5" />
+                    <span className="text-xs text-orange-400 flex items-center gap-1 bg-orange-500/10 px-1.5 py-0.5 rounded-md border border-orange-500/20 font-bold">
+                      <Flame className="w-3.5 h-3.5 fill-orange-400" strokeWidth={2.2} />
                       x{player.streak}
                     </span>
                   )}
-                  <span className="font-extrabold text-base text-emerald-400">
+                  <span className="font-extrabold text-base text-emerald-400 font-mono">
                     {player.score} {isEn ? 'pts' : 'נק׳'}
                   </span>
                 </div>
@@ -134,15 +151,22 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           {/* Action buttons */}
           <div className="flex gap-3">
             <button
-              onClick={onRestart}
-              className="flex-1 py-3.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-95 text-white font-extrabold rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+              onClick={() => {
+                sounds.soundSuccess();
+                onRestart();
+              }}
+              className="btn-3d btn-3d-emerald flex-1 py-4 px-4 text-white font-black text-base rounded-2xl flex items-center justify-center gap-2 cursor-pointer"
             >
-              <RotateCcw className="w-5 h-5" />
+              <span className="shimmer-sweep" />
+              <RotateCcw className="w-5 h-5 drop-shadow" />
               <span>{isEn ? 'Play Again' : 'שחק שוב'}</span>
             </button>
             <button
-              onClick={onHome}
-              className="py-3.5 px-4 bg-white/10 hover:bg-white/15 active:scale-95 text-slate-200 font-bold rounded-2xl border border-white/15 flex items-center justify-center gap-2 cursor-pointer transition-all"
+              onClick={() => {
+                sounds.soundKeypress();
+                onHome();
+              }}
+              className="btn-3d btn-3d-dark py-4 px-5 text-slate-200 font-extrabold rounded-2xl flex items-center justify-center gap-2 cursor-pointer"
             >
               <Home className="w-5 h-5" />
               <span>{isEn ? 'Home' : 'תפריט'}</span>

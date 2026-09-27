@@ -29,6 +29,7 @@ export function getGameSocket(): Socket {
 
 export interface TurnStartedPayload {
   isHolder: boolean;
+  cardId?: string;
   cardIndex: number;
   totalCards: number;
   holderId: string;
@@ -36,6 +37,8 @@ export interface TurnStartedPayload {
   holderAvatar: string;
   // Provided only to holder!
   image: string | null;
+  imageUrl?: string | null;
+  fallback?: string | null;
   word: string | null;
   category: string;
   hint: string | null;

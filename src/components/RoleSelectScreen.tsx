@@ -1,5 +1,5 @@
 import React from 'react';
-import { Crown, Gamepad2, Play, Volume2, VolumeX, Globe, Film } from 'lucide-react';
+import { Crown, Gamepad2, Volume2, VolumeX, Globe, Film, ScrollText, Image, HelpCircle, Timer, RefreshCw, Users, Sparkles } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
 import { translations } from '../utils/translations';
@@ -7,7 +7,7 @@ import { translations } from '../utils/translations';
 interface RoleSelectScreenProps {
   onOpenHost: () => void;
   onOpenPlayer: () => void;
-  onQuickStart: () => void;
+  onQuickStart?: () => void;
   onOpenVideo?: () => void;
   turnDuration?: number;
   isMuted: boolean;
@@ -40,7 +40,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
             sounds.soundKeypress();
             onToggleLanguage();
           }}
-          className="bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+          className="btn-3d btn-3d-dark text-white px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 cursor-pointer"
           title={isEn ? 'Switch to Hebrew' : 'עבור לאנגלית'}
         >
           <Globe className="w-3.5 h-3.5 text-pink-400" />
@@ -49,7 +49,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
         <button
           onClick={onToggleMute}
-          className="p-2 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-slate-300 border border-white/15 transition-all cursor-pointer"
+          className="btn-3d btn-3d-dark p-2 rounded-full text-slate-300 cursor-pointer"
           title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
         >
           {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
@@ -72,46 +72,58 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
       <h1 className="text-2xl sm:text-3xl font-black mb-1 text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-100 to-pink-300 tracking-tight">
         {t.title}
       </h1>
-      <p className="text-xs sm:text-sm text-slate-300 max-w-sm mb-4 leading-relaxed">
+      <p className="text-xs sm:text-sm text-slate-300 max-w-sm mb-3 sm:mb-4 leading-relaxed">
         {t.sub}
       </p>
 
       {/* Quick Rules Card */}
-      <div className={`w-full max-w-sm bg-white/[0.07] border border-white/15 rounded-2xl p-4 mb-5 shadow-lg ${isEn ? 'text-left' : 'text-right'}`}>
+      <div className={`w-full max-w-sm bg-white/[0.07] border border-white/15 rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 shadow-lg ${isEn ? 'text-left' : 'text-right'}`}>
         <h3 className="text-xs sm:text-sm font-black text-amber-300 flex items-center gap-1.5 mb-2.5">
+          <div className="w-5 h-5 rounded-md bg-amber-400/20 flex items-center justify-center border border-amber-400/30">
+            <ScrollText className="w-3.5 h-3.5 text-amber-400" strokeWidth={2.2} />
+          </div>
           <span>{t.rulesTitle}</span>
         </h3>
         <ul className="space-y-2 text-[11px] sm:text-xs text-slate-200 leading-relaxed">
           <li className="flex items-start gap-2">
-            <span className="text-base leading-none">🖼️</span>
+            <div className="w-5 h-5 rounded-md bg-purple-500/20 border border-purple-400/30 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+              <Image className="w-3 h-3 text-purple-300" strokeWidth={2.2} />
+            </div>
             <div dangerouslySetInnerHTML={{ __html: t.r1 }} />
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-base leading-none">❓</span>
+            <div className="w-5 h-5 rounded-md bg-pink-500/20 border border-pink-400/30 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+              <HelpCircle className="w-3 h-3 text-pink-300" strokeWidth={2.2} />
+            </div>
             <div dangerouslySetInnerHTML={{ __html: t.r2 }} />
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-base leading-none">⏱️</span>
+            <div className="w-5 h-5 rounded-md bg-amber-500/20 border border-amber-400/30 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+              <Timer className="w-3 h-3 text-amber-300" strokeWidth={2.2} />
+            </div>
             <div dangerouslySetInnerHTML={{ __html: t.r3.replace('{seconds}', durationLabel) }} />
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-base leading-none">🔄</span>
+            <div className="w-5 h-5 rounded-md bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+              <RefreshCw className="w-3 h-3 text-emerald-300" strokeWidth={2.2} />
+            </div>
             <div dangerouslySetInnerHTML={{ __html: t.r4 }} />
           </li>
         </ul>
       </div>
 
       {/* Action Buttons */}
-      <div className="w-full space-y-3 max-w-sm">
+      <div className="w-full space-y-3 sm:space-y-3.5 max-w-sm">
         <button
           onClick={() => {
             sounds.soundKeypress();
             onOpenHost();
           }}
-          className="w-full py-3.5 px-6 bg-gradient-to-r from-[#6C5CE7] to-[#8E44AD] hover:from-[#5d4ce6] hover:to-[#8239a1] active:scale-98 text-white font-extrabold text-base sm:text-lg rounded-2xl border border-white/25 shadow-xl shadow-purple-900/40 flex items-center justify-center gap-3 transition-all cursor-pointer"
+          className="btn-3d btn-3d-purple w-full py-4 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-3 cursor-pointer"
         >
-          <Crown className="w-5 h-5 text-yellow-300 drop-shadow" />
-          <span>{t.btnHost}</span>
+          <span className="shimmer-sweep" />
+          <Crown className="w-5 h-5 text-yellow-300 drop-shadow" strokeWidth={2.2} />
+          <span className="tracking-wide">{t.btnHost}</span>
         </button>
 
         <button
@@ -119,21 +131,11 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
             sounds.soundKeypress();
             onOpenPlayer();
           }}
-          className="w-full py-3.5 px-6 bg-gradient-to-r from-[#FD79A8] to-[#E84393] hover:from-[#fc659a] hover:to-[#d83584] active:scale-98 text-white font-extrabold text-base sm:text-lg rounded-2xl border border-white/25 shadow-xl shadow-pink-900/40 flex items-center justify-center gap-3 transition-all cursor-pointer"
+          className="btn-3d btn-3d-pink w-full py-4 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-3 cursor-pointer"
         >
-          <Gamepad2 className="w-5 h-5 text-white" />
-          <span>{t.btnPlayer}</span>
-        </button>
-
-        <button
-          onClick={() => {
-            sounds.soundKeypress();
-            onQuickStart();
-          }}
-          className="w-full py-3 px-6 bg-gradient-to-r from-[#00B894] to-[#00CEC9] hover:from-[#00a383] hover:to-[#00b5b1] active:scale-98 text-white font-bold text-sm sm:text-base rounded-2xl border border-white/20 shadow-lg shadow-teal-900/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-        >
-          <Play className="w-4 h-4 fill-white" />
-          <span>{t.btnQuick}</span>
+          <span className="shimmer-sweep" />
+          <Gamepad2 className="w-5 h-5 text-white drop-shadow" strokeWidth={2.2} />
+          <span className="tracking-wide">{t.btnPlayer}</span>
         </button>
 
         {onOpenVideo && (
@@ -142,21 +144,30 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
               sounds.soundKeypress();
               onOpenVideo();
             }}
-            className="w-full py-2.5 px-4 bg-white/[0.08] hover:bg-white/[0.14] active:scale-98 text-pink-300 hover:text-white font-bold text-xs sm:text-sm rounded-2xl border border-white/15 shadow flex items-center justify-center gap-2 transition-all cursor-pointer"
+            className="btn-3d btn-3d-dark w-full py-3 px-4 text-pink-300 hover:text-white font-extrabold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 cursor-pointer"
           >
-            <Film className="w-4 h-4 text-pink-400" />
-            <span>{isEn ? 'Watch Intro Video 🎬' : '🎬 צפה בסרטון הסבר ופתיח'}</span>
+            <Film className="w-4 h-4 text-pink-400" strokeWidth={2.2} />
+            <span>{isEn ? 'Watch Intro Video' : 'צפה בסרטון הסבר ופתיח'}</span>
           </button>
         )}
       </div>
 
       {/* Bottom feature pill */}
       <div className="mt-5 flex items-center justify-center gap-2 text-[11px] text-slate-400">
-        <span>⏱️ {durationLabel}</span>
+        <span className="flex items-center gap-1">
+          <Timer className="w-3.5 h-3.5 text-pink-400" strokeWidth={2.2} />
+          <span>{durationLabel}</span>
+        </span>
         <span>•</span>
-        <span>👥 {isEn ? 'Live Multiplayer' : 'משחק מרובה משתתפים'}</span>
+        <span className="flex items-center gap-1">
+          <Users className="w-3.5 h-3.5 text-purple-400" strokeWidth={2.2} />
+          <span>{isEn ? 'Live Multiplayer' : 'משחק מרובה משתתפים'}</span>
+        </span>
         <span>•</span>
-        <span>✨ {isEn ? 'Instant PIN Room' : 'הצטרפות מהירה'}</span>
+        <span className="flex items-center gap-1">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" strokeWidth={2.2} />
+          <span>{isEn ? 'Instant PIN Room' : 'הצטרפות מהירה'}</span>
+        </span>
       </div>
     </div>
   );

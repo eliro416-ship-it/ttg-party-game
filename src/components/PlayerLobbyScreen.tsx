@@ -10,7 +10,9 @@ import {
   Radio,
   Hourglass,
   Globe,
-  Sparkles
+  Sparkles,
+  Timer,
+  Crown
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
@@ -97,7 +99,7 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
       </div>
 
       <h1 className="text-2xl sm:text-3xl font-black text-center mb-1 text-transparent bg-clip-text bg-gradient-to-r from-white via-pink-100 to-pink-300">
-        {isEn ? `Welcome, ${myPlayer.name}!` : `ברוך הבא, ${myPlayer.name}!`}
+        {isEn ? `Welcome, ${myPlayer.name}!` : `ברוך/ה הבא/ה, ${myPlayer.name}!`}
       </h1>
       <p className="text-xs sm:text-sm text-slate-300 text-center mb-4">
         {isEn ? 'You are connected to the live room' : 'התחברת בהצלחה לחדר המשחק החי'}
@@ -108,20 +110,20 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
         <div className="flex items-center justify-center gap-2 mb-2">
           <Hourglass className="w-5 h-5 text-amber-300 animate-spin" />
           <span className="text-sm font-extrabold text-amber-300">
-            {isEn ? 'Waiting for host to start...' : 'ממתין למארח שיתחיל את המשחק...'}
+            {isEn ? 'Waiting for host to start...' : 'ממתין/ה למארח/ת שיתחיל/תתחיל את המשחק...'}
           </span>
         </div>
         <p className="text-xs text-slate-300 max-w-xs mx-auto leading-relaxed">
           {isEn
             ? 'When the host clicks "Start Game", your device will automatically sync into the round!'
-            : 'ברגע שהמארח ילחץ על התחלת המשחק, המכשיר שלך יכנס אוטומטית לסיבוב הראשון!'}
+            : 'ברגע שהמארח/ת ילחץ/תלחץ על התחלת המשחק, המכשיר שלך יכנס אוטומטית לסיבוב הראשון!'}
         </p>
 
         {/* PIN Copy & Share quick buttons */}
-        <div className="flex justify-center gap-2 mt-4">
+        <div className="flex justify-center gap-2.5 mt-4">
           <button
             onClick={handleCopyPin}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-xs font-bold text-white border border-white/15 transition-all cursor-pointer"
+            className="btn-3d btn-3d-dark flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white cursor-pointer"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? t.pinCopied : t.copyPin}</span>
@@ -132,9 +134,9 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
               sounds.soundKeypress();
               onOpenShareModal();
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 active:scale-95 text-xs font-bold text-pink-200 border border-pink-400/30 transition-all cursor-pointer"
+            className="btn-3d btn-3d-pink flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-white cursor-pointer"
           >
-            <Share2 className="w-3.5 h-3.5 text-pink-300" />
+            <Share2 className="w-3.5 h-3.5 text-pink-100" />
             <span>{t.share}</span>
           </button>
         </div>
@@ -147,8 +149,9 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
             <Users className="w-4 h-4 text-purple-400" />
             <span>{t.connectedPlayers} ({players.length})</span>
           </span>
-          <span className="text-[10px] text-pink-300 bg-pink-500/20 px-2 py-0.5 rounded-full font-bold">
-            ⏱️ {turnDuration === 60 ? (isEn ? '1m/turn' : 'דקה לתור') : `${turnDuration}${isEn ? 's' : ' שנ׳'}`}
+          <span className="text-[10px] text-pink-300 bg-pink-500/20 px-2.5 py-1 rounded-full font-bold flex items-center gap-1 border border-pink-400/30">
+            <Timer className="w-3 h-3 text-pink-400" strokeWidth={2.2} />
+            <span>{turnDuration === 60 ? (isEn ? '1m/turn' : 'דקה לתור') : `${turnDuration}${isEn ? 's' : ' שנ׳'}`}</span>
           </span>
         </div>
 
@@ -167,8 +170,8 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
                 <span className="text-lg">{p.avatar}</span>
                 <span className="truncate flex-1">{p.name}</span>
                 {p.isHost && (
-                  <span className="text-[10px] text-amber-300 bg-amber-400/20 px-1 rounded">
-                    👑
+                  <span className="text-[10px] text-amber-300 bg-amber-400/20 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 border border-amber-400/30 font-bold" title={isEn ? 'Host' : 'מארח/ת'}>
+                    <Crown className="w-3 h-3 text-yellow-300" strokeWidth={2.2} />
                   </span>
                 )}
                 {isMe && (

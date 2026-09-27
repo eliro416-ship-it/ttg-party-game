@@ -1,17 +1,41 @@
+import { Language, VoiceGender } from '../types/game';
+
 class SoundManager {
   private ctx: AudioContext | null = null;
   public isMuted: boolean = false;
+  public voiceGender: VoiceGender = 'female';
+  private cachedVoices: SpeechSynthesisVoice[] = [];
 
   constructor() {
-    const saved = localStorage.getItem('game_sound_muted');
-    if (saved !== null) {
-      this.isMuted = saved === 'true';
+    if (typeof window !== 'undefined') {
+      const savedMute = localStorage.getItem('game_sound_muted');
+      if (savedMute !== null) {
+        this.isMuted = savedMute === 'true';
+      }
+
+      const savedGender = localStorage.getItem('game_voice_gender');
+      if (savedGender === 'male' || savedGender === 'female') {
+        this.voiceGender = savedGender;
+      }
+
+      this.initVoices();
+    }
+  }
+
+  private initVoices() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      this.cachedVoices = window.speechSynthesis.getVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.cachedVoices = window.speechSynthesis.getVoices();
+        };
+      }
     }
   }
 
   private getContext(): AudioContext | null {
     if (this.isMuted) return null;
-    if (!this.ctx) {
+    if (!this.ctx && typeof window !== 'undefined') {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
@@ -25,8 +49,26 @@ class SoundManager {
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
-    localStorage.setItem('game_sound_muted', String(this.isMuted));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('game_sound_muted', String(this.isMuted));
+      if (this.isMuted && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
     return this.isMuted;
+  }
+
+  public setVoiceGender(gender: VoiceGender): VoiceGender {
+    this.voiceGender = gender;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('game_voice_gender', gender);
+    }
+    return this.voiceGender;
+  }
+
+  public toggleVoiceGender(): VoiceGender {
+    const next = this.voiceGender === 'female' ? 'male' : 'female';
+    return this.setVoiceGender(next);
   }
 
   public playTone(freq: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.1) {
@@ -67,7 +109,6 @@ class SoundManager {
   public soundSuccess() {
     const ctx = this.getContext();
     if (!ctx) return;
-    const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
     notes.forEach((freq, idx) => {
       setTimeout(() => {
@@ -108,30 +149,136 @@ class SoundManager {
     });
   }
 
-  public soundYes() {
-    this.playTone(587.33, 0.12, 'sine', 0.12);
-    setTimeout(() => {
-      this.playTone(880, 0.2, 'sine', 0.14);
-    }, 80);
+  /**
+   * Spoken speech narration with clear Male/Female voice distinction.
+   * On mobile devices with only one Hebrew voice:
+   * 1. Explicit utterance.lang = 'he-IL' (or 'en-US' for English).
+   * 2. Voice filtering via window.speechSynthesis.getVoices() searching for 'he' or 'iw'.
+   * 3. When 'male':
+   *    - First check for voice containing 'male', 'david', 'guy', or 'he-il-x-iad-local'.
+   *    - If not available, use existing Hebrew voice and adjust pitch: 0.65, rate: 0.88.
+   * 4. When 'female':
+   *    - Set pitch: 1.15, rate: 1.0.
+   * 5. cancel() called before every speech, and properties enforced directly on utterance before speak().
+   */
+  public speakText(text: string, lang: Language = 'he', gender: VoiceGender = this.voiceGender) {
+    if (this.isMuted) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    try {
+      // 5. Cancel previous speech to prevent overlapping responses
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      const isEn = lang === 'en';
+
+      // 1. Explicit language configuration (always 'he-IL' for Hebrew)
+      utterance.lang = isEn ? 'en-US' : 'he-IL';
+
+      // 2. Retrieve voices, supporting 'he' and 'iw' (common Hebrew locale codes)
+      const freshVoices = window.speechSynthesis.getVoices();
+      if (freshVoices && freshVoices.length > 0) {
+        this.cachedVoices = freshVoices;
+      }
+      const allVoices = this.cachedVoices.length > 0 ? this.cachedVoices : [];
+
+      const langVoices = allVoices.filter((v) => {
+        const vLang = (v.lang || '').toLowerCase();
+        const vName = (v.name || '').toLowerCase();
+        return isEn
+          ? vLang.startsWith('en')
+          : (
+              vLang.startsWith('he') ||
+              vLang.startsWith('iw') ||
+              vLang.includes('he-il') ||
+              vLang.includes('iw-il') ||
+              vName.includes('hebrew') ||
+              vName.includes('עברית')
+            );
+      });
+
+      // 3 & 4. Distinct voice selection and parameter tuning
+      if (gender === 'male') {
+        // 3. Check for dedicated male voice
+        const maleVoice = langVoices.find((v) => {
+          const vName = (v.name || '').toLowerCase();
+          const vURI = (v.voiceURI || '').toLowerCase();
+          return (
+            vName.includes('male') ||
+            vName.includes('david') ||
+            vName.includes('guy') ||
+            vName.includes('he-il-x-iad-local') ||
+            vURI.includes('male') ||
+            vURI.includes('david') ||
+            vURI.includes('guy') ||
+            vURI.includes('he-il-x-iad-local')
+          );
+        });
+
+        if (maleVoice) {
+          utterance.voice = maleVoice;
+        } else if (langVoices.length > 0) {
+          utterance.voice = langVoices[0];
+        }
+
+        // Apply deep masculine pitch and steady pace
+        utterance.pitch = 0.65;
+        utterance.rate = 0.88;
+      } else {
+        // 4. Female voice selection
+        const femaleVoice =
+          langVoices.find((v) => {
+            const vName = (v.name || '').toLowerCase();
+            const vURI = (v.voiceURI || '').toLowerCase();
+            return (
+              /female|carmit|zira|samantha|victoria|karen|siri/i.test(vName) ||
+              /female|carmit|zira|siri/i.test(vURI)
+            );
+          }) || langVoices[0];
+
+        if (femaleVoice) {
+          utterance.voice = femaleVoice;
+        }
+
+        // Female pitch and rate
+        utterance.pitch = 1.15;
+        utterance.rate = 1.0;
+      }
+
+      // Enforce volume and speak directly
+      utterance.volume = 1.0;
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('Speech synthesis error:', err);
+    }
   }
 
-  public soundNo() {
-    this.playTone(280, 0.15, 'sawtooth', 0.1);
-    setTimeout(() => {
-      this.playTone(220, 0.2, 'sawtooth', 0.12);
-    }, 100);
+  public speakWord(text: string, lang: Language = 'he', gender?: VoiceGender) {
+    this.speakText(text, lang, gender || this.voiceGender);
   }
 
-  public soundHot() {
-    this.playTone(659.25, 0.1, 'sine', 0.12);
-    setTimeout(() => this.playTone(783.99, 0.1, 'sine', 0.12), 70);
-    setTimeout(() => this.playTone(987.77, 0.15, 'sine', 0.14), 140);
-  }
+  /**
+   * High-clarity Clue Speech:
+   * Speaks the response cleanly ("כן", "לא", "חם", "קר") in Hebrew or English
+   * without distracting beeps or audio distortion filters.
+   */
+  public soundClue(
+    clue: 'yes' | 'no' | 'hot' | 'cold',
+    lang: Language = 'he',
+    overrideGender?: VoiceGender
+  ) {
+    if (this.isMuted) return;
+    const gender = overrideGender || this.voiceGender;
 
-  public soundCold() {
-    this.playTone(440, 0.1, 'sine', 0.1);
-    setTimeout(() => this.playTone(370, 0.12, 'sine', 0.1), 70);
-    setTimeout(() => this.playTone(311.13, 0.2, 'sine', 0.12), 140);
+    const wordMap: Record<string, { he: string; en: string }> = {
+      yes: { he: 'כן', en: 'Yes' },
+      no: { he: 'לא', en: 'No' },
+      hot: { he: 'חם', en: 'Hot' },
+      cold: { he: 'קר', en: 'Cold' },
+    };
+
+    const word = wordMap[clue]?.[lang] || clue;
+    this.speakText(word, lang, gender);
   }
 }
 

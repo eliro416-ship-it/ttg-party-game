@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { CardItem, Player, Language } from '../types/game';
+import { CardItem, Player, Language, VoiceGender } from '../types/game';
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { normalizeHebrewInput, lettersMatch } from '../utils/hebrewKeyboard';
 import { sounds } from '../utils/audio';
 import { translations } from '../utils/translations';
 import { getGameSocket, getSessionToken, TurnStartedPayload, RoundWonPayload, ReactionPayload } from '../utils/socket';
+import { VoiceGenderSelector } from './VoiceGenderSelector';
 import {
   Timer as TimerIcon,
   Flame,
@@ -13,13 +14,21 @@ import {
   LogOut,
   Trophy,
   CheckCircle2,
+  XCircle,
   Share2,
   RefreshCw,
   Lightbulb,
   SkipForward,
   Globe,
   ShieldCheck,
-  Radio
+  Radio,
+  Image as ImageIcon,
+  HelpCircle,
+  Settings,
+  Mic,
+  Snowflake,
+  User,
+  Lock
 } from 'lucide-react';
 
 interface GameTableProps {
@@ -41,6 +50,8 @@ interface GameTableProps {
   onToggleMute: () => void;
   language?: Language;
   onToggleLanguage?: () => void;
+  voiceGender?: VoiceGender;
+  onChangeVoiceGender?: (gender: VoiceGender) => void;
 }
 
 export const GameTable: React.FC<GameTableProps> = ({
@@ -62,9 +73,24 @@ export const GameTable: React.FC<GameTableProps> = ({
   onToggleMute,
   language = 'he',
   onToggleLanguage,
+  voiceGender,
+  onChangeVoiceGender,
 }) => {
   const t = translations[language];
   const isEn = language === 'en';
+
+  // Internal voice gender state (fallback if not controlled from parent)
+  const [internalVoiceGender, setInternalVoiceGender] = useState<VoiceGender>(() => {
+    return voiceGender || sounds.voiceGender;
+  });
+
+  const currentVoiceGender = voiceGender || internalVoiceGender;
+
+  const handleVoiceGenderChange = (gender: VoiceGender) => {
+    setInternalVoiceGender(gender);
+    sounds.setVoiceGender(gender);
+    onChangeVoiceGender?.(gender);
+  };
 
   // In Live Server mode:
   // If the server provided turn data, determine role and content from serverTurnData.
@@ -93,7 +119,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [revealedIndices, setRevealedIndices] = useState<number[]>([]);
   const [showTimerPicker, setShowTimerPicker] = useState<boolean>(false);
   const [lastReaction, setLastReaction] = useState<string | null>(null);
-  const [floatingReaction, setFloatingReaction] = useState<{ emoji: string; text: string; sender: string } | null>(null);
+  const [floatingReaction, setFloatingReaction] = useState<{ reactionType?: 'yes' | 'no' | 'hot' | 'cold'; emoji: string; text: string; sender: string } | null>(null);
   const [winnerCelebration, setWinnerCelebration] = useState<RoundWonPayload | null>(null);
 
   // Role Simulation toggle for single-screen / solo demo testing
@@ -116,22 +142,22 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (data.reaction === 'yes') {
         emoji = '✅';
         text = t.btnYes;
-        sounds.soundYes();
+        sounds.soundClue('yes', language, currentVoiceGender);
       } else if (data.reaction === 'no') {
         emoji = '❌';
         text = t.btnNo;
-        sounds.soundNo();
+        sounds.soundClue('no', language, currentVoiceGender);
       } else if (data.reaction === 'hot') {
         emoji = '🔥';
         text = t.btnHot;
-        sounds.soundHot();
+        sounds.soundClue('hot', language, currentVoiceGender);
       } else if (data.reaction === 'cold') {
         emoji = '❄️';
         text = t.btnCold;
-        sounds.soundCold();
+        sounds.soundClue('cold', language, currentVoiceGender);
       }
 
-      setFloatingReaction({ emoji, text, sender: data.senderName });
+      setFloatingReaction({ reactionType: data.reaction, emoji, text, sender: data.senderName });
       setLastReaction(`${emoji} ${text}`);
       setTimeout(() => setFloatingReaction(null), 3000);
     };
@@ -404,10 +430,8 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Holder sends reaction to all devices via server
   const sendHolderReaction = (reaction: 'yes' | 'no' | 'hot' | 'cold', label: string) => {
-    if (reaction === 'yes') sounds.soundYes();
-    if (reaction === 'no') sounds.soundNo();
-    if (reaction === 'hot') sounds.soundHot();
-    if (reaction === 'cold') sounds.soundCold();
+    // Play sound chime + formant vocalization + speak the word with chosen voice gender
+    sounds.soundClue(reaction, language, currentVoiceGender);
 
     setLastReaction(label);
 
@@ -461,8 +485,20 @@ export const GameTable: React.FC<GameTableProps> = ({
       {/* Real-time Floating Reaction Toast */}
       {floatingReaction && (
         <div className="fixed top-6 inset-x-0 mx-auto max-w-xs z-50 flex items-center justify-center pointer-events-none animate-bounce">
-          <div className="bg-black/90 border-2 border-amber-400 text-white px-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-md">
-            <span className="text-3xl">{floatingReaction.emoji}</span>
+          <div className="bg-black/90 border-2 border-amber-400/80 text-white px-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-md">
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20 shrink-0">
+              {floatingReaction.reactionType === 'yes' ? (
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" strokeWidth={2.4} />
+              ) : floatingReaction.reactionType === 'no' ? (
+                <XCircle className="w-6 h-6 text-rose-400" strokeWidth={2.4} />
+              ) : floatingReaction.reactionType === 'hot' ? (
+                <Flame className="w-6 h-6 text-amber-400" strokeWidth={2.4} />
+              ) : floatingReaction.reactionType === 'cold' ? (
+                <Snowflake className="w-6 h-6 text-cyan-400" strokeWidth={2.4} />
+              ) : (
+                <Volume2 className="w-6 h-6 text-pink-400" strokeWidth={2.2} />
+              )}
+            </div>
             <div>
               <div className="text-[11px] text-amber-300 font-bold">{t.reactionReceived}</div>
               <div className="text-sm font-black text-white">{floatingReaction.text}</div>
@@ -475,22 +511,24 @@ export const GameTable: React.FC<GameTableProps> = ({
       <div className="w-full flex justify-between items-center mb-2.5">
         <button
           onClick={onLeaveGame}
-          className="flex items-center gap-1 text-xs text-slate-400 hover:text-rose-300 px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-rose-500/20 transition-all cursor-pointer"
+          className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-rose-300 px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-rose-500/20 border border-white/10 transition-all cursor-pointer group shadow-sm"
           title={isEn ? 'Leave Game' : 'צא מהמשחק'}
         >
-          <LogOut className={`w-3.5 h-3.5 ${isEn ? 'mr-1' : 'ml-1'}`} />
+          <div className="w-5 h-5 rounded-lg bg-white/10 group-hover:bg-rose-500/30 flex items-center justify-center transition-colors">
+            <LogOut className={`w-3.5 h-3.5 text-slate-300 group-hover:text-rose-300 ${isEn ? '' : 'rotate-180'}`} strokeWidth={2.2} />
+          </div>
           <span>{t.leaveGame}</span>
         </button>
 
         <div className="flex items-center gap-2">
           {/* Live indicator badge */}
           {isLiveServer ? (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
-              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+            <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/30 shadow-sm">
+              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" strokeWidth={2.2} />
               <span>PIN: {roomPin}</span>
             </span>
           ) : (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-500/30">
+            <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-300 bg-indigo-500/20 px-2.5 py-1 rounded-full border border-indigo-500/30 shadow-sm">
               <span>Solo/Demo</span>
             </span>
           )}
@@ -502,9 +540,11 @@ export const GameTable: React.FC<GameTableProps> = ({
                 sounds.soundKeypress();
                 onToggleLanguage();
               }}
-              className="bg-white/10 hover:bg-white/20 active:scale-95 border border-white/15 text-white px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+              className="bg-white/10 hover:bg-white/20 active:scale-95 border border-white/15 text-white px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
             >
-              <Globe className="w-3.5 h-3.5 text-pink-400" />
+              <div className="w-5 h-5 rounded-lg bg-pink-500/20 flex items-center justify-center border border-pink-400/30">
+                <Globe className="w-3.5 h-3.5 text-pink-300" strokeWidth={2.2} />
+              </div>
               <span>{t.langBtn}</span>
             </button>
           )}
@@ -516,10 +556,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                 sounds.soundKeypress();
                 onOpenShareModal();
               }}
-              className="flex items-center gap-1 text-xs text-pink-300 hover:text-white px-2 py-1 rounded-xl bg-pink-500/15 hover:bg-pink-500/30 border border-pink-400/30 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 text-xs text-pink-200 hover:text-white px-2.5 py-1 rounded-xl bg-pink-500/15 hover:bg-pink-500/30 border border-pink-400/30 transition-all cursor-pointer shadow-sm"
               title={isEn ? 'Share game room' : 'שתף חדר משחק'}
             >
-              <Share2 className="w-3.5 h-3.5 text-pink-400" />
+              <div className="w-5 h-5 rounded-lg bg-pink-500/30 flex items-center justify-center border border-pink-300/40">
+                <Share2 className="w-3.5 h-3.5 text-pink-200" strokeWidth={2.2} />
+              </div>
               <span className="hidden sm:inline">{t.share}</span>
             </button>
           )}
@@ -527,10 +569,14 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Sound Toggle */}
           <button
             onClick={onToggleMute}
-            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-300 cursor-pointer"
+            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center text-slate-300 cursor-pointer shadow-sm transition-all"
             title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
           >
-            {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
+            {isMuted ? (
+              <VolumeX className="w-4 h-4 text-rose-400" strokeWidth={2.2} />
+            ) : (
+              <Volume2 className="w-4 h-4 text-emerald-400" strokeWidth={2.2} />
+            )}
           </button>
         </div>
       </div>
@@ -539,13 +585,17 @@ export const GameTable: React.FC<GameTableProps> = ({
       <div className="w-full flex justify-between items-center px-1 mb-2.5">
         <div>
           {isCurrentClientHolder ? (
-            <span className="text-xs font-black px-3.5 py-1 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white border border-purple-400/40 shadow-md flex items-center gap-1.5 animate-fadeIn">
-              <span>🖼️</span>
+            <span className="text-xs font-black px-3.5 py-1.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white border border-purple-400/40 shadow-md flex items-center gap-2 animate-fadeIn">
+              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/30">
+                <ImageIcon className="w-3.5 h-3.5 text-purple-200" strokeWidth={2.2} />
+              </div>
               <span>{t.holderRole}</span>
             </span>
           ) : (
-            <span className="text-xs font-black px-3.5 py-1 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white border border-pink-400/40 shadow-md flex items-center gap-1.5 animate-fadeIn">
-              <span>❓</span>
+            <span className="text-xs font-black px-3.5 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white border border-pink-400/40 shadow-md flex items-center gap-2 animate-fadeIn">
+              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/30">
+                <HelpCircle className="w-3.5 h-3.5 text-pink-200" strokeWidth={2.2} />
+              </div>
               <span>{t.guesserRole}</span>
             </span>
           )}
@@ -558,42 +608,53 @@ export const GameTable: React.FC<GameTableProps> = ({
             sounds.soundKeypress();
             setSimulatedRole(isCurrentClientHolder ? 'guesser' : 'holder');
           }}
-          className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-slate-200 border border-white/15 transition-all cursor-pointer shadow-sm"
+          className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-slate-200 border border-white/15 transition-all cursor-pointer shadow-sm"
           title={isEn ? 'Toggle perspective between holder and guesser' : 'מאפשר להדגים את נקודת המבט השנייה או לבדוק לבד'}
         >
-          <RefreshCw className="w-3 h-3 text-pink-400" />
+          <RefreshCw className="w-3 h-3 text-pink-400" strokeWidth={2.2} />
           <span>{t.demoBtn}</span>
         </button>
       </div>
 
       {/* Security badge: server-authoritative indicator */}
-      <div className="w-full flex justify-between items-center px-2 py-0.5 mb-2 text-[10px] text-slate-400 bg-black/25 rounded-lg border border-white/5">
-        <span className="flex items-center gap-1">
-          <ShieldCheck className="w-3 h-3 text-emerald-400" />
-          <span>{t.serverAuthoritative}</span>
+      <div className="w-full flex justify-between items-center px-3 py-1.5 mb-2.5 text-[11px] text-slate-300 bg-black/40 backdrop-blur-sm rounded-xl border border-white/10 shadow-sm">
+        <span className="flex items-center gap-1.5">
+          <div className="w-4 h-4 rounded-md bg-emerald-500/20 flex items-center justify-center border border-emerald-400/40">
+            <Lock className="w-2.5 h-2.5 text-emerald-400" strokeWidth={2.2} />
+          </div>
+          <span className="font-semibold">{t.serverAuthoritative}</span>
         </span>
-        <span>
+        <span className="font-mono font-bold text-slate-400">
           {currentCardIndex + 1} / {cards.length}
         </span>
       </div>
 
       {/* Main Game Display Frame */}
-      <div className="w-full relative rounded-3xl overflow-hidden border-2 border-white/20 shadow-2xl bg-black mb-3 group aspect-[4/3] max-h-[220px] sm:max-h-[240px] flex items-center justify-center">
+      <div className="w-full relative rounded-3xl overflow-hidden border-2 border-white/20 shadow-2xl bg-slate-900 mb-3 group aspect-[4/3] max-h-[220px] sm:max-h-[240px] flex items-center justify-center">
         {isCurrentClientHolder ? (
           /* Card Holder View: Sees the photo and the word! */
           <>
             <img
-              src={serverTurnData?.image || currentCard.image}
+              src={serverTurnData?.imageUrl || serverTurnData?.image || currentCard.imageUrl || currentCard.image}
               alt={targetWord}
               className={`w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 ${
                 isSuccess ? 'scale-105 brightness-110' : ''
               }`}
               loading="eager"
+              crossOrigin="anonymous"
+              onError={(e) => {
+                const target = e.currentTarget;
+                const fallbackUrl = currentCard.fallback || serverTurnData?.fallback;
+                if (fallbackUrl && target.src !== fallbackUrl) {
+                  target.src = fallbackUrl;
+                }
+              }}
             />
 
             {/* Category badge */}
-            <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20 shadow`}>
-              {t.categoryLabel} <span className="text-pink-300">{activeCategory}</span>
+            <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20 shadow flex items-center gap-1.5`}>
+              <span>{t.categoryLabel}</span>
+              <span className="text-pink-300 font-extrabold">{activeCategory}</span>
             </div>
 
             {/* Secret word badge */}
@@ -605,8 +666,8 @@ export const GameTable: React.FC<GameTableProps> = ({
         ) : (
           /* Guesser View: Server NEVER sends image or word. Absolutely 0 leaks! */
           <div className="w-full h-full flex flex-col items-center justify-center text-center p-5 bg-gradient-to-br from-[#2D1454] via-[#1E1B4B] to-[#0F172A]">
-            <div className="text-5xl sm:text-6xl mb-2.5 animate-bounce drop-shadow-[0_0_15px_rgba(253,121,168,0.5)]">
-              ❓
+            <div className="w-14 h-14 sm:w-16 sm:h-16 mb-2.5 rounded-2xl bg-pink-500/20 border-2 border-pink-400/40 flex items-center justify-center shadow-[0_0_25px_rgba(253,121,168,0.4)] animate-bounce">
+              <HelpCircle className="w-9 h-9 sm:w-10 sm:h-10 text-pink-300" strokeWidth={2.2} />
             </div>
             <div className="font-black text-base sm:text-lg text-white mb-1 flex items-center gap-1.5">
               <span>{t.holdingText}</span>
@@ -618,14 +679,19 @@ export const GameTable: React.FC<GameTableProps> = ({
             </p>
 
             {/* Category badge for guesser */}
-            <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20 shadow`}>
-              {t.categoryLabel} <span className="text-pink-300">{activeCategory}</span>
+            <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20 shadow flex items-center gap-1.5`}>
+              <span>{t.categoryLabel}</span>
+              <span className="text-pink-300 font-extrabold">{activeCategory}</span>
             </div>
 
             {/* Live hint if triggered by Holder */}
             {showHintText && activeHint && (
-              <div className="absolute bottom-3 inset-x-3 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-xl text-center text-xs text-amber-200 border border-amber-400/40 animate-fadeIn">
-                💡 <span className="font-bold">{isEn ? 'Hint:' : 'רמז:'}</span> {activeHint}
+              <div className="absolute bottom-3 inset-x-3 bg-black/85 backdrop-blur-md px-3 py-1.5 rounded-xl text-center text-xs text-amber-200 border border-amber-400/40 animate-fadeIn flex items-center justify-center gap-1.5 shadow-lg">
+                <div className="w-4 h-4 rounded-md bg-amber-400/20 flex items-center justify-center border border-amber-400/30">
+                  <Lightbulb className="w-3 h-3 text-amber-300" strokeWidth={2.2} />
+                </div>
+                <span className="font-bold">{isEn ? 'Hint:' : 'רמז:'}</span>
+                <span>{activeHint}</span>
               </div>
             )}
           </div>
@@ -633,12 +699,35 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         {/* Winner celebration overlay */}
         {(isSuccess || winnerCelebration) && (
-          <div className="absolute inset-0 bg-emerald-950/85 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn text-center p-4 z-20">
-            <CheckCircle2 className="w-12 h-12 text-emerald-400 mb-1.5 animate-bounce" />
-            <span className="text-2xl sm:text-3xl font-black text-white drop-shadow-md">
-              {winnerCelebration?.winnerName ? `🎉 ${winnerCelebration.winnerName}` : t.correctAlert}
+          <div className="absolute inset-0 bg-emerald-950/90 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn text-center p-4 z-20">
+            {winnerCelebration?.image && (
+              <img
+                src={winnerCelebration.image}
+                alt={winnerCelebration.word || targetWord}
+                className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl border-2 border-emerald-400/50 shadow-lg mb-1.5"
+                loading="eager"
+                crossOrigin="anonymous"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  const fallbackUrl = currentCard.fallback || '';
+                  if (fallbackUrl && target.src !== fallbackUrl) {
+                    target.src = fallbackUrl;
+                  }
+                }}
+              />
+            )}
+            <CheckCircle2 className="w-8 h-8 text-emerald-400 mb-1 animate-bounce" strokeWidth={2.4} />
+            <span className="text-xl sm:text-2xl font-black text-white drop-shadow-md flex items-center gap-2">
+              {winnerCelebration?.winnerName ? (
+                <>
+                  <Trophy className="w-6 h-6 text-amber-300 inline drop-shadow" strokeWidth={2.2} />
+                  <span>{winnerCelebration.winnerName}</span>
+                </>
+              ) : (
+                t.correctAlert
+              )}
             </span>
-            <span className="text-emerald-300 font-bold text-sm sm:text-base mt-1">
+            <span className="text-emerald-300 font-bold text-sm sm:text-base mt-0.5">
               {isEn ? 'Word:' : 'המילה הייתה:'} <b className="text-white uppercase">{winnerCelebration?.word || targetWord}</b>
             </span>
             {winnerCelebration?.points ? (
@@ -657,6 +746,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             className={`w-4 h-4 ${
               timeLeft <= 4 ? 'text-rose-400 animate-pulse' : 'text-amber-400'
             }`}
+            strokeWidth={2.2}
           />
           <span>{t.timeLabel}</span>
         </div>
@@ -690,19 +780,19 @@ export const GameTable: React.FC<GameTableProps> = ({
               setShowTimerPicker(!showTimerPicker);
             }}
             title={isEn ? 'Change turn timer' : 'שנה זמן טיימר'}
-            className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-[11px] font-bold text-slate-300 hover:text-white transition-all border border-white/10 flex items-center gap-1 cursor-pointer"
+            className="btn-3d btn-3d-dark px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-slate-200 flex items-center gap-1.5 cursor-pointer"
           >
-            <span>⚙️</span>
-            <span className="text-[10px] text-pink-300 font-semibold">{turnDuration === 60 ? (isEn ? '1m' : 'דקה') : `${turnDuration}s`}</span>
+            <Settings className="w-3.5 h-3.5 text-pink-400" strokeWidth={2.2} />
+            <span className="text-[10px] text-pink-300 font-extrabold">{turnDuration === 60 ? (isEn ? '1m' : 'דקה') : `${turnDuration}s`}</span>
           </button>
         </div>
       </div>
 
       {/* Mid-game Timer Picker Dropdown */}
       {showTimerPicker && (
-        <div className="w-full mb-3 bg-black/70 backdrop-blur-md border border-pink-500/40 rounded-2xl p-2.5 flex items-center justify-between gap-2 animate-fadeIn shadow-xl">
+        <div className="w-full mb-3 bg-black/80 backdrop-blur-md border border-pink-500/40 rounded-2xl p-2.5 flex items-center justify-between gap-2 animate-fadeIn shadow-2xl">
           <span className="text-xs font-bold text-slate-200 whitespace-nowrap pr-1 flex items-center gap-1">
-            <TimerIcon className="w-3.5 h-3.5 text-pink-400" />
+            <TimerIcon className="w-3.5 h-3.5 text-pink-400" strokeWidth={2.2} />
             <span>{t.changeTimer}</span>
           </span>
           <div className="flex-1 grid grid-cols-4 gap-1.5">
@@ -716,10 +806,10 @@ export const GameTable: React.FC<GameTableProps> = ({
                 key={sec}
                 type="button"
                 onClick={() => handleSelectTimerDuration(sec)}
-                className={`py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                className={`btn-3d py-1.5 rounded-xl text-xs font-bold cursor-pointer ${
                   turnDuration === sec
-                    ? 'bg-pink-500/40 border-pink-400 text-white shadow-sm ring-1 ring-pink-400/40'
-                    : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
+                    ? 'btn-3d-timer-active text-white'
+                    : 'btn-3d-timer-inactive text-slate-300'
                 }`}
               >
                 {label}
@@ -734,54 +824,104 @@ export const GameTable: React.FC<GameTableProps> = ({
         /* HOLDER INTERACTION AREA */
         <div className="w-full my-1 bg-gradient-to-b from-purple-900/30 to-black/40 border border-purple-500/30 rounded-2xl p-3.5 text-center animate-fadeIn shadow-lg">
           <div className="flex items-center justify-center gap-2 mb-1 text-emerald-400 font-extrabold text-sm">
-            <span>🗣️</span>
+            <div className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
+              <Mic className="w-3.5 h-3.5 text-emerald-300" strokeWidth={2.2} />
+            </div>
             <span>{t.holderMsg}</span>
           </div>
-          <p className="text-xs text-slate-300 mb-3">
+          <p className="text-xs text-slate-300 mb-2.5">
             {t.holderSub}
           </p>
 
-          {/* Quick Sound/Reaction response buttons for the holder */}
+          {/* Voice Gender Selection Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-3 py-2 bg-black/40 rounded-2xl border border-white/10 shadow-inner">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+              <div className="w-5 h-5 rounded-md bg-pink-500/20 border border-pink-400/30 flex items-center justify-center">
+                <Volume2 className="w-3.5 h-3.5 text-pink-400" strokeWidth={2.2} />
+              </div>
+              <span>{isEn ? 'Spoken Voice:' : 'קול המענה:'}</span>
+              <span className="inline-flex items-center gap-1 text-[11px] text-pink-300 font-extrabold bg-pink-500/10 px-2 py-0.5 rounded-full border border-pink-500/20">
+                <User className="w-3 h-3 text-pink-300" strokeWidth={2.2} />
+                <span>{currentVoiceGender === 'female' ? (isEn ? 'Female' : 'נקבה') : (isEn ? 'Male' : 'זכר')}</span>
+              </span>
+            </div>
+            <VoiceGenderSelector
+              voiceGender={currentVoiceGender}
+              onChangeVoiceGender={handleVoiceGenderChange}
+              language={language}
+              variant="segmented"
+            />
+          </div>
+
+          {/* Quick Sound & Voice Clue response buttons for the holder */}
           <div className="grid grid-cols-4 gap-2 mb-2.5">
             <button
               type="button"
               onClick={() => sendHolderReaction('yes', t.btnYes)}
-              className="py-2.5 px-1 bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/40 text-emerald-300 rounded-xl text-xs font-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer shadow"
+              className="btn-3d btn-3d-clue-yes py-3.5 px-1 text-white rounded-2xl text-xs font-black flex flex-col items-center justify-center gap-1.5 cursor-pointer group"
+              title={isEn ? 'Yes (Spoken Voice)' : 'כן (השמעת קול)'}
             >
-              <span className="text-base">✅</span>
-              <span>{t.btnYes}</span>
+              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center border border-white/25 shadow-sm group-hover:scale-110 transition-transform">
+                <CheckCircle2 className="w-6 h-6 text-emerald-300 drop-shadow" strokeWidth={2.4} />
+              </div>
+              <span className="font-black tracking-wide drop-shadow text-xs">{t.btnYes}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black/30 text-emerald-100 font-bold flex items-center gap-1">
+                <Volume2 className="w-2.5 h-2.5 text-emerald-300" strokeWidth={2.2} />
+                <span>{currentVoiceGender === 'female' ? (isEn ? 'Female' : 'נקבה') : (isEn ? 'Male' : 'זכר')}</span>
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => sendHolderReaction('no', t.btnNo)}
-              className="py-2.5 px-1 bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/40 text-rose-300 rounded-xl text-xs font-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer shadow"
+              className="btn-3d btn-3d-clue-no py-3.5 px-1 text-white rounded-2xl text-xs font-black flex flex-col items-center justify-center gap-1.5 cursor-pointer group"
+              title={isEn ? 'No (Spoken Voice)' : 'לא (השמעת קול)'}
             >
-              <span className="text-base">❌</span>
-              <span>{t.btnNo}</span>
+              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center border border-white/25 shadow-sm group-hover:scale-110 transition-transform">
+                <XCircle className="w-6 h-6 text-rose-300 drop-shadow" strokeWidth={2.4} />
+              </div>
+              <span className="font-black tracking-wide drop-shadow text-xs">{t.btnNo}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black/30 text-rose-100 font-bold flex items-center gap-1">
+                <Volume2 className="w-2.5 h-2.5 text-rose-300" strokeWidth={2.2} />
+                <span>{currentVoiceGender === 'female' ? (isEn ? 'Female' : 'נקבה') : (isEn ? 'Male' : 'זכר')}</span>
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => sendHolderReaction('hot', t.btnHot)}
-              className="py-2.5 px-1 bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-300 rounded-xl text-xs font-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer shadow"
+              className="btn-3d btn-3d-clue-hot py-3.5 px-1 text-white rounded-2xl text-xs font-black flex flex-col items-center justify-center gap-1.5 cursor-pointer group"
+              title={isEn ? 'Hot (Spoken Voice)' : 'חם (השמעת קול)'}
             >
-              <span className="text-base">🔥</span>
-              <span>{t.btnHot}</span>
+              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center border border-white/25 shadow-sm group-hover:scale-110 transition-transform">
+                <Flame className="w-6 h-6 text-amber-300 drop-shadow" strokeWidth={2.4} />
+              </div>
+              <span className="font-black tracking-wide drop-shadow text-xs">{t.btnHot}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black/30 text-amber-100 font-bold flex items-center gap-1">
+                <Volume2 className="w-2.5 h-2.5 text-amber-300" strokeWidth={2.2} />
+                <span>{currentVoiceGender === 'female' ? (isEn ? 'Female' : 'נקבה') : (isEn ? 'Male' : 'זכר')}</span>
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => sendHolderReaction('cold', t.btnCold)}
-              className="py-2.5 px-1 bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/40 text-cyan-300 rounded-xl text-xs font-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer shadow"
+              className="btn-3d btn-3d-clue-cold py-3.5 px-1 text-white rounded-2xl text-xs font-black flex flex-col items-center justify-center gap-1.5 cursor-pointer group"
+              title={isEn ? 'Cold (Spoken Voice)' : 'קר (השמעת קול)'}
             >
-              <span className="text-base">❄️</span>
-              <span>{t.btnCold}</span>
+              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center border border-white/25 shadow-sm group-hover:scale-110 transition-transform">
+                <Snowflake className="w-6 h-6 text-cyan-300 drop-shadow" strokeWidth={2.4} />
+              </div>
+              <span className="font-black tracking-wide drop-shadow text-xs">{t.btnCold}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black/30 text-cyan-100 font-bold flex items-center gap-1">
+                <Volume2 className="w-2.5 h-2.5 text-cyan-300" strokeWidth={2.2} />
+                <span>{currentVoiceGender === 'female' ? (isEn ? 'Female' : 'נקבה') : (isEn ? 'Male' : 'זכר')}</span>
+              </span>
             </button>
           </div>
 
           {lastReaction && (
-            <div className="mb-2 text-xs font-bold text-amber-300 bg-amber-400/10 py-1 px-3 rounded-lg border border-amber-400/20 animate-fadeIn">
+            <div className="mb-2 text-xs font-bold text-amber-300 bg-amber-400/10 py-1.5 px-3 rounded-xl border border-amber-400/20 animate-fadeIn">
               {t.holderReaction} <b>{lastReaction}</b>
             </div>
           )}
@@ -792,9 +932,11 @@ export const GameTable: React.FC<GameTableProps> = ({
               <button
                 type="button"
                 onClick={handleGiveHint}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-amber-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                className="btn-3d btn-3d-dark flex items-center gap-2 px-4 py-2.5 text-amber-300 rounded-xl text-xs font-bold cursor-pointer"
               >
-                <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+                <div className="w-5 h-5 rounded-md bg-amber-400/20 flex items-center justify-center border border-amber-400/40">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-300" strokeWidth={2.2} />
+                </div>
                 <span>{t.giveHint}</span>
               </button>
             )}
@@ -802,9 +944,11 @@ export const GameTable: React.FC<GameTableProps> = ({
             <button
               type="button"
               onClick={handleSkipTurn}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-rose-500/20 text-slate-300 hover:text-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              className="btn-3d btn-3d-dark flex items-center gap-2 px-4 py-2.5 text-slate-300 hover:text-rose-200 rounded-xl text-xs font-bold cursor-pointer"
             >
-              <SkipForward className="w-3.5 h-3.5" />
+              <div className="w-5 h-5 rounded-md bg-white/10 flex items-center justify-center border border-white/20">
+                <SkipForward className="w-3.5 h-3.5 text-slate-300" strokeWidth={2.2} />
+              </div>
               <span>{t.skipTurn}</span>
             </button>
           </div>
