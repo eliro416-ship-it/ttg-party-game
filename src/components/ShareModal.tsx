@@ -21,14 +21,15 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, pin, la
 
   // Build the dynamic invitation link using the real current application URL
   const currentLang = language;
-  const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}?pin=${pin}&lang=${currentLang}`
-    : `/?pin=${pin}&lang=${currentLang}`;
+  const baseUrl = (typeof window !== 'undefined' && window.location.origin.includes('time-to-guess.netlify.app'))
+    ? window.location.origin
+    : 'https://time-to-guess.netlify.app';
+  const shareUrl = `${baseUrl}/?pin=${pin}&lang=${currentLang}`;
   const inviteUrl = shareUrl;
 
   const shareText = isEn
-    ? `🃏 Join my "Time to Guess" game room!\nRoom PIN: ${pin}\nQuick join link:\n${shareUrl}`
-    : `🃏 בואו לשחק איתי ב״הזמן לנחש״ (Time To Guess)!\nקוד החדר: ${pin}\nלהצטרפות מהירה לחצו כאן:\n${shareUrl}`;
+    ? `🎮 Invitation to "Time to Guess" (Time to Guess)! ⏱️\n\nHey! I'm holding the secret picture in a cool live network room.\n🔑 Room PIN code: ${pin}\n\n👇 Click here to join instantly:\n${shareUrl}`
+    : `🎮 הזמנה למשחק "הזמן לנחש" (Time to Guess)! ⏱️\n\nהיי! אני מחזיק/ה בתמונה הסודית בחדר רשת חי ומגניב.\n🔑 קוד ה-PIN של החדר: ${pin}\n\n👇 להצטרפות מהירה בלחיצה אחת:\n${shareUrl}`;
 
   // Generate QR Code
   useEffect(() => {
@@ -83,7 +84,6 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, pin, la
         await navigator.share({
           title: isEn ? 'Time to Guess 🃏' : 'הזמן לנחש 🃏',
           text: shareText,
-          url: inviteUrl,
         });
         sounds.soundSuccess();
       } catch (err: any) {

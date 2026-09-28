@@ -69,7 +69,6 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isJoining) return;
 
     if (!pin.trim()) {
       sounds.soundError();
@@ -84,12 +83,13 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
 
     localStorage.setItem('player_name', name.trim());
     localStorage.setItem('player_avatar', selectedAvatar);
+    localStorage.setItem('ttg_room_pin', pin.trim());
 
-    setIsJoining(true);
+    sounds.soundSuccess();
     setError('');
 
+    // Instant transition directly to game screen:
     onJoin(pin.trim(), name.trim(), selectedAvatar, (errMessage: string) => {
-      setIsJoining(false);
       sounds.soundError();
       setError(errMessage || (isEn ? 'Invalid room PIN code! Ask host for PIN.' : 'קוד PIN שגוי! בקש/י את הקוד התקין מהמארח/ת.'));
     });
@@ -222,16 +222,11 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
         {/* Submit */}
         <button
           type="submit"
-          disabled={isJoining}
-          className="btn-3d btn-3d-pink w-full mt-3 py-4 px-6 disabled:opacity-60 text-white font-black text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer"
+          className="btn-3d btn-3d-pink w-full mt-3 py-4 px-6 text-white font-black text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-lg active:scale-98 transition-all"
         >
           <span className="shimmer-sweep" />
-          {isJoining ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Sparkles className="w-5 h-5 text-white drop-shadow" />
-          )}
-          <span>{isJoining ? (isEn ? 'Connecting...' : 'מתחבר לחדר...') : t.btnJoin}</span>
+          <Sparkles className="w-5 h-5 text-white drop-shadow" />
+          <span>{t.btnJoin}</span>
         </button>
       </form>
     </div>

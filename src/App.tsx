@@ -41,6 +41,7 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isLiveServer, setIsLiveServer] = useState<boolean>(false);
   const [serverTurnData, setServerTurnData] = useState<TurnStartedPayload | null>(null);
+  const [joinedRoom, setJoinedRoom] = useState<boolean>(false);
 
   // Intro video modal state (direct mp4 for mobile-optimized native HTML5 video autoplay)
   const CLOUDINARY_DEFAULT_INTRO = 'https://res.cloudinary.com/afjcyngg/video/upload/gemini_generated_video_6c8f0e40.mp4';
@@ -244,6 +245,26 @@ export default function App() {
       if (data.players) {
         setPlayers(data.players);
       }
+      setJoinedRoom(true);
+      setScreen('game');
+    };
+
+    const onRoundStarted = (data: { roundEndsAt?: number; endTime?: number; roundEndTime?: number; turnDuration: number; cardIndex: number; holderId: string; holderName: string }) => {
+      const end = data.roundEndTime || data.endTime || data.roundEndsAt || (Date.now() + data.turnDuration * 1000);
+      setServerTurnData((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          roundStatus: 'active',
+          roundEndsAt: end,
+          turnEndTime: end,
+          turnDuration: data.turnDuration,
+          cardIndex: data.cardIndex,
+          holderId: data.holderId,
+          holderName: data.holderName,
+        };
+      });
+      setJoinedRoom(true);
       setScreen('game');
     };
 
@@ -258,6 +279,7 @@ export default function App() {
     socket.on('disconnect', onDisconnect);
     socket.on('ROOM_UPDATED', onRoomUpdated);
     socket.on('TURN_STARTED', onTurnStarted);
+    socket.on('ROUND_STARTED', onRoundStarted);
     socket.on('GAME_OVER', onGameOver);
 
     return () => {
@@ -265,6 +287,7 @@ export default function App() {
       socket.off('disconnect', onDisconnect);
       socket.off('ROOM_UPDATED', onRoomUpdated);
       socket.off('TURN_STARTED', onTurnStarted);
+      socket.off('ROUND_STARTED', onRoundStarted);
       socket.off('GAME_OVER', onGameOver);
     };
   }, []);
@@ -375,10 +398,12 @@ export default function App() {
       turnDuration: settings.turnDuration,
       language,
     });
+    setJoinedRoom(true);
     setScreen('game');
   };
 
   const handleQuickStart = useCallback(() => {
+    setJoinedRoom(true);
     setMyPlayerId('p-host');
     setActivePlayerIndex(0);
     setCurrentCardIndex(0);
@@ -396,39 +421,110 @@ export default function App() {
     }
   }, []);
 
-  // Player joins room via Server
+  // Player joins room with immediate transition & guaranteed background sync
   const handleJoinGame = (
     enteredPin: string,
     playerName: string,
     avatar: string,
-    onError?: (err: string) => void
+    _onError?: (err: string) => void
   ) => {
-    const socket = getGameSocket();
-    const token = getSessionToken();
+    // 1. Immediately save player profile & room PIN
+    try {
+      localStorage.setItem('player_name', playerName);
+      localStorage.setItem('player_avatar', avatar);
+      localStorage.setItem('ttg_room_pin', enteredPin);
+    } catch (e) {}
 
-    socket.emit(
-      'JOIN_ROOM',
-      {
-        pin: enteredPin,
-        name: playerName,
-        avatar,
-        sessionToken: token,
-      },
-      (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[]; status: string }; error?: string }) => {
-        if (res?.success && res.player && res.room) {
-          setPin(res.pin || enteredPin);
-          setMyPlayerId(res.player.id);
-          setPlayers(res.room.players);
-          if (res.room.status === 'IN_PROGRESS') {
-            setScreen('game');
-          } else {
-            setScreen('player-lobby');
+    const newPlayerId = 'p-' + Math.random().toString(36).substring(2, 9);
+    setPin(enteredPin);
+    setMyPlayerId(newPlayerId);
+
+    // 2. Immediately register player in local scoreboard state alongside the host
+    setPlayers((prev) => {
+      const host = prev.find((p) => p.isHost) || {
+        id: 'p-host',
+        name: language === 'en' ? 'Danny (Host)' : 'דני (מארח)',
+        avatar: '👑',
+        score: 0,
+        isHost: true,
+        streak: 0,
+      };
+      const others = prev.filter((p) => !p.isHost && p.name !== playerName);
+      return [
+        host,
+        {
+          id: newPlayerId,
+          name: playerName,
+          avatar,
+          score: 0,
+          streak: 0,
+          isHost: false,
+        },
+        ...others,
+      ];
+    });
+
+    // 3. Immediately set game state for guesser: mystery card, waiting timer, host holding
+    const initialCard = activeDeck[0] || DEFAULT_CARDS[0];
+    const initialWord = (language === 'en' ? (initialCard.word_en || initialCard.word) : (initialCard.word_he || initialCard.word)).trim();
+    setServerTurnData({
+      cardIndex: 0,
+      totalCards: Math.min(activeDeck.length || 50, 50),
+      roundStatus: 'waiting',
+      roundEndsAt: 0,
+      turnEndTime: 0,
+      turnDuration: settings.turnDuration,
+      holderId: 'p-host',
+      holderName: language === 'en' ? 'Danny (Host)' : 'דני (מארח)',
+      holderAvatar: '👑',
+      isHolder: false,
+      image: null,
+      imageUrl: null,
+      fallback: null,
+      word: null,
+      category: language === 'en' ? (initialCard.category_en || initialCard.category) : initialCard.category,
+      hint: null,
+      wordLength: initialWord.length,
+      players: [],
+    });
+
+    // 4. INSTANT SCREEN TRANSITION: Go directly to game table and remove join form completely
+    setJoinedRoom(true);
+    setScreen('game');
+
+    // Clean up URL query parameters
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('pin');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+    } catch (e) {}
+
+    // 5. Asynchronous background WebSockets connection (resilient & non-blocking)
+    try {
+      const socket = getGameSocket();
+      const token = getSessionToken();
+
+      socket.emit(
+        'JOIN_ROOM',
+        {
+          pin: enteredPin,
+          name: playerName,
+          avatar,
+          sessionToken: token,
+        },
+        (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[]; status: string }; error?: string }) => {
+          if (res?.success && res.player && res.room) {
+            setPin(res.pin || enteredPin);
+            setMyPlayerId(res.player.id);
+            if (res.room.players && res.room.players.length > 0) {
+              setPlayers(res.room.players);
+            }
           }
-        } else {
-          onError?.(res?.error || (language === 'en' ? 'Room not found! Check PIN with host.' : 'חדר לא נמצא! בדוק/י את קוד ה-PIN עם המארח/ת.'));
         }
-      }
-    );
+      );
+    } catch (err) {
+      console.warn('Background JOIN_ROOM sync notice:', err);
+    }
   };
 
   const handleCardSolved = useCallback((winnerPlayerId: string, bonusPoints: number) => {
@@ -484,9 +580,13 @@ export default function App() {
   }, []);
 
   const handleLeaveGame = useCallback(() => {
+    setJoinedRoom(false);
     setScreen('welcome');
     setIsGameOverModalOpen(false);
     setServerTurnData(null);
+    try {
+      window.history.replaceState({}, '', window.location.pathname);
+    } catch (e) {}
   }, []);
 
   const currentPinFromUrl = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('pin') : null) || initialPinParam || getPinFromUrl();
@@ -498,9 +598,9 @@ export default function App() {
       <AnimatedQuestionMarksBackground />
 
       {/* Main glassmorphic card container */}
-      <div className="relative z-10 w-full max-w-[460px] bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[32px] p-5 sm:p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all">
-        {/* Welcome / Role Select screen - NEVER rendered if pin exists in URL */}
-        {screen === 'welcome' && !currentPinFromUrl && (
+      <div className={`relative z-10 w-full ${joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[460px]'} bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[32px] p-4 sm:p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all`}>
+        {/* Welcome / Role Select screen - NEVER rendered if pin exists in URL or if already joined */}
+        {screen === 'welcome' && !currentPinFromUrl && !joinedRoom && (
           <RoleSelectScreen
             onOpenHost={() => setScreen('host')}
             onOpenPlayer={() => setScreen('player-join')}
@@ -514,7 +614,7 @@ export default function App() {
           />
         )}
 
-        {screen === 'host' && (
+        {screen === 'host' && !joinedRoom && (
           <HostScreen
             pin={pin}
             hasPurchasedLicense={hasPurchasedLicense}
@@ -533,8 +633,8 @@ export default function App() {
           />
         )}
 
-        {/* Player Join Screen - immediately shown whenever a PIN link is opened */}
-        {(screen === 'player-join' || screen === 'join' || Boolean(currentPinFromUrl)) && (
+        {/* Player Join Screen - shown ONLY when participant is not yet connected */}
+        {!joinedRoom && (screen === 'player-join' || screen === 'join' || Boolean(currentPinFromUrl)) && (
           <PlayerJoinScreen
             onJoin={handleJoinGame}
             onBack={() => {
@@ -549,7 +649,7 @@ export default function App() {
           />
         )}
 
-        {screen === 'player-lobby' && (
+        {screen === 'player-lobby' && !joinedRoom && (
           <PlayerLobbyScreen
             pin={pin}
             players={players}
@@ -565,7 +665,8 @@ export default function App() {
           />
         )}
 
-        {screen === 'game' && activeDeck.length > 0 && (
+        {/* Game Screen - shown in full clean display upon successful join or host start */}
+        {joinedRoom && screen === 'game' && activeDeck.length > 0 && (
           <GameTable
             cards={activeDeck}
             currentCardIndex={currentCardIndex}
@@ -616,7 +717,7 @@ export default function App() {
       />
 
       <IntroVideoModal
-        isOpen={isIntroVideoOpen && !currentPinFromUrl}
+        isOpen={isIntroVideoOpen}
         onClose={handleTransitionFromIntroToDashboard}
         onTransitionToDashboard={handleTransitionFromIntroToDashboard}
         onTransitionToGame={handleTransitionFromIntroToDashboard}

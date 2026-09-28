@@ -29,6 +29,8 @@ export function getGameSocket(): Socket {
 
 export interface TurnStartedPayload {
   isHolder: boolean;
+  roundStatus?: 'waiting' | 'active';
+  roundEndsAt?: number;
   cardId?: string;
   cardIndex: number;
   totalCards: number;
@@ -46,6 +48,14 @@ export interface TurnStartedPayload {
   turnEndTime: number;
   turnDuration: number;
   players: (Player & { isHolder: boolean; isOnline: boolean })[];
+}
+
+export interface RoundStartedPayload {
+  roundEndsAt: number;
+  turnDuration: number;
+  cardIndex: number;
+  holderId: string;
+  holderName: string;
 }
 
 export interface RoundWonPayload {

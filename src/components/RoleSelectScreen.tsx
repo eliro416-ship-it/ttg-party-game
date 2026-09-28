@@ -33,7 +33,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
   return (
     <div className="w-full flex flex-col items-center text-center animate-fadeIn select-none" dir={isEn ? 'ltr' : 'rtl'}>
-      {/* Top bar with Language Switcher and Sound Toggle */}
+      {/* Top bar with Language Switcher, Single Intro Video Button, and Sound Toggle */}
       <div className="w-full flex justify-between items-center mb-4">
         <button
           onClick={() => {
@@ -47,13 +47,33 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
           <span>{t.langBtn}</span>
         </button>
 
-        <button
-          onClick={onToggleMute}
-          className="btn-3d btn-3d-dark p-2 rounded-full text-slate-300 cursor-pointer"
-          title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
-        >
-          {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Single clean Header Video Button */}
+          {onOpenVideo && (
+            <button
+              type="button"
+              onClick={() => {
+                sounds.soundKeypress();
+                onOpenVideo();
+              }}
+              className="btn-3d btn-3d-dark text-pink-300 hover:text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-sm"
+              title={isEn ? 'Watch Intro Video' : 'צפייה בסרטון הפתיחה'}
+            >
+              <div className="w-4 h-4 rounded-full bg-pink-500/20 flex items-center justify-center border border-pink-400/40">
+                <Film className="w-2.5 h-2.5 text-pink-300" strokeWidth={2.4} />
+              </div>
+              <span className="font-extrabold">{isEn ? 'Intro Video' : 'סרטון פתיחה'}</span>
+            </button>
+          )}
+
+          <button
+            onClick={onToggleMute}
+            className="btn-3d btn-3d-dark p-2 rounded-full text-slate-300 cursor-pointer"
+            title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
+          >
+            {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
+          </button>
+        </div>
       </div>
 
       {/* Branded TTG Icon Badge */}
@@ -137,19 +157,6 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
           <Gamepad2 className="w-5 h-5 text-white drop-shadow" strokeWidth={2.2} />
           <span className="tracking-wide">{t.btnPlayer}</span>
         </button>
-
-        {onOpenVideo && (
-          <button
-            onClick={() => {
-              sounds.soundKeypress();
-              onOpenVideo();
-            }}
-            className="btn-3d btn-3d-dark w-full py-3 px-4 text-pink-300 hover:text-white font-extrabold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Film className="w-4 h-4 text-pink-400" strokeWidth={2.2} />
-            <span>{isEn ? 'Watch Intro Video' : 'צפה בסרטון הסבר ופתיח'}</span>
-          </button>
-        )}
       </div>
 
       {/* Bottom feature pill */}
@@ -169,25 +176,6 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
           <span>{isEn ? 'Instant PIN Room' : 'הצטרפות מהירה'}</span>
         </span>
       </div>
-
-      {/* Floating button in the corner to re-watch the intro video at any time */}
-      {onOpenVideo && (
-        <button
-          type="button"
-          onClick={() => {
-            sounds.soundKeypress();
-            onOpenVideo();
-          }}
-          className="fixed bottom-4 sm:bottom-6 start-4 sm:start-6 z-40 group btn-3d btn-3d-dark px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-xs font-black text-pink-300 hover:text-white border border-pink-500/40 backdrop-blur-xl shadow-[0_8px_25px_rgba(0,0,0,0.6)] flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95"
-          title={isEn ? 'Watch Intro Video' : 'צפייה חוזרת בסרטון הפתיחה'}
-        >
-          <div className="w-5 h-5 rounded-full bg-pink-500/20 flex items-center justify-center border border-pink-400/40 group-hover:scale-110 transition-transform">
-            <Film className="w-3 h-3 text-pink-300" strokeWidth={2.4} />
-          </div>
-          <span className="tracking-wide">{isEn ? 'Intro Video' : 'סרטון פתיחה'}</span>
-          <span className="text-[11px]">🎬</span>
-        </button>
-      )}
     </div>
   );
 };

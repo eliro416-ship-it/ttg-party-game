@@ -18,6 +18,7 @@ interface ServerPlayer {
 interface RoomState {
   pin: string;
   status: 'LOBBY' | 'IN_PROGRESS' | 'GAME_OVER';
+  roundStatus: 'waiting' | 'active';
   hostId: string;
   players: ServerPlayer[];
   deck: CardItem[];
@@ -59,6 +60,7 @@ export function setupGameSocketServer(io: Server) {
       const newRoom: RoomState = {
         pin,
         status: 'LOBBY',
+        roundStatus: 'waiting',
         hostId: playerId,
         players: [hostPlayer],
         deck: shuffledDeck,
@@ -84,6 +86,7 @@ export function setupGameSocketServer(io: Server) {
       });
 
       broadcastLobbyUpdate(io, newRoom);
+      sendTurnStateToPlayer(io, newRoom, hostPlayer);
     });
 
     // 2. JOIN_ROOM
@@ -136,13 +139,68 @@ export function setupGameSocketServer(io: Server) {
 
       broadcastLobbyUpdate(io, room);
 
-      // If game is already running, send the current turn state to this reconnecting/joining player
-      if (room.status === 'IN_PROGRESS') {
-        sendTurnStateToPlayer(io, room, player);
+      // Send the current turn state to this player and refresh all players
+      for (const p of room.players) {
+        sendTurnStateToPlayer(io, room, p);
       }
     });
 
-    // 3. START_GAME (Host only)
+    // 3. START_GAME / START_ROUND
+    socket.on('START_ROUND', (data: { pin: string; sessionToken: string; duration?: number; endTime?: number; roundEndTime?: number }, callback) => {
+      const room = rooms.get(data.pin);
+      if (!room) return callback?.({ success: false, error: 'Room not found' });
+
+      const player = room.players.find((p) => p.sessionToken === data.sessionToken);
+      const currentHolder = room.players[room.currentHolderIndex];
+
+      if (!player || (!player.isHost && player.id !== currentHolder?.id)) {
+        return callback?.({ success: false, error: 'Only host or card holder can start the round' });
+      }
+
+      if (data.duration && data.duration > 0) {
+        room.turnDuration = data.duration;
+      }
+
+      room.status = 'IN_PROGRESS';
+      room.roundStatus = 'active';
+
+      const durationMs = room.turnDuration * 1000;
+      // Absolute timestamp sync: prioritize host-provided endTime/roundEndTime if valid, ensuring exact millisecond parity across network!
+      const targetTime = data.roundEndTime || data.endTime;
+      const roundEndsAt = (targetTime && targetTime > Date.now()) ? targetTime : (Date.now() + durationMs);
+      room.turnEndTime = roundEndsAt;
+      room.revealedHint = false;
+
+      if (room.turnTimer) {
+        clearTimeout(room.turnTimer);
+        room.turnTimer = null;
+      }
+
+      callback?.({ success: true, roundEndsAt, endTime: roundEndsAt, roundEndTime: roundEndsAt });
+
+      for (const p of room.players) {
+        sendTurnStateToPlayer(io, room, p);
+      }
+
+      // Broadcast ROUND_STARTED with exact timestamp to all players
+      io.to(room.pin).emit('ROUND_STARTED', {
+        type: 'ROUND_STARTED',
+        roundEndsAt,
+        endTime: roundEndsAt,
+        roundEndTime: roundEndsAt,
+        turnDuration: room.turnDuration,
+        cardIndex: room.currentCardIndex,
+        holderId: currentHolder?.id,
+        holderName: currentHolder?.name,
+      });
+
+      const serverTimeoutMs = Math.max(100, roundEndsAt - Date.now());
+      room.turnTimer = setTimeout(() => {
+        handleServerTurnTimeout(io, room);
+      }, serverTimeoutMs);
+    });
+
+    // START_GAME (Host enters the game room from HostScreen; starts in waiting status so host can click "התחל סיבוב! 🚀")
     socket.on('START_GAME', (data: { pin: string; sessionToken: string; turnDuration?: number; language?: 'he' | 'en' }, callback) => {
       const room = rooms.get(data.pin);
       if (!room) return callback?.({ success: false, error: 'Room not found' });
@@ -159,21 +217,33 @@ export function setupGameSocketServer(io: Server) {
         room.language = data.language;
       }
 
-      // Shuffle entire deck with Fisher-Yates and reset played history
       room.deck = shuffleDeck(DEFAULT_CARDS);
       room.playedCardIds.clear();
       room.status = 'IN_PROGRESS';
+      room.roundStatus = 'waiting';
       room.currentCardIndex = 0;
       room.currentHolderIndex = 0;
+      room.turnEndTime = 0;
+      room.revealedHint = false;
 
-      callback?.({ success: true });
-      startNewTurn(io, room);
+      if (room.turnTimer) {
+        clearTimeout(room.turnTimer);
+        room.turnTimer = null;
+      }
+
+      callback?.({ success: true, roundStatus: 'waiting' });
+
+      for (const p of room.players) {
+        sendTurnStateToPlayer(io, room, p);
+      }
     });
 
     // 4. SUBMIT_GUESS (Server-Authoritative Validation)
     socket.on('SUBMIT_GUESS', (data: { pin: string; guess: string; sessionToken: string }, callback) => {
       const room = rooms.get(data.pin);
-      if (!room || room.status !== 'IN_PROGRESS') return;
+      if (!room || room.status !== 'IN_PROGRESS' || room.roundStatus !== 'active') {
+        return callback?.({ success: false, error: 'Round is not active' });
+      }
 
       const player = room.players.find((p) => p.sessionToken === data.sessionToken);
       if (!player || !player.isOnline) return;
@@ -208,7 +278,8 @@ export function setupGameSocketServer(io: Server) {
         (normalizedGuess === targetHe || (targetEn.length > 0 && normalizedGuess === targetEn));
 
       if (isMatch) {
-        // Clear turn timer
+        // Stop timer immediately and set round to waiting
+        room.roundStatus = 'waiting';
         if (room.turnTimer) {
           clearTimeout(room.turnTimer);
           room.turnTimer = null;
@@ -226,7 +297,7 @@ export function setupGameSocketServer(io: Server) {
 
         callback?.({ success: true, correct: true });
 
-        // Broadcast ROUND_WON to all clients (now safely revealing image + word for celebration)
+        // Broadcast ROUND_WON to all clients (safely revealing image + word for celebration)
         io.to(room.pin).emit('ROUND_WON', {
           winnerId: player.id,
           winnerName: player.name,
@@ -237,7 +308,7 @@ export function setupGameSocketServer(io: Server) {
           scores: room.players.map((p) => ({ id: p.id, name: p.name, score: p.score, streak: p.streak })),
         });
 
-        // Delay 2.5s for celebration, then start next turn
+        // Delay 2.5s for celebration, then advance turn and wait for next start
         setTimeout(() => {
           advanceToNextTurn(io, room);
         }, 2500);
@@ -300,6 +371,7 @@ export function setupGameSocketServer(io: Server) {
 
       if (!player || (!player.isHost && player.id !== currentHolder?.id)) return;
 
+      room.roundStatus = 'waiting';
       if (room.turnTimer) {
         clearTimeout(room.turnTimer);
         room.turnTimer = null;
@@ -427,6 +499,8 @@ function sendTurnStateToPlayer(io: Server, room: RoomState, player: ServerPlayer
     // HOLDER PAYLOAD: Full image and word
     io.to(player.socketId).emit('TURN_STARTED', {
       isHolder: true,
+      roundStatus: room.roundStatus || 'waiting',
+      roundEndsAt: room.turnEndTime || 0,
       cardId: card.id,
       cardIndex: room.currentCardIndex,
       totalCards: Math.min(room.deck.length, 50),
@@ -457,6 +531,8 @@ function sendTurnStateToPlayer(io: Server, room: RoomState, player: ServerPlayer
     // GUESSER PAYLOAD: NO image, NO secret word. Inspection in browser will find zero clues!
     io.to(player.socketId).emit('TURN_STARTED', {
       isHolder: false,
+      roundStatus: room.roundStatus || 'waiting',
+      roundEndsAt: room.turnEndTime || 0,
       cardId: card.id,
       cardIndex: room.currentCardIndex,
       totalCards: Math.min(room.deck.length, 50),
@@ -489,6 +565,12 @@ function sendTurnStateToPlayer(io: Server, room: RoomState, player: ServerPlayer
 function handleServerTurnTimeout(io: Server, room: RoomState) {
   if (room.status !== 'IN_PROGRESS') return;
 
+  room.roundStatus = 'waiting';
+  if (room.turnTimer) {
+    clearTimeout(room.turnTimer);
+    room.turnTimer = null;
+  }
+
   const card = room.deck[room.currentCardIndex];
   const correctWord = card
     ? (room.language === 'en' ? (card.word_en || card.wordEn || card.word) : (card.word_he || card.word))
@@ -520,6 +602,12 @@ function advanceToNextTurn(io: Server, room: RoomState) {
 
   room.currentCardIndex += 1;
   room.currentHolderIndex = (room.currentHolderIndex + 1) % room.players.length;
+  room.roundStatus = 'waiting';
+  room.turnEndTime = 0;
+  if (room.turnTimer) {
+    clearTimeout(room.turnTimer);
+    room.turnTimer = null;
+  }
 
   // Duplicate prevention check:
   // If all cards in current deck were played or deck index reaches end:
@@ -535,7 +623,10 @@ function advanceToNextTurn(io: Server, room: RoomState) {
     }
   }
 
-  startNewTurn(io, room);
+  // Broadcast updated turn state to all players in 'waiting' status (timer paused until START_ROUND)
+  for (const player of room.players) {
+    sendTurnStateToPlayer(io, room, player);
+  }
 }
 
 function broadcastLobbyUpdate(io: Server, room: RoomState) {

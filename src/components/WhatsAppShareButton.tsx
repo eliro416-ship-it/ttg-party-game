@@ -26,14 +26,15 @@ export const WhatsAppShareButton: React.FC<WhatsAppShareButtonProps> = ({
   const isEn = language === 'en';
   const currentLang = language;
 
-  // Use the dynamic real URL where the application is currently running
-  const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}?pin=${pin}&lang=${currentLang}`
-    : `/?pin=${pin}&lang=${currentLang}`;
+  // Use the requested URL format and template
+  const baseUrl = (typeof window !== 'undefined' && window.location.origin.includes('time-to-guess.netlify.app'))
+    ? window.location.origin
+    : 'https://time-to-guess.netlify.app';
+  const shareUrl = `${baseUrl}/?pin=${pin}&lang=${currentLang}`;
 
   const shareText = isEn
-    ? `🎮 *Invitation to "Time To Guess" Live Game!* ⏱️\n\nHey! I just opened a live room.\n🔑 *Room PIN Code:* *${pin}*\n\n👇 *Click here to join instantly:*\n${shareUrl}\n\nJoin now and let's play! 🚀`
-    : `🎮 *הזמנה למשחק ״הזמן לנחש״ (Time To Guess)!* ⏱️\n\nהיי! פתחתי חדר משחק רשת חי ומגניב.\n🔑 *קוד ה-PIN של החדר:* *${pin}*\n\n👇 *להצטרפות מהירה בלחיצה אחת:*\n${shareUrl}\n\nמחכים לך, כנס/י עכשיו! 🚀`;
+    ? `🎮 Invitation to "Time to Guess" (Time to Guess)! ⏱️\n\nHey! I'm holding the secret picture in a cool live network room.\n🔑 Room PIN code: ${pin}\n\n👇 Click here to join instantly:\n${shareUrl}`
+    : `🎮 הזמנה למשחק "הזמן לנחש" (Time to Guess)! ⏱️\n\nהיי! אני מחזיק/ה בתמונה הסודית בחדר רשת חי ומגניב.\n🔑 קוד ה-PIN של החדר: ${pin}\n\n👇 להצטרפות מהירה בלחיצה אחת:\n${shareUrl}`;
 
   const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
 
