@@ -172,12 +172,8 @@ export default function App() {
     });
   }, []);
 
-  // Players
-  const [players, setPlayers] = useState<Player[]>([
-    { id: 'p-host', name: 'דני / Danny', avatar: '👑', score: 0, isHost: true, streak: 0 },
-    { id: 'p-1', name: 'מיכל / Michal', avatar: '🦁', score: 0, isHost: false, streak: 0 },
-    { id: 'p-2', name: 'יוסי / Yossi', avatar: '🦊', score: 0, isHost: false, streak: 0 },
-  ]);
+  // Players: Real connected players only (zero mock data)
+  const [players, setPlayers] = useState<Player[]>([]);
 
   const [myPlayerId, setMyPlayerId] = useState<string>('p-host');
   const [activePlayerIndex, setActivePlayerIndex] = useState<number>(0);
@@ -272,6 +268,7 @@ export default function App() {
         roundStatus: data.roundStatus,
         roundEndsAt: data.roundEndsAt || 0,
         turnEndTime: data.roundEndsAt || 0,
+        serverTime: data.serverTime || Date.now(),
         turnDuration: data.turnDuration || settings.turnDuration,
         cardIndex: data.cardIndex,
         totalCards: 50,
@@ -311,7 +308,19 @@ export default function App() {
       setScreen('game');
     };
 
-    const onRoundStarted = (data: { roundEndsAt?: number; endTime?: number; roundEndTime?: number; turnDuration: number; cardIndex: number; holderId: string; holderName: string }) => {
+    const onRoundStarted = (data: {
+      roundEndsAt?: number;
+      endTime?: number;
+      roundEndTime?: number;
+      serverTime?: number;
+      turnDuration: number;
+      cardIndex: number;
+      cardId?: string;
+      category?: string;
+      wordLength?: number;
+      holderId: string;
+      holderName: string;
+    }) => {
       const end = data.roundEndTime || data.endTime || data.roundEndsAt || (Date.now() + data.turnDuration * 1000);
       setServerTurnData((prev) => {
         if (!prev) return null;
@@ -320,8 +329,12 @@ export default function App() {
           roundStatus: 'active',
           roundEndsAt: end,
           turnEndTime: end,
+          serverTime: data.serverTime || Date.now(),
           turnDuration: data.turnDuration,
           cardIndex: data.cardIndex,
+          cardId: data.cardId || prev.cardId,
+          category: data.category || prev.category,
+          wordLength: data.wordLength || prev.wordLength,
           holderId: data.holderId,
           holderName: data.holderName,
         };
@@ -337,21 +350,41 @@ export default function App() {
       setIsGameOverModalOpen(true);
     };
 
+    const onRoundWon = (data: {
+      winnerId: string;
+      winnerName: string;
+      points: number;
+      scores?: Array<{ id: string; name: string; score: number; streak: number }>;
+    }) => {
+      if (data.scores && data.scores.length > 0) {
+        setPlayers((prev) =>
+          prev.map((p) => {
+            const found = data.scores!.find((s) => s.id === p.id);
+            return found ? { ...p, score: found.score, streak: found.streak } : p;
+          })
+        );
+      }
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('ROOM_UPDATED', onRoomUpdated);
+    socket.on('SYNC_ROOM_STATE', onRoomState);
     socket.on('ROOM_STATE', onRoomState);
     socket.on('TURN_STARTED', onTurnStarted);
     socket.on('ROUND_STARTED', onRoundStarted);
+    socket.on('ROUND_WON', onRoundWon);
     socket.on('GAME_OVER', onGameOver);
 
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('ROOM_UPDATED', onRoomUpdated);
+      socket.off('SYNC_ROOM_STATE', onRoomState);
       socket.off('ROOM_STATE', onRoomState);
       socket.off('TURN_STARTED', onTurnStarted);
       socket.off('ROUND_STARTED', onRoundStarted);
+      socket.off('ROUND_WON', onRoundWon);
       socket.off('GAME_OVER', onGameOver);
     };
   }, []);
@@ -482,26 +515,49 @@ export default function App() {
       players: players.map((p, idx) => ({ ...p, isHolder: idx === 0, isOnline: true })),
     });
 
-    // 4. Broadcast START_GAME to the socket server
+    // 4. Broadcast START_GAME to the socket server with host's deck and selected initial card
     const socket = getGameSocket();
     socket.emit('START_GAME', {
       pin,
       sessionToken: getSessionToken(),
       turnDuration: settings.turnDuration,
       language,
+      deck: activeDeck,
+      initialCard: {
+        cardId: firstCard.id,
+        category: language === 'en' ? (firstCard.category_en || firstCard.category) : firstCard.category,
+        wordLength: firstWord.length,
+        word: firstWord,
+        imageUrl: firstCard.imageUrl || firstCard.image,
+        image: firstCard.imageUrl || firstCard.image,
+        fallback: firstCard.fallback,
+        hint: language === 'en' ? (firstCard.hint_en || firstCard.hint) : firstCard.hint,
+      },
     });
   };
 
   const handleQuickStart = useCallback(() => {
     setJoinedRoom(true);
-    setMyPlayerId('p-host');
+    const soloId = 'p-host';
+    setMyPlayerId(soloId);
+    setPlayers([
+      {
+        id: soloId,
+        name: language === 'en' ? 'Player 1' : 'שחקן 1',
+        avatar: '🦁',
+        score: 0,
+        isHost: true,
+        streak: 0,
+        isOnline: true,
+      },
+    ]);
     setActivePlayerIndex(0);
     setCurrentCardIndex(0);
     setTotalCardsSolved(0);
     setPlayedCardIds(new Set());
     setShuffledDeck(shuffleDeck([...DEFAULT_CARDS]));
     setScreen('game');
-  }, []);
+  }, [language]);
 
   const handleTransitionFromIntroToDashboard = useCallback(() => {
     setIsIntroVideoOpen(false);
@@ -529,52 +585,39 @@ export default function App() {
     setPin(enteredPin);
     setMyPlayerId(newPlayerId);
 
-    // 2. Immediately register player in local scoreboard state alongside the host
-    setPlayers((prev) => {
-      const host = prev.find((p) => p.isHost) || {
-        id: 'p-host',
-        name: language === 'en' ? 'Danny (Host)' : 'דני (מארח)',
-        avatar: '👑',
+    // 2. Set joining player locally until room state syncs real connected players
+    setPlayers([
+      {
+        id: newPlayerId,
+        name: playerName,
+        avatar,
         score: 0,
-        isHost: true,
         streak: 0,
-      };
-      const others = prev.filter((p) => !p.isHost && p.name !== playerName);
-      return [
-        host,
-        {
-          id: newPlayerId,
-          name: playerName,
-          avatar,
-          score: 0,
-          streak: 0,
-          isHost: false,
-        },
-        ...others,
-      ];
-    });
+        isHost: false,
+        isOnline: true,
+      },
+    ]);
 
-    // 3. Immediately set game state for guesser: mystery card, waiting timer, host holding
-    const initialCard = activeDeck[0] || DEFAULT_CARDS[0];
-    const initialWord = (language === 'en' ? (initialCard.word_en || initialCard.word) : (initialCard.word_he || initialCard.word)).trim();
+    // 3. Immediately set initial game state for guesser: mystery card, waiting timer, host holding
+    // Guesser NEVER draws an independent local card; waits for authoritative room state from host/server!
     setServerTurnData({
       cardIndex: 0,
-      totalCards: Math.min(activeDeck.length || 50, 50),
+      totalCards: 50,
       roundStatus: 'waiting',
       roundEndsAt: 0,
       turnEndTime: 0,
       turnDuration: settings.turnDuration,
       holderId: 'p-host',
-      holderName: language === 'en' ? 'Danny (Host)' : 'דני (מארח)',
+      holderName: language === 'en' ? 'Host' : 'מארח/ת',
       holderAvatar: '👑',
       isHolder: false,
       image: null,
       imageUrl: null,
       fallback: null,
       word: null,
-      category: language === 'en' ? (initialCard.category_en || initialCard.category) : initialCard.category,
+      category: '',
       hint: null,
-      wordLength: initialWord.length,
+      wordLength: 0,
       players: [],
     });
 
@@ -603,6 +646,12 @@ export default function App() {
           sessionToken: token,
         },
         (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[]; status: string }; roomState?: RoomStatePayload; error?: string }) => {
+          if (res?.player?.id) {
+            setMyPlayerId(res.player.id);
+            try {
+              localStorage.setItem('ttg_player_id', res.player.id);
+            } catch (e) {}
+          }
           if (res?.success && res.roomState) {
             setPin(res.roomState.pin);
             setPlayers(

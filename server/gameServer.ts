@@ -146,7 +146,21 @@ export function setupGameSocketServer(io: Server) {
     });
 
     // 3. START_GAME / START_ROUND
-    socket.on('START_ROUND', (data: { pin: string; sessionToken: string; duration?: number; endTime?: number; roundEndTime?: number }, callback) => {
+    socket.on('START_ROUND', (data: {
+      pin: string;
+      sessionToken: string;
+      duration?: number;
+      endTime?: number;
+      roundEndTime?: number;
+      cardId?: string;
+      category?: string;
+      wordLength?: number;
+      word?: string;
+      imageUrl?: string;
+      image?: string;
+      fallback?: string;
+      hint?: string;
+    }, callback) => {
       const room = rooms.get(data.pin);
       if (!room) return callback?.({ success: false, error: 'Room not found' });
 
@@ -161,13 +175,41 @@ export function setupGameSocketServer(io: Server) {
         room.turnDuration = data.duration;
       }
 
+      // Authoritative card sync from Host:
+      if (data.cardId) {
+        const found = DEFAULT_CARDS.find((c) => c.id === data.cardId);
+        const activeCard: CardItem = found ? { ...found } : {
+          id: data.cardId,
+          word: data.word || '',
+          word_he: data.word || '',
+          word_en: data.word || '',
+          wordEn: data.word || '',
+          category: data.category || 'חיות',
+          category_en: data.category || 'Animals',
+          categoryEn: data.category || 'Animals',
+          image: data.imageUrl || data.image || '',
+          imageUrl: data.imageUrl || data.image || '',
+          fallback: data.fallback || '',
+          hint: data.hint || '',
+          hint_en: data.hint || '',
+          hintEn: data.hint || '',
+        };
+        if (data.word) {
+          activeCard.word = data.word;
+          activeCard.word_he = data.word;
+        }
+        if (data.category) {
+          activeCard.category = data.category;
+        }
+        room.deck[room.currentCardIndex] = activeCard;
+      }
+
       room.status = 'IN_PROGRESS';
       room.roundStatus = 'active';
 
       const durationMs = room.turnDuration * 1000;
-      // Absolute timestamp sync: prioritize host-provided endTime/roundEndTime if valid, ensuring exact millisecond parity across network!
-      const targetTime = data.roundEndTime || data.endTime;
-      const roundEndsAt = (targetTime && targetTime > Date.now()) ? targetTime : (Date.now() + durationMs);
+      const now = Date.now();
+      const roundEndsAt = now + durationMs;
       room.turnEndTime = roundEndsAt;
       room.revealedHint = false;
 
@@ -176,19 +218,25 @@ export function setupGameSocketServer(io: Server) {
         room.turnTimer = null;
       }
 
-      callback?.({ success: true, roundEndsAt, endTime: roundEndsAt, roundEndTime: roundEndsAt });
+      const card = room.deck[room.currentCardIndex] || DEFAULT_CARDS[0];
+      const targetWord = (room.language === 'en' ? (card.word_en || card.wordEn || card.word) : (card.word_he || card.word)).trim();
+      const targetCategory = room.language === 'en' ? (card.category_en || card.categoryEn || card.category) : card.category;
+
+      callback?.({ success: true, roundEndsAt, serverTime: now });
 
       // Synchronize Room State and Turn State across all clients
       syncRoomStateToAll(io, room);
 
-      // Broadcast ROUND_STARTED with exact timestamp to all players
+      // Broadcast ROUND_STARTED with exact timestamp and card metadata to all players
       io.to(room.pin).emit('ROUND_STARTED', {
         type: 'ROUND_STARTED',
         roundEndsAt,
-        endTime: roundEndsAt,
-        roundEndTime: roundEndsAt,
+        serverTime: now,
         turnDuration: room.turnDuration,
         cardIndex: room.currentCardIndex,
+        cardId: card.id,
+        category: targetCategory,
+        wordLength: targetWord.length,
         holderId: currentHolder?.id,
         holderName: currentHolder?.name,
       });
@@ -199,8 +247,73 @@ export function setupGameSocketServer(io: Server) {
       }, serverTimeoutMs);
     });
 
+    // SELECT_CARD (Host picks/sets card for the current round)
+    socket.on('SELECT_CARD', (data: {
+      pin: string;
+      sessionToken: string;
+      cardId: string;
+      category?: string;
+      wordLength?: number;
+      word?: string;
+      image?: string;
+      imageUrl?: string;
+      fallback?: string;
+      hint?: string;
+    }, callback) => {
+      const room = rooms.get(data.pin);
+      if (!room) return callback?.({ success: false, error: 'Room not found' });
+      const player = room.players.find((p) => p.sessionToken === data.sessionToken);
+      if (!player || !player.isHost) {
+        return callback?.({ success: false, error: 'Only host can select card' });
+      }
+
+      const found = DEFAULT_CARDS.find((c) => c.id === data.cardId);
+      const cardToSet: CardItem = found ? { ...found } : {
+        id: data.cardId,
+        word: data.word || '',
+        word_he: data.word || '',
+        word_en: data.word || '',
+        wordEn: data.word || '',
+        category: data.category || 'חיות',
+        category_en: data.category || 'Animals',
+        categoryEn: data.category || 'Animals',
+        image: data.imageUrl || data.image || '',
+        imageUrl: data.imageUrl || data.image || '',
+        fallback: data.fallback || '',
+        hint: data.hint || '',
+        hint_en: '',
+        hintEn: '',
+      };
+      if (data.word) {
+        cardToSet.word = data.word;
+        cardToSet.word_he = data.word;
+      }
+      if (data.category) {
+        cardToSet.category = data.category;
+      }
+      room.deck[room.currentCardIndex] = cardToSet;
+      callback?.({ success: true });
+      syncRoomStateToAll(io, room);
+    });
+
     // START_GAME (Host enters the game room from HostScreen; starts in waiting status so host can click "התחל סיבוב! 🚀")
-    socket.on('START_GAME', (data: { pin: string; sessionToken: string; turnDuration?: number; language?: 'he' | 'en' }, callback) => {
+    socket.on('START_GAME', (data: {
+      pin: string;
+      sessionToken: string;
+      turnDuration?: number;
+      language?: 'he' | 'en';
+      deck?: CardItem[];
+      initialCard?: {
+        cardId: string;
+        category: string;
+        wordLength: number;
+        word?: string;
+        image?: string;
+        imageUrl?: string;
+        fallback?: string;
+        hint?: string;
+      };
+    }, callback) => {
       const room = rooms.get(data.pin);
       if (!room) return callback?.({ success: false, error: 'Room not found' });
 
@@ -216,7 +329,36 @@ export function setupGameSocketServer(io: Server) {
         room.language = data.language;
       }
 
-      room.deck = shuffleDeck(DEFAULT_CARDS);
+      if (data.deck && Array.isArray(data.deck) && data.deck.length > 0) {
+        room.deck = [...data.deck];
+      } else {
+        room.deck = shuffleDeck(DEFAULT_CARDS);
+      }
+
+      if (data.initialCard?.cardId) {
+        const found = DEFAULT_CARDS.find((c) => c.id === data.initialCard!.cardId);
+        if (found) {
+          room.deck[0] = { ...found };
+        } else if (data.initialCard.word) {
+          room.deck[0] = {
+            id: data.initialCard.cardId,
+            word: data.initialCard.word,
+            word_he: data.initialCard.word,
+            word_en: data.initialCard.word,
+            wordEn: data.initialCard.word,
+            category: data.initialCard.category || 'חיות',
+            category_en: data.initialCard.category || 'Animals',
+            categoryEn: data.initialCard.category || 'Animals',
+            image: data.initialCard.imageUrl || data.initialCard.image || '',
+            imageUrl: data.initialCard.imageUrl || data.initialCard.image || '',
+            fallback: data.initialCard.fallback || '',
+            hint: data.initialCard.hint || '',
+            hint_en: '',
+            hintEn: '',
+          };
+        }
+      }
+
       room.playedCardIds.clear();
       room.status = 'IN_PROGRESS';
       room.roundStatus = 'waiting';
@@ -338,6 +480,7 @@ export function setupGameSocketServer(io: Server) {
         senderName: player.name,
         timestamp: Date.now(),
       });
+      syncRoomStateToAll(io, room);
     });
 
     // 6. GIVE_HINT (Holder provides hint to guessers)
@@ -359,6 +502,7 @@ export function setupGameSocketServer(io: Server) {
       io.to(room.pin).emit('HINT_REVEALED', {
         hint,
       });
+      syncRoomStateToAll(io, room);
     });
 
     // 7. SKIP_TURN (Holder or Host skips)
@@ -606,8 +750,14 @@ function advanceToNextTurn(io: Server, room: RoomState) {
   }
 
   room.currentCardIndex += 1;
-  // Cyclical turn rotation:
-  room.currentHolderIndex = (room.currentHolderIndex + 1) % room.players.length;
+  // Cyclical turn rotation (prefer online players):
+  let nextHolderIndex = (room.currentHolderIndex + 1) % room.players.length;
+  let attempts = 0;
+  while (!room.players[nextHolderIndex]?.isOnline && attempts < room.players.length) {
+    nextHolderIndex = (nextHolderIndex + 1) % room.players.length;
+    attempts++;
+  }
+  room.currentHolderIndex = nextHolderIndex;
   room.roundStatus = 'waiting';
   room.turnEndTime = 0;
   room.revealedHint = false;
@@ -684,6 +834,7 @@ export function syncRoomStateToAll(io: Server, room: RoomState) {
   for (const player of room.players) {
     if (player.socketId) {
       const roomState = getPlayerRoomState(room, player);
+      io.to(player.socketId).emit('SYNC_ROOM_STATE', roomState);
       io.to(player.socketId).emit('ROOM_STATE', roomState);
       if (room.status === 'IN_PROGRESS') {
         sendTurnStateToPlayer(io, room, player);

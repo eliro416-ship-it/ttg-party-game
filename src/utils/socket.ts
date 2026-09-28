@@ -34,6 +34,7 @@ export interface RoomStatePayload {
   currentHolderIndex: number;
   roundStatus: 'waiting' | 'active' | 'ended';
   roundEndsAt: number | null;
+  serverTime?: number;
   turnDuration: number;
   currentCard: {
     id: string;
@@ -56,6 +57,7 @@ export interface TurnStartedPayload {
   isHolder: boolean;
   roundStatus?: 'waiting' | 'active' | 'ended';
   roundEndsAt?: number;
+  serverTime?: number;
   cardId?: string;
   cardIndex: number;
   totalCards: number;
@@ -77,8 +79,14 @@ export interface TurnStartedPayload {
 
 export interface RoundStartedPayload {
   roundEndsAt: number;
+  endTime?: number;
+  roundEndTime?: number;
+  serverTime?: number;
   turnDuration: number;
   cardIndex: number;
+  cardId?: string;
+  category?: string;
+  wordLength?: number;
   holderId: string;
   holderName: string;
 }

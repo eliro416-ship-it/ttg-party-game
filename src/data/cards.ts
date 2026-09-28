@@ -318,6 +318,22 @@ export const DEFAULT_CARDS: CardItem[] = [
     hintEn: 'Slow reptile carrying its home on its back'
   },
   {
+    id: 'card-panda',
+    word: 'פנדה',
+    word_he: 'פנדה',
+    word_en: 'PANDA',
+    wordEn: 'PANDA',
+    category: 'חיות',
+    category_en: 'Animals',
+    categoryEn: 'Animals',
+    image: 'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?auto=format&fit=crop&w=800&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?auto=format&fit=crop&w=800&q=80',
+    fallback: generateCardFallback('פנדה', 'חיות', '🐼', '#1f2937', '#111827'),
+    hint: 'דוב שחור ולבן מסין שאוהב לאכול במבוק',
+    hint_en: 'Black and white bear from China that loves eating bamboo',
+    hintEn: 'Black and white bear from China that loves eating bamboo'
+  },
+  {
     id: 'card-wolf',
     word: 'זאב',
     word_he: 'זאב',
@@ -326,8 +342,8 @@ export const DEFAULT_CARDS: CardItem[] = [
     category: 'חיות',
     category_en: 'Animals',
     categoryEn: 'Animals',
-    image: 'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?auto=format&fit=crop&w=800&q=80',
-    imageUrl: 'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?auto=format&fit=crop&w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1590422749897-47b8555fa537?auto=format&fit=crop&w=800&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1590422749897-47b8555fa537?auto=format&fit=crop&w=800&q=80',
     fallback: generateCardFallback('זאב', 'חיות', '🐺', '#374151', '#111827'),
     hint: 'טורף יער שחי בלהקה ונובח אל הירח',
     hint_en: 'Wild canine predator that howls at the moon',
