@@ -50,12 +50,12 @@ export const WhatsAppShareButton: React.FC<WhatsAppShareButtonProps> = ({
         target="_blank"
         rel="noopener noreferrer"
         onClick={handleShareClick}
-        className={`btn-3d btn-3d-whatsapp relative group inline-flex items-center justify-center gap-2 px-4 py-2.5 text-white font-bold text-xs sm:text-sm rounded-xl cursor-pointer animate-whatsapp-pulse ${className}`}
+        className={`btn-3d btn-3d-whatsapp relative group w-full h-[42px] flex items-center justify-center gap-1.5 px-2.5 sm:px-3 text-white font-bold text-xs sm:text-sm rounded-xl cursor-pointer animate-whatsapp-pulse whitespace-nowrap shadow-md ${className}`}
         title={isEn ? 'Share with top card to WhatsApp' : 'שתף/י בוואטסאפ עם כרטיס עליון'}
       >
         <span className="shimmer-sweep" />
         <WhatsAppIcon className="w-4 h-4 fill-white shrink-0 drop-shadow" />
-        <span className="font-extrabold tracking-wide">{isEn ? 'WhatsApp' : 'שליחה בוואטסאפ'}</span>
+        <span className="font-extrabold tracking-wide whitespace-nowrap">{isEn ? 'WhatsApp' : 'שליחה בוואטסאפ'}</span>
       </a>
     );
   }

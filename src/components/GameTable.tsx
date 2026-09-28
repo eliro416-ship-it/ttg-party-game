@@ -124,15 +124,15 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [floatingReaction, setFloatingReaction] = useState<{ reactionType?: 'yes' | 'no' | 'hot' | 'cold'; emoji: string; text: string; sender: string } | null>(null);
   const [winnerCelebration, setWinnerCelebration] = useState<RoundWonPayload | null>(null);
 
-  // Round status ('waiting' = paused waiting for host/holder to start; 'active' = timer counting down)
-  const [roundStatus, setRoundStatus] = useState<'waiting' | 'active'>(() => {
+  // Round status ('waiting' = paused waiting for host/holder to start; 'active' = timer counting down; 'ended' = round concluded)
+  const [roundStatus, setRoundStatus] = useState<'waiting' | 'active' | 'ended'>(() => {
     return serverTurnData?.roundStatus || 'waiting';
   });
   const [roundEndsAt, setRoundEndsAt] = useState<number>(() => {
     return serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
   });
 
-  const currentRoundStatus: 'waiting' | 'active' = roundStatus;
+  const currentRoundStatus: 'waiting' | 'active' | 'ended' = roundStatus;
   const currentRoundEndsAt: number = roundEndsAt;
 
   // Sync from incoming serverTurnData updates
@@ -141,9 +141,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       setRoundStatus(serverTurnData.roundStatus);
     }
     const end = serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
-    if (end > 0) {
-      setRoundEndsAt(end);
-    }
+    setRoundEndsAt(end);
   }, [serverTurnData?.roundStatus, serverTurnData?.roundEndsAt, serverTurnData?.turnEndTime]);
 
   const isHost = players.find(p => p.id === myPlayerId)?.isHost || myPlayerId === 'p-host';
@@ -152,6 +150,70 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [simulatedRole, setSimulatedRole] = useState<'holder' | 'guesser' | null>(null);
 
   const isCurrentClientHolder = simulatedRole ? simulatedRole === 'holder' : isServerHolder;
+
+  // Responsive sizing, spacing and font-sizes for word boxes based on word length
+  const boxConfig = useMemo(() => {
+    // 1. Short words (up to 5 or 6 letters): preserve original comfortable size (48px-52px, gap-2)
+    if (wordLength <= 5) {
+      return {
+        gapClass: 'gap-2',
+        boxClass: 'w-12 sm:w-13 h-12 sm:h-13 aspect-square rounded-2xl text-2xl sm:text-3xl',
+        style: { aspectRatio: '1 / 1' } as React.CSSProperties,
+      };
+    }
+
+    if (wordLength === 6) {
+      return {
+        gapClass: 'gap-1.5 sm:gap-2',
+        boxClass: 'w-11 sm:w-12 h-11 sm:h-12 aspect-square rounded-xl sm:rounded-2xl text-xl sm:text-2xl',
+        style: {
+          width: 'calc((100% - 24px) / 6)',
+          maxWidth: '48px',
+          aspectRatio: '1 / 1',
+        } as React.CSSProperties,
+      };
+    }
+
+    // 2. Elastic auto-shrink for longer words:
+    if (wordLength === 7) {
+      return {
+        gapClass: 'gap-1 sm:gap-1.5',
+        boxClass: 'max-w-[44px] aspect-square rounded-xl text-lg sm:text-xl',
+        style: {
+          width: 'calc((100% - 24px) / 7)',
+          maxWidth: '44px',
+          aspectRatio: '1 / 1',
+        } as React.CSSProperties,
+      };
+    }
+
+    if (wordLength === 8) {
+      return {
+        gapClass: 'gap-1',
+        boxClass: 'max-w-[40px] aspect-square rounded-lg sm:rounded-xl text-base sm:text-lg',
+        style: {
+          width: 'calc((100% - 28px) / 8)',
+          maxWidth: '40px',
+          aspectRatio: '1 / 1',
+        } as React.CSSProperties,
+      };
+    }
+
+    // 9+ letters: compact padding, dynamic width calculation and matching font-size
+    const totalGaps = (wordLength - 1) * 3;
+    const isVeryLong = wordLength >= 11;
+    return {
+      gapClass: 'gap-0.5 sm:gap-1',
+      boxClass: `aspect-square rounded-md sm:rounded-lg ${
+        isVeryLong ? 'text-xs sm:text-sm max-w-[30px]' : 'text-sm sm:text-base max-w-[36px]'
+      }`,
+      style: {
+        width: `calc((100% - ${totalGaps}px) / ${wordLength})`,
+        maxWidth: isVeryLong ? '30px' : '36px',
+        aspectRatio: '1 / 1',
+      } as React.CSSProperties,
+    };
+  }, [wordLength]);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const isHandledRef = useRef<boolean>(false);
@@ -683,20 +745,18 @@ export const GameTable: React.FC<GameTableProps> = ({
             </button>
           )}
 
-          {/* 4. Share Room Modal */}
-          {onOpenShareModal && (
-            <button
-              onClick={() => {
-                sounds.soundKeypress();
-                onOpenShareModal();
-              }}
-              className="btn-3d btn-3d-dark h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-bold text-pink-200 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shrink-0"
-              title={isEn ? 'Share game room' : 'שתף חדר משחק'}
-            >
-              <Share2 className="w-3.5 h-3.5 text-pink-300 shrink-0" strokeWidth={2.2} />
-              <span className="hidden sm:inline">{t.share}</span>
-            </button>
-          )}
+          {/* 4. WhatsApp Share Room Button */}
+          <a
+            href={whatsappDirectUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleQuickWhatsAppShare}
+            className="btn-3d btn-3d-whatsapp h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-black text-white flex items-center justify-center gap-1.5 cursor-pointer shadow-md shrink-0 border border-emerald-300/40 hover:scale-105 active:scale-95 transition-all"
+            title={isEn ? 'Share room via WhatsApp' : 'שתף חדר בוואטסאפ'}
+          >
+            <WhatsAppIcon className="w-3.5 h-3.5 fill-white shrink-0 drop-shadow" />
+            <span className="hidden sm:inline font-bold">{t.share}</span>
+          </a>
 
           {/* 5. Sound Toggle */}
           <button
@@ -840,18 +900,31 @@ export const GameTable: React.FC<GameTableProps> = ({
           </>
         ) : (
           /* Guesser View: Server NEVER sends image or word. Absolutely 0 leaks! */
-          <div className="w-full h-full flex flex-col items-center justify-center text-center p-5 bg-gradient-to-br from-[#2D1454] via-[#1E1B4B] to-[#0F172A]">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 mb-2.5 rounded-2xl bg-pink-500/20 border-2 border-pink-400/40 flex items-center justify-center shadow-[0_0_25px_rgba(253,121,168,0.4)] animate-bounce">
-              <HelpCircle className="w-9 h-9 sm:w-10 sm:h-10 text-pink-300" strokeWidth={2.2} />
+          <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 sm:p-5 bg-gradient-to-br from-[#2D1454] via-[#1E1B4B] to-[#0F172A] relative">
+            <div className="w-13 h-13 sm:w-16 sm:h-16 mb-2 rounded-2xl bg-pink-500/20 border-2 border-pink-400/40 flex items-center justify-center shadow-[0_0_25px_rgba(253,121,168,0.4)] animate-bounce">
+              <HelpCircle className="w-8 h-8 sm:w-10 sm:h-10 text-pink-300" strokeWidth={2.2} />
             </div>
-            <div className="font-black text-base sm:text-lg text-white mb-1 flex items-center gap-1.5">
+            <div className="font-black text-sm sm:text-base text-white mb-1 flex items-center gap-1.5">
               <span>{t.holdingText}</span>
               <span className="text-amber-300 font-extrabold">{activeHolderName}</span>
               <span>{activeHolderAvatar}</span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-xs leading-relaxed">
-              {t.guesserMystery}
-            </p>
+
+            {/* Waiting status overlay badge directly inside the picture frame */}
+            {currentRoundStatus === 'waiting' ? (
+              <div className="mt-1.5 bg-black/75 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-amber-400/50 shadow-xl flex items-center justify-center gap-2 text-amber-200 text-xs sm:text-sm font-black animate-pulse max-w-[92%]">
+                <TimerIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2.4} />
+                <span className="truncate">
+                  {isEn
+                    ? `Waiting for ${activeHolderName} to start the round...`
+                    : `ממתינים לתחילת הסיבוב על ידי ${activeHolderName}...`}
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs sm:text-sm text-slate-300 max-w-xs leading-relaxed">
+                {t.guesserMystery}
+              </p>
+            )}
 
             {/* Category badge for guesser */}
             <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20 shadow flex items-center gap-1.5`}>
@@ -861,7 +934,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             {/* Live hint if triggered by Holder */}
             {showHintText && activeHint && (
-              <div className="absolute bottom-3 inset-x-3 bg-black/85 backdrop-blur-md px-3 py-1.5 rounded-xl text-center text-xs text-amber-200 border border-amber-400/40 animate-fadeIn flex items-center justify-center gap-1.5 shadow-lg">
+              <div className="absolute bottom-2.5 inset-x-3 bg-black/85 backdrop-blur-md px-3 py-1.5 rounded-xl text-center text-xs text-amber-200 border border-amber-400/40 animate-fadeIn flex items-center justify-center gap-1.5 shadow-lg">
                 <div className="w-4 h-4 rounded-md bg-amber-400/20 flex items-center justify-center border border-amber-400/30">
                   <Lightbulb className="w-3 h-3 text-amber-300" strokeWidth={2.2} />
                 </div>
@@ -945,56 +1018,24 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* Waiting Status / Start Round Actions */}
-      {currentRoundStatus === 'waiting' && (
-        isCurrentClientHolder || isHost ? (
-          /* Host / Card Holder: prominent "התחל סיבוב! 🚀" button */
-          <div className="w-full my-2 p-3 sm:p-4 rounded-3xl bg-gradient-to-r from-purple-900/60 via-pink-900/50 to-indigo-900/60 border-2 border-pink-500/50 shadow-2xl text-center animate-fadeIn">
-            <div className="text-xs sm:text-sm font-extrabold text-pink-200 mb-2 flex items-center justify-center gap-2">
-              <span className="text-xl">👑</span>
-              <span>{isEn ? 'You are holding the secret picture! Ready?' : 'התמונה אצלך! כולם ממתינים שתתחיל/י את הסיבוב'}</span>
-            </div>
-
-            {/* Quick 3D WhatsApp Share Button directly above "Start Round!" */}
-            {roomPin && (
-              <a
-                href={whatsappDirectUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleQuickWhatsAppShare}
-                className="btn-3d btn-3d-whatsapp relative group w-full py-2.5 px-4 text-white font-black text-sm rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-lg mb-2.5 hover:scale-[1.01] active:scale-[0.98] transition-all"
-                title={isEn ? 'Share room via WhatsApp' : 'שיתוף חדר בוואטסאפ'}
-              >
-                <span className="shimmer-sweep" />
-                <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shadow-inner shrink-0 group-hover:scale-110 transition-transform">
-                  <WhatsAppIcon className="w-4 h-4 fill-white drop-shadow" />
-                </div>
-                <span className="tracking-wide drop-shadow-sm text-xs sm:text-sm font-black">
-                  {isEn ? 'Share Room via WhatsApp' : 'שיתוף חדר בוואטסאפ'}
-                </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/25 text-emerald-100 font-extrabold shadow-sm">
-                  PIN: {roomPin}
-                </span>
-              </a>
-            )}
-
-            <button
-              type="button"
-              onClick={handleStartRound}
-              className="btn-3d btn-3d-purple w-full py-3.5 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-[0_10px_35px_rgba(168,85,247,0.6)] animate-pulse hover:scale-102 active:scale-98 transition-all"
-            >
-              <span className="shimmer-sweep" />
-              <Rocket className="w-5 h-5 text-amber-300 animate-bounce" />
-              <span className="tracking-wide">{isEn ? 'Start Round! 🚀' : 'התחל סיבוב! 🚀'}</span>
-            </button>
+      {/* Waiting Status / Start Round Actions: only for holder (shows Start Round button) */}
+      {currentRoundStatus === 'waiting' && isCurrentClientHolder && (
+        <div className="w-full my-2 p-3 sm:p-4 rounded-3xl bg-gradient-to-r from-purple-900/60 via-pink-900/50 to-indigo-900/60 border-2 border-pink-500/50 shadow-2xl text-center animate-fadeIn">
+          <div className="text-xs sm:text-sm font-extrabold text-pink-200 mb-3 flex items-center justify-center gap-2">
+            <span className="text-xl">👑</span>
+            <span>{isEn ? 'You are holding the secret picture! Ready?' : 'התמונה אצלך! כולם ממתינים שתתחיל/י את הסיבוב'}</span>
           </div>
-        ) : (
-          /* Guesser: Waiting message */
-          <div className="w-full my-2 p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-pink-500/20 to-purple-500/20 border-2 border-amber-400/40 shadow-xl flex items-center justify-center gap-2.5 text-amber-200 text-xs sm:text-sm font-black animate-pulse text-center">
-            <TimerIcon className="w-4 h-4 text-amber-400 shrink-0" strokeWidth={2.4} />
-            <span>{isEn ? 'Waiting for host to start the round...' : 'ממתינים לתחילת הסיבוב על ידי המארח...'}</span>
-          </div>
-        )
+
+          <button
+            type="button"
+            onClick={handleStartRound}
+            className="btn-3d btn-3d-purple w-full py-3.5 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-[0_10px_35px_rgba(168,85,247,0.6)] animate-pulse hover:scale-102 active:scale-98 transition-all"
+          >
+            <span className="shimmer-sweep" />
+            <Rocket className="w-5 h-5 text-amber-300 animate-bounce" />
+            <span className="tracking-wide">{isEn ? 'Start Round! 🚀' : 'התחל סיבוב! 🚀'}</span>
+          </button>
+        </div>
       )}
 
       {/* Role-Specific Interactive Area */}
@@ -1095,11 +1136,11 @@ export const GameTable: React.FC<GameTableProps> = ({
             {t.guessLabel}
           </p>
 
-          {/* Letter Boxes Container */}
+          {/* Responsive & Elastic Letter Boxes Container */}
           <div
-            className={`flex gap-1.5 sm:gap-2 justify-center my-2 transition-transform ${
-              isShaking ? 'animate-shake' : ''
-            }`}
+            className={`w-full max-w-full flex justify-center items-center py-3 px-2 transition-transform ${
+              boxConfig.gapClass
+            } ${isShaking ? 'animate-shake' : ''}`}
             dir={isEn ? 'ltr' : 'rtl'}
           >
             {Array.from({ length: wordLength }).map((_, index) => {
@@ -1121,11 +1162,14 @@ export const GameTable: React.FC<GameTableProps> = ({
                     setActiveBoxIndex(index);
                     sounds.soundKeypress();
                   }}
-                  className={`w-11 sm:w-13 h-13 sm:h-15 rounded-2xl text-center font-black text-2xl sm:text-3xl select-none uppercase transition-all cursor-pointer ${
+                  style={boxConfig.style}
+                  className={`min-w-0 shrink-0 p-0 text-center font-black select-none uppercase transition-all cursor-pointer leading-none flex items-center justify-center ${
+                    boxConfig.boxClass
+                  } ${
                     isSuccess
-                      ? 'bg-emerald-500/30 border-2 border-emerald-400 text-emerald-100 scale-105 shadow-lg shadow-emerald-500/30'
+                      ? 'bg-emerald-500/30 border-2 border-emerald-400 text-emerald-100 scale-105 shadow-lg shadow-emerald-500/30 z-10'
                       : isCurrentFocus
-                      ? 'bg-pink-500/25 border-2 border-pink-400 text-white -translate-y-1 shadow-lg shadow-pink-500/30 ring-2 ring-pink-500/30'
+                      ? 'bg-pink-500/25 border-2 border-pink-400 text-white -translate-y-1 shadow-[0_0_15px_rgba(244,114,182,0.5)] ring-2 ring-pink-400/80 z-10'
                       : letter
                       ? 'bg-white/15 border-2 border-white/30 text-white'
                       : 'bg-white/5 border-2 border-white/15 text-white/50 hover:bg-white/10'

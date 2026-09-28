@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { GameScreen, Player, RoomSettings, CardItem, Language, VoiceGender } from './types/game';
+import { GameScreen, Player, RoomSettings, CardItem, Language, VoiceGender, HostStep } from './types/game';
 import { DEFAULT_CARDS, shuffleDeck } from './data/cards';
 import { RoleSelectScreen } from './components/RoleSelectScreen';
 import { HostScreen } from './components/HostScreen';
@@ -12,7 +12,7 @@ import { ShareModal } from './components/ShareModal';
 import { IntroVideoModal } from './components/IntroVideoModal';
 import { AnimatedQuestionMarksBackground } from './components/AnimatedQuestionMarksBackground';
 import { sounds } from './utils/audio';
-import { getGameSocket, getSessionToken, TurnStartedPayload } from './utils/socket';
+import { getGameSocket, getSessionToken, TurnStartedPayload, RoomStatePayload } from './utils/socket';
 import { getPinFromUrl, getLangFromUrl } from './utils/url';
 
 export default function App() {
@@ -36,6 +36,7 @@ export default function App() {
   });
 
   const [hasPurchasedLicense, setHasPurchasedLicense] = useState<boolean>(false);
+  const [hostStep, setHostStep] = useState<HostStep>('create');
   const [isGeneratingPin, setIsGeneratingPin] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(sounds.isMuted);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
@@ -239,6 +240,67 @@ export default function App() {
       }
     };
 
+    const onRoomState = (data: RoomStatePayload) => {
+      if (data.pin) {
+        setPin(data.pin);
+      }
+      if (data.players && data.players.length > 0) {
+        setPlayers(
+          data.players.map((p) => ({
+            id: p.id,
+            name: p.name,
+            avatar: p.icon || p.avatar || '🦁',
+            score: p.score ?? 0,
+            streak: p.streak ?? 0,
+            isHost: p.isHost ?? false,
+            isOnline: p.isOnline ?? true,
+          }))
+        );
+      }
+      if (typeof data.currentHolderIndex === 'number') {
+        setActivePlayerIndex(data.currentHolderIndex);
+      }
+      if (typeof data.cardIndex === 'number') {
+        setCurrentCardIndex(data.cardIndex);
+      }
+      if (data.turnDuration) {
+        setSettings((prev) => ({ ...prev, turnDuration: data.turnDuration }));
+      }
+
+      setServerTurnData({
+        isHolder: data.isHolder,
+        roundStatus: data.roundStatus,
+        roundEndsAt: data.roundEndsAt || 0,
+        turnEndTime: data.roundEndsAt || 0,
+        turnDuration: data.turnDuration || settings.turnDuration,
+        cardIndex: data.cardIndex,
+        totalCards: 50,
+        holderId: data.holderId,
+        holderName: data.holderName,
+        holderAvatar: data.holderAvatar,
+        cardId: data.currentCard.id,
+        image: data.currentCard.imageUrl || data.currentCard.image || null,
+        imageUrl: data.currentCard.imageUrl || data.currentCard.image || null,
+        fallback: data.currentCard.fallback || null,
+        word: data.currentCard.word || null,
+        category: data.currentCard.category,
+        hint: data.currentCard.hint || null,
+        wordLength: data.currentCard.wordLength,
+        players: data.players.map((p) => ({
+          ...p,
+          avatar: p.icon || p.avatar || '🦁',
+          isHolder: p.id === data.holderId,
+          isOnline: p.isOnline ?? true,
+        })),
+      });
+
+      // Transition to game screen only when the game is actively IN_PROGRESS
+      if (data.status === 'IN_PROGRESS') {
+        setJoinedRoom(true);
+        setScreen('game');
+      }
+    };
+
     const onTurnStarted = (data: TurnStartedPayload) => {
       setServerTurnData(data);
       setCurrentCardIndex(data.cardIndex);
@@ -278,6 +340,7 @@ export default function App() {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('ROOM_UPDATED', onRoomUpdated);
+    socket.on('ROOM_STATE', onRoomState);
     socket.on('TURN_STARTED', onTurnStarted);
     socket.on('ROUND_STARTED', onRoundStarted);
     socket.on('GAME_OVER', onGameOver);
@@ -286,6 +349,7 @@ export default function App() {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('ROOM_UPDATED', onRoomUpdated);
+      socket.off('ROOM_STATE', onRoomState);
       socket.off('TURN_STARTED', onTurnStarted);
       socket.off('ROUND_STARTED', onRoundStarted);
       socket.off('GAME_OVER', onGameOver);
@@ -297,40 +361,39 @@ export default function App() {
     setIsMuted(updated);
   };
 
-  // Host generates PIN via Server with 1.5s guaranteed fallback & complete error resilience
-  const handleGeneratePin = useCallback(() => {
-    setIsGeneratingPin(true);
-    let handled = false;
+  // Host generates PIN via Server or local generator with immediate smooth transition to lobby
+  const handleGenerateRoom = useCallback((customTurnDuration?: number) => {
+    setIsGeneratingPin(false);
+    const chosenDuration = customTurnDuration || settings.turnDuration;
 
-    // Guaranteed fallback handler: generates local mock room and moves to management screen
-    const executeFallback = () => {
-      if (handled) return;
-      handled = true;
-      const fallbackPin = Math.floor(1000 + Math.random() * 9000).toString();
-      setPin(fallbackPin);
-      try {
-        localStorage.setItem('ttg_room_pin', fallbackPin);
-      } catch (e) {}
-      setMyPlayerId('p-host');
-      setPlayers([
-        {
-          id: 'p-host',
-          name: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
-          avatar: '👑',
-          score: 0,
-          isHost: true,
-          streak: 0,
-        },
-      ]);
-      setHasPurchasedLicense(true);
-      setIsGeneratingPin(false);
-    };
+    // 1. Immediately generate a 4-digit room PIN (e.g. 2350)
+    const new4DigitPin = Math.floor(1000 + Math.random() * 9000).toString();
+    setPin(new4DigitPin);
+    try {
+      localStorage.setItem('ttg_room_pin', new4DigitPin);
+      localStorage.setItem('game_turn_duration', chosenDuration.toString());
+    } catch (e) {}
 
-    // 1.5s timeout safety net: guarantee transition even if WebSockets connection is down or hanging
-    const timer = setTimeout(() => {
-      executeFallback();
-    }, 1500);
+    // 2. Save settings & host info in state
+    setSettings((prev) => ({ ...prev, turnDuration: chosenDuration }));
+    setHasPurchasedLicense(true);
+    setMyPlayerId('p-host');
+    setPlayers([
+      {
+        id: 'p-host',
+        name: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
+        avatar: '👑',
+        score: 0,
+        isHost: true,
+        streak: 0,
+        isOnline: true,
+      },
+    ]);
 
+    // 3. Immediately transition to 'lobby' step - guaranteed 0ms UI freeze or blocking
+    setHostStep('lobby');
+
+    // 4. Background socket registration
     try {
       const socket = getGameSocket();
       const token = getSessionToken();
@@ -341,14 +404,10 @@ export default function App() {
           hostName: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
           avatar: '👑',
           sessionToken: token,
-          turnDuration: settings.turnDuration,
+          turnDuration: chosenDuration,
           language,
         },
         (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[] } }) => {
-          if (handled) return;
-          clearTimeout(timer);
-          handled = true;
-
           if (res?.success && res.pin) {
             setPin(res.pin);
             try {
@@ -357,31 +416,18 @@ export default function App() {
             if (res.player?.id) setMyPlayerId(res.player.id);
             if (res.room?.players && res.room.players.length > 0) {
               setPlayers(res.room.players);
-            } else {
-              setPlayers([
-                {
-                  id: res.player?.id || 'p-host',
-                  name: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
-                  avatar: '👑',
-                  score: 0,
-                  isHost: true,
-                  streak: 0,
-                },
-              ]);
             }
-            setHasPurchasedLicense(true);
-          } else {
-            executeFallback();
           }
-          setIsGeneratingPin(false);
         }
       );
     } catch (err) {
-      console.warn('Socket CREATE_ROOM exception, triggering immediate fallback:', err);
-      clearTimeout(timer);
-      executeFallback();
+      console.warn('Socket CREATE_ROOM exception:', err);
     }
   }, [language, settings.turnDuration]);
+
+  const handleGeneratePin = useCallback(() => {
+    handleGenerateRoom(settings.turnDuration);
+  }, [handleGenerateRoom, settings.turnDuration]);
 
   const handleAddCustomCard = (card: CardItem) => {
     const updated = [...customCards, card];
@@ -389,8 +435,54 @@ export default function App() {
     localStorage.setItem('game_custom_cards', JSON.stringify(updated));
   };
 
-  // Host starts the game for all connected devices
+  // Host starts the game: immediately moves to game board with Host configured as first image holder
   const handleStartHostGame = () => {
+    // 1. Explicit state transition to 'game'
+    setHostStep('game');
+    setJoinedRoom(true);
+    setScreen('game');
+
+    // 2. Host is configured as first image holder
+    setActivePlayerIndex(0);
+    setCurrentCardIndex(0);
+    setPlayedCardIds(new Set());
+    const hostId = myPlayerId || 'p-host';
+    setMyPlayerId(hostId);
+
+    const firstCard = activeDeck[0] || DEFAULT_CARDS[0];
+    const firstWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
+    const hostPlayer = players.find((p) => p.isHost) || players[0] || {
+      id: hostId,
+      name: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
+      avatar: '👑',
+    };
+
+    // 3. Immediately prepare serverTurnData so host sees:
+    // Selected image, secret word, 4 response buttons ("כן", "לא", "חם", "קר"), and "התחל סיבוב! 🚀"
+    // The timer on the picture stands in waiting (roundStatus: 'waiting') until host clicks "התחל סיבוב! 🚀"
+    setServerTurnData({
+      isHolder: true,
+      roundStatus: 'waiting',
+      roundEndsAt: 0,
+      turnEndTime: 0,
+      turnDuration: settings.turnDuration,
+      cardIndex: 0,
+      totalCards: Math.min(activeDeck.length, 50),
+      holderId: hostPlayer.id,
+      holderName: hostPlayer.name,
+      holderAvatar: hostPlayer.avatar || '👑',
+      cardId: firstCard.id,
+      image: firstCard.imageUrl || firstCard.image,
+      imageUrl: firstCard.imageUrl || firstCard.image,
+      fallback: firstCard.fallback || null,
+      word: firstWord,
+      category: language === 'en' ? (firstCard.category_en || firstCard.category) : firstCard.category,
+      hint: null,
+      wordLength: firstWord.length,
+      players: players.map((p, idx) => ({ ...p, isHolder: idx === 0, isOnline: true })),
+    });
+
+    // 4. Broadcast START_GAME to the socket server
     const socket = getGameSocket();
     socket.emit('START_GAME', {
       pin,
@@ -398,8 +490,6 @@ export default function App() {
       turnDuration: settings.turnDuration,
       language,
     });
-    setJoinedRoom(true);
-    setScreen('game');
   };
 
   const handleQuickStart = useCallback(() => {
@@ -512,8 +602,49 @@ export default function App() {
           avatar,
           sessionToken: token,
         },
-        (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[]; status: string }; error?: string }) => {
-          if (res?.success && res.player && res.room) {
+        (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[]; status: string }; roomState?: RoomStatePayload; error?: string }) => {
+          if (res?.success && res.roomState) {
+            setPin(res.roomState.pin);
+            setPlayers(
+              res.roomState.players.map((p) => ({
+                id: p.id,
+                name: p.name,
+                avatar: p.icon || p.avatar || '🦁',
+                score: p.score ?? 0,
+                streak: p.streak ?? 0,
+                isHost: p.isHost ?? false,
+                isOnline: p.isOnline ?? true,
+              }))
+            );
+            setActivePlayerIndex(res.roomState.currentHolderIndex);
+            setCurrentCardIndex(res.roomState.cardIndex);
+            setServerTurnData({
+              isHolder: res.roomState.isHolder,
+              roundStatus: res.roomState.roundStatus,
+              roundEndsAt: res.roomState.roundEndsAt || 0,
+              turnEndTime: res.roomState.roundEndsAt || 0,
+              turnDuration: res.roomState.turnDuration || settings.turnDuration,
+              cardIndex: res.roomState.cardIndex,
+              totalCards: 50,
+              holderId: res.roomState.holderId,
+              holderName: res.roomState.holderName,
+              holderAvatar: res.roomState.holderAvatar,
+              cardId: res.roomState.currentCard.id,
+              image: res.roomState.currentCard.imageUrl || res.roomState.currentCard.image || null,
+              imageUrl: res.roomState.currentCard.imageUrl || res.roomState.currentCard.image || null,
+              fallback: res.roomState.currentCard.fallback || null,
+              word: res.roomState.currentCard.word || null,
+              category: res.roomState.currentCard.category,
+              hint: res.roomState.currentCard.hint || null,
+              wordLength: res.roomState.currentCard.wordLength,
+              players: res.roomState.players.map((p) => ({
+                ...p,
+                avatar: p.icon || p.avatar || '🦁',
+                isHolder: p.id === res.roomState!.holderId,
+                isOnline: p.isOnline ?? true,
+              })),
+            });
+          } else if (res?.success && res.player && res.room) {
             setPin(res.pin || enteredPin);
             setMyPlayerId(res.player.id);
             if (res.room.players && res.room.players.length > 0) {
@@ -551,10 +682,40 @@ export default function App() {
     if (currentCardIndex + 1 >= activeDeck.length || totalCardsSolved + 1 >= 25) {
       setIsGameOverModalOpen(true);
     } else {
-      setCurrentCardIndex((prev) => (prev + 1) % activeDeck.length);
-      setActivePlayerIndex((prev) => (prev + 1) % players.length);
+      const nextCardIndex = (currentCardIndex + 1) % activeDeck.length;
+      const nextPlayerIndex = (activePlayerIndex + 1) % players.length;
+      setCurrentCardIndex(nextCardIndex);
+      setActivePlayerIndex(nextPlayerIndex);
+
+      // Local cyclic turn rotation:
+      const nextHolder = players[nextPlayerIndex];
+      const nextCard = activeDeck[nextCardIndex];
+      const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
+      const isHolder = myPlayerId === nextHolder?.id;
+
+      setServerTurnData({
+        isHolder,
+        roundStatus: 'waiting',
+        roundEndsAt: 0,
+        turnEndTime: 0,
+        turnDuration: settings.turnDuration,
+        cardIndex: nextCardIndex,
+        totalCards: Math.min(activeDeck.length, 50),
+        holderId: nextHolder?.id || 'p-host',
+        holderName: nextHolder?.name || 'מחזיק',
+        holderAvatar: nextHolder?.avatar || '👑',
+        cardId: nextCard.id,
+        image: isHolder ? (nextCard.imageUrl || nextCard.image) : null,
+        imageUrl: isHolder ? (nextCard.imageUrl || nextCard.image) : null,
+        fallback: isHolder ? nextCard.fallback : null,
+        word: isHolder ? nextWord : null,
+        category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
+        hint: null,
+        wordLength: nextWord.length,
+        players: players.map((p) => ({ ...p, isHolder: p.id === nextHolder?.id, isOnline: true })),
+      });
     }
-  }, [activeDeck, currentCardIndex, players.length, totalCardsSolved]);
+  }, [activeDeck, currentCardIndex, players, totalCardsSolved, activePlayerIndex, myPlayerId, language, settings.turnDuration]);
 
   const handleCardTimeout = useCallback(() => {
     setPlayers((prev) =>
@@ -564,9 +725,38 @@ export default function App() {
     if (currentCard) {
       setPlayedCardIds((prev) => new Set(prev).add(currentCard.id));
     }
-    setCurrentCardIndex((prev) => (prev + 1) % activeDeck.length);
-    setActivePlayerIndex((prev) => (prev + 1) % players.length);
-  }, [activeDeck, activePlayerIndex, currentCardIndex, players.length]);
+    const nextCardIndex = (currentCardIndex + 1) % activeDeck.length;
+    const nextPlayerIndex = (activePlayerIndex + 1) % players.length;
+    setCurrentCardIndex(nextCardIndex);
+    setActivePlayerIndex(nextPlayerIndex);
+
+    const nextHolder = players[nextPlayerIndex];
+    const nextCard = activeDeck[nextCardIndex];
+    const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
+    const isHolder = myPlayerId === nextHolder?.id;
+
+    setServerTurnData({
+      isHolder,
+      roundStatus: 'waiting',
+      roundEndsAt: 0,
+      turnEndTime: 0,
+      turnDuration: settings.turnDuration,
+      cardIndex: nextCardIndex,
+      totalCards: Math.min(activeDeck.length, 50),
+      holderId: nextHolder?.id || 'p-host',
+      holderName: nextHolder?.name || 'מחזיק',
+      holderAvatar: nextHolder?.avatar || '👑',
+      cardId: nextCard.id,
+      image: isHolder ? (nextCard.imageUrl || nextCard.image) : null,
+      imageUrl: isHolder ? (nextCard.imageUrl || nextCard.image) : null,
+      fallback: isHolder ? nextCard.fallback : null,
+      word: isHolder ? nextWord : null,
+      category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
+      hint: null,
+      wordLength: nextWord.length,
+      players: players.map((p) => ({ ...p, isHolder: p.id === nextHolder?.id, isOnline: true })),
+    });
+  }, [activeDeck, activePlayerIndex, currentCardIndex, players, myPlayerId, language, settings.turnDuration]);
 
   const handleRestartGame = useCallback(() => {
     setIsGameOverModalOpen(false);
@@ -576,11 +766,13 @@ export default function App() {
     setPlayedCardIds(new Set());
     setShuffledDeck(shuffleDeck([...DEFAULT_CARDS]));
     setPlayers((prev) => prev.map((p) => ({ ...p, score: 0, streak: 0 })));
+    setHostStep('game');
     setScreen('game');
   }, []);
 
   const handleLeaveGame = useCallback(() => {
     setJoinedRoom(false);
+    setHostStep('create');
     setScreen('welcome');
     setIsGameOverModalOpen(false);
     setServerTurnData(null);
@@ -598,11 +790,14 @@ export default function App() {
       <AnimatedQuestionMarksBackground />
 
       {/* Main glassmorphic card container */}
-      <div className={`relative z-10 w-full ${joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[460px]'} bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[32px] p-4 sm:p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all`}>
+      <div className={`relative z-10 w-full ${joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[460px]'} ${screen === 'host' ? 'p-3 sm:p-5 max-h-[98dvh] sm:max-h-none flex flex-col justify-between overflow-hidden' : 'p-4 sm:p-6'} bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[28px] sm:rounded-[32px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all`}>
         {/* Welcome / Role Select screen - NEVER rendered if pin exists in URL or if already joined */}
         {screen === 'welcome' && !currentPinFromUrl && !joinedRoom && (
           <RoleSelectScreen
-            onOpenHost={() => setScreen('host')}
+            onOpenHost={() => {
+              setHostStep('create');
+              setScreen('host');
+            }}
             onOpenPlayer={() => setScreen('player-join')}
             onQuickStart={handleQuickStart}
             onOpenVideo={() => setIsIntroVideoOpen(true)}
@@ -616,12 +811,21 @@ export default function App() {
 
         {screen === 'host' && !joinedRoom && (
           <HostScreen
+            hostStep={hostStep}
+            setHostStep={setHostStep}
             pin={pin}
             hasPurchasedLicense={hasPurchasedLicense}
             isGeneratingPin={isGeneratingPin}
             onPurchaseLicense={handleGeneratePin}
+            onGenerateRoom={handleGenerateRoom}
             onStartGame={handleStartHostGame}
-            onBack={() => setScreen('welcome')}
+            onBack={() => {
+              if (hostStep === 'lobby') {
+                setHostStep('create');
+              } else {
+                setScreen('welcome');
+              }
+            }}
             players={players}
             onOpenCustomCardModal={() => setIsCustomCardModalOpen(true)}
             onOpenShareModal={() => setIsShareModalOpen(true)}

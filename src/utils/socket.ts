@@ -27,9 +27,34 @@ export function getGameSocket(): Socket {
   return socket;
 }
 
+export interface RoomStatePayload {
+  pin: string;
+  status?: string;
+  players: (Player & { icon?: string; isHolder?: boolean; isOnline?: boolean })[];
+  currentHolderIndex: number;
+  roundStatus: 'waiting' | 'active' | 'ended';
+  roundEndsAt: number | null;
+  turnDuration: number;
+  currentCard: {
+    id: string;
+    category: string;
+    wordLength: number;
+    word: string | null;
+    imageUrl: string | null;
+    image?: string | null;
+    fallback?: string | null;
+    hint?: string | null;
+  };
+  isHolder: boolean;
+  holderId: string;
+  holderName: string;
+  holderAvatar: string;
+  cardIndex: number;
+}
+
 export interface TurnStartedPayload {
   isHolder: boolean;
-  roundStatus?: 'waiting' | 'active';
+  roundStatus?: 'waiting' | 'active' | 'ended';
   roundEndsAt?: number;
   cardId?: string;
   cardIndex: number;

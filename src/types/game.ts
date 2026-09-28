@@ -29,6 +29,7 @@ export interface Player {
 }
 
 export type GameScreen = 'welcome' | 'host' | 'player-join' | 'join' | 'player-lobby' | 'game' | 'game-over';
+export type HostStep = 'create' | 'lobby' | 'game';
 
 export interface RoomSettings {
   turnDuration: number; // in seconds, e.g. 15
