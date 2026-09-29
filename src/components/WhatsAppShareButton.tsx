@@ -55,7 +55,7 @@ export const WhatsAppShareButton: React.FC<WhatsAppShareButtonProps> = ({
       >
         <span className="shimmer-sweep" />
         <WhatsAppIcon className="w-4 h-4 fill-white shrink-0 drop-shadow" />
-        <span className="font-extrabold tracking-wide whitespace-nowrap">{isEn ? 'WhatsApp' : 'שליחה בוואטסאפ'}</span>
+        <span className="font-medium text-xs tracking-wide whitespace-nowrap">{isEn ? 'WhatsApp' : 'ווטסאפ'}</span>
       </a>
     );
   }

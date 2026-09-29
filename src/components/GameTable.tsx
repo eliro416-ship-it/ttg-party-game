@@ -604,8 +604,11 @@ export const GameTable: React.FC<GameTableProps> = ({
   const handleStartRound = () => {
     sounds.soundSuccess();
     const duration = serverTurnData?.turnDuration || turnDuration;
-    const roundEndTime = Date.now() + duration * 1000;
-    const word = localTargetWord;
+    const roundEndTime = Date.now() + (duration * 1000);
+    const activeCard = activeTurnCard || cards[currentCardIndex] || cards[0];
+    const word = (isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word)).trim();
+    const cleanWordLength = word.trim().length;
+    const resolvedHolderId = activeMyPlayerId || myPlayerId || effectiveHolderId || 'p-host';
 
     // 1. Immediately update host/holder local state:
     setRoundEndsAt(roundEndTime);
@@ -613,16 +616,16 @@ export const GameTable: React.FC<GameTableProps> = ({
     isHandledRef.current = false;
     setCurrentGuess('');
 
-    // 2. Broadcast 'round_start' event across Supabase Realtime channel
+    // 2. Broadcast 'round_start' event across Supabase Realtime channel with required properties:
     broadcastRoundStart({
-      category: isEn ? (currentCard.category_en || currentCard.category) : currentCard.category,
-      wordLength: word.length,
+      category: isEn ? (activeCard.category_en || activeCard.category) : activeCard.category,
+      wordLength: cleanWordLength,
       roundEndsAt: roundEndTime,
-      holderId: myPlayerId,
+      holderId: resolvedHolderId,
       holderName: activeHolderName,
       holderAvatar: activeHolderAvatar,
       cardIndex: currentCardIndex,
-      cardId: currentCard.id,
+      cardId: activeCard.id,
       wordHash: encodeWordHash(word),
       turnDuration: duration,
     });
@@ -842,26 +845,26 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* Top action bar: Balanced single row with equal height 38px 3D glass buttons */}
-      <div className="w-full flex items-center justify-between gap-1.5 sm:gap-2 mb-2.5">
+      {/* Top action bar: Controlled layout with padding, overflow safety, and strict compact dimensions */}
+      <div className="w-full px-2 box-border overflow-hidden flex items-center justify-between gap-1 sm:gap-1.5 mb-2.5">
         {/* 1. Leave Game */}
         <button
           onClick={onLeaveGame}
-          className="btn-3d btn-3d-dark h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-bold text-slate-200 hover:text-rose-300 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+          className="btn-3d btn-3d-dark h-9 px-2 sm:px-2.5 rounded-xl text-xs font-bold text-slate-200 hover:text-rose-300 flex items-center justify-center gap-1 cursor-pointer shadow-sm shrink-0"
           title={isEn ? 'Leave Game' : 'צא מהמשחק'}
         >
           <LogOut className={`w-3.5 h-3.5 text-slate-300 ${isEn ? '' : 'rotate-180'}`} strokeWidth={2.2} />
           <span className="hidden xs:inline">{t.leaveGame}</span>
         </button>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* 2. Room PIN badge - ALWAYS displayed in network room (Zero Solo Mode) */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* 2. Room PIN badge - ALWAYS displayed in network room */}
           <div
-            className="btn-3d btn-3d-dark h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm shrink-0 select-text"
+            className="btn-3d btn-3d-dark h-9 px-2 sm:px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1 shadow-sm shrink-0 select-text"
             title={`Room PIN: ${effectivePin}`}
           >
             <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" strokeWidth={2.2} />
-            <span className="text-emerald-300 font-mono tracking-wider font-black">PIN: {effectivePin}</span>
+            <span className="text-emerald-300 font-mono tracking-wider font-black text-[11px] sm:text-xs">PIN: {effectivePin}</span>
           </div>
 
           {/* 3. Language Switcher */}
@@ -871,11 +874,10 @@ export const GameTable: React.FC<GameTableProps> = ({
                 sounds.soundKeypress();
                 onToggleLanguage();
               }}
-              className="btn-3d btn-3d-dark h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+              className="btn-3d btn-3d-dark h-9 w-9 min-w-[36px] rounded-xl text-xs font-bold text-white flex items-center justify-center cursor-pointer shadow-sm shrink-0"
               title={isEn ? 'Switch to Hebrew' : 'עבור לאנגלית'}
             >
               <Globe className="w-3.5 h-3.5 text-pink-300 shrink-0" strokeWidth={2.2} />
-              <span>{t.langBtn}</span>
             </button>
           )}
 
@@ -885,17 +887,17 @@ export const GameTable: React.FC<GameTableProps> = ({
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleQuickWhatsAppShare}
-            className="btn-3d btn-3d-whatsapp h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-black text-white flex items-center justify-center gap-1.5 cursor-pointer shadow-md shrink-0 border border-emerald-300/40 hover:scale-105 active:scale-95 transition-all"
+            className="btn-3d btn-3d-whatsapp h-9 w-9 min-w-[36px] sm:w-auto sm:px-2.5 rounded-xl text-xs font-black text-white flex items-center justify-center gap-1 cursor-pointer shadow-md shrink-0 border border-emerald-300/40 hover:scale-105 active:scale-95 transition-all"
             title={isEn ? 'Share room via WhatsApp' : 'שתף חדר בוואטסאפ'}
           >
             <WhatsAppIcon className="w-3.5 h-3.5 fill-white shrink-0 drop-shadow" />
-            <span className="hidden sm:inline font-bold">{t.share}</span>
+            <span className="hidden sm:inline font-bold text-[11px]">{t.share}</span>
           </a>
 
-          {/* 5. Sound Toggle */}
+          {/* 5. Sound Toggle - Fixed compact w-9 h-9 size (36px x 36px) prevents any overflow */}
           <button
             onClick={onToggleMute}
-            className="btn-3d btn-3d-dark h-[38px] w-[38px] rounded-xl flex items-center justify-center text-slate-300 cursor-pointer shadow-sm shrink-0"
+            className="btn-3d btn-3d-dark h-9 w-9 min-w-[36px] rounded-xl flex items-center justify-center text-slate-300 cursor-pointer shadow-sm shrink-0"
             title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
           >
             {isMuted ? (
@@ -1123,24 +1125,36 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* Waiting Status / Start Round Actions: only for holder (shows Start Round button) */}
-      {currentRoundStatus === 'waiting' && isCurrentClientHolder && (
-        <div className="w-full my-2 p-3 sm:p-4 rounded-3xl bg-gradient-to-r from-purple-900/60 via-pink-900/50 to-indigo-900/60 border-2 border-pink-500/50 shadow-2xl text-center animate-fadeIn">
-          <div className="text-xs sm:text-sm font-extrabold text-pink-200 mb-3 flex items-center justify-center gap-2">
-            <span className="text-xl">👑</span>
-            <span>{isEn ? 'You are holding the secret picture! Ready?' : 'התמונה אצלך! כולם ממתינים שתתחיל/י את הסיבוב'}</span>
-          </div>
+      {/* Waiting Status / Start Round Actions: for holder (shows Start Round button when waiting, and active notice when round is active) */}
+      {isCurrentClientHolder && (
+        currentRoundStatus === 'waiting' ? (
+          <div className="w-full my-2 p-3 sm:p-4 rounded-3xl bg-gradient-to-r from-purple-900/60 via-pink-900/50 to-indigo-900/60 border-2 border-pink-500/50 shadow-2xl text-center animate-fadeIn">
+            <div className="text-xs sm:text-sm font-extrabold text-pink-200 mb-3 flex items-center justify-center gap-2">
+              <span className="text-xl">👑</span>
+              <span>{isEn ? 'You are holding the secret picture! Ready?' : 'התמונה אצלך! כולם ממתינים שתתחיל/י את הסיבוב'}</span>
+            </div>
 
-          <button
-            type="button"
-            onClick={handleStartRound}
-            className="btn-3d btn-3d-purple w-full py-3.5 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-[0_10px_35px_rgba(168,85,247,0.6)] animate-pulse hover:scale-102 active:scale-98 transition-all"
-          >
-            <span className="shimmer-sweep" />
-            <Rocket className="w-5 h-5 text-amber-300 animate-bounce" />
-            <span className="tracking-wide">{isEn ? 'Start Round! 🚀' : 'התחל סיבוב! 🚀'}</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={handleStartRound}
+              className="btn-3d btn-3d-purple w-full py-3.5 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-[0_10px_35px_rgba(168,85,247,0.6)] animate-pulse hover:scale-102 active:scale-98 transition-all"
+            >
+              <span className="shimmer-sweep" />
+              <Rocket className="w-5 h-5 text-amber-300 animate-bounce" />
+              <span className="tracking-wide">{isEn ? 'Start Round! 🚀' : 'התחל סיבוב! 🚀'}</span>
+            </button>
+          </div>
+        ) : currentRoundStatus === 'active' ? (
+          <div className="w-full my-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-teal-950/60 to-slate-900/70 border border-emerald-500/50 shadow-lg text-center animate-fadeIn flex items-center justify-center gap-2.5">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <span className="text-xs sm:text-sm font-extrabold text-emerald-200">
+              {isEn ? 'Round in progress! Players are guessing...' : 'הסיבוב בעיצומו! השחקנים מנחשים...'}
+            </span>
+          </div>
+        ) : null
       )}
 
       {/* Role-Specific Interactive Area */}

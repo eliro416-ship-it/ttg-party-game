@@ -112,7 +112,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
       {/* Top Header Section */}
       <div className="w-full shrink-0">
         {/* Top navigation */}
-        <div className="w-full flex items-center justify-between mb-1.5 sm:mb-2">
+        <div className="w-full px-2 box-border overflow-hidden flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
           <button
             type="button"
             onClick={handleBackNavigation}
@@ -243,39 +243,39 @@ export const HostScreen: React.FC<HostScreenProps> = ({
               </span>
             </div>
 
-            {/* 1. All 3 Share buttons organized in a single horizontal row, exact 42px height, no wrap */}
-            <div className="grid grid-cols-[1fr_1.35fr_1fr] gap-1.5 sm:gap-2 items-center w-full my-1">
-              {/* Side 1: Copy PIN */}
+            {/* 1. All 3 Share buttons organized equally in 3 columns (grid-cols-3), clean text wrapping and centered */}
+            <div className="grid grid-cols-3 gap-2 items-center w-full my-1.5">
+              {/* Button 1: Copy PIN / קוד */}
               <button
                 type="button"
                 onClick={handleCopyPin}
-                className="btn-3d btn-3d-dark h-[42px] px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold text-white flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap"
+                className="btn-3d btn-3d-dark h-[42px] w-full px-2 rounded-xl text-xs font-medium text-white flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
                 title={t.copyPin}
               >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                <span className="truncate">{copied ? t.pinCopied : t.copyPin}</span>
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <Copy className="w-3.5 h-3.5 text-slate-200 shrink-0" />}
+                <span className="whitespace-nowrap">{copied ? t.pinCopied : (isEn ? 'Copy Code' : 'העתק קוד')}</span>
               </button>
 
-              {/* Center: WhatsApp button - Prominent 3D Green, slightly larger */}
+              {/* Button 2: WhatsApp - clean text and equal width */}
               <WhatsAppShareButton
                 pin={pin}
                 language={language}
                 variant="compact"
-                className="h-[42px] !py-0 px-2 sm:px-3 text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 whitespace-nowrap shadow-md"
+                className="h-[42px] w-full !py-0 px-2 text-xs font-medium flex items-center justify-center gap-1.5 whitespace-nowrap shadow-md"
               />
 
-              {/* Side 2: QR & Link */}
+              {/* Button 3: QR & Link */}
               <button
                 type="button"
                 onClick={() => {
                   sounds.soundKeypress();
                   onOpenShareModal();
                 }}
-                className="btn-3d btn-3d-pink h-[42px] px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-extrabold text-white flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap"
+                className="btn-3d btn-3d-pink h-[42px] w-full px-2 rounded-xl text-xs font-medium text-white flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
                 title={isEn ? 'QR & Link' : 'QR וקישור'}
               >
                 <Share2 className="w-3.5 h-3.5 text-pink-100 shrink-0" />
-                <span className="truncate">{isEn ? 'QR / Link' : 'QR וקישור'}</span>
+                <span className="whitespace-nowrap">{isEn ? 'QR & Link' : 'QR וקישור'}</span>
               </button>
             </div>
 

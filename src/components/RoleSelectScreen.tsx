@@ -33,21 +33,21 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
   return (
     <div className="w-full flex flex-col items-center text-center animate-fadeIn select-none" dir={isEn ? 'ltr' : 'rtl'}>
-      {/* Top bar with Language Switcher, Single Intro Video Button, and Sound Toggle */}
-      <div className="w-full flex justify-between items-center mb-4">
+      {/* Top bar with Language Switcher, Single Intro Video Button, and Sound Toggle - padding and compact size */}
+      <div className="w-full px-2 box-border overflow-hidden flex justify-between items-center gap-2 mb-4">
         <button
           onClick={() => {
             sounds.soundKeypress();
             onToggleLanguage();
           }}
-          className="btn-3d btn-3d-dark text-white px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          className="btn-3d btn-3d-dark text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
           title={isEn ? 'Switch to Hebrew' : 'עבור לאנגלית'}
         >
           <Globe className="w-3.5 h-3.5 text-pink-400" />
           <span>{t.langBtn}</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Single clean Header Video Button */}
           {onOpenVideo && (
             <button
@@ -56,7 +56,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 sounds.soundKeypress();
                 onOpenVideo();
               }}
-              className="btn-3d btn-3d-dark text-pink-300 hover:text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-sm"
+              className="btn-3d btn-3d-dark text-pink-300 hover:text-white px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-sm shrink-0"
               title={isEn ? 'Watch Intro Video' : 'צפייה בסרטון הפתיחה'}
             >
               <div className="w-4 h-4 rounded-full bg-pink-500/20 flex items-center justify-center border border-pink-400/40">
@@ -68,7 +68,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
           <button
             onClick={onToggleMute}
-            className="btn-3d btn-3d-dark p-2 rounded-full text-slate-300 cursor-pointer"
+            className="btn-3d btn-3d-dark h-9 w-9 min-w-[36px] rounded-xl flex items-center justify-center text-slate-300 cursor-pointer shrink-0 shadow-sm"
             title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
           >
             {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}

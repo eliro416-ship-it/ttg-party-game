@@ -60,7 +60,7 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
   return (
     <div className="w-full flex flex-col items-center animate-fadeIn select-none" dir={isEn ? 'ltr' : 'rtl'}>
       {/* Top action bar */}
-      <div className="w-full flex items-center justify-between mb-4">
+      <div className="w-full px-2 box-border overflow-hidden flex items-center justify-between gap-2 mb-4">
         <button
           onClick={() => {
             sounds.soundKeypress();
