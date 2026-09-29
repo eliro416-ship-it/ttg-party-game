@@ -4,7 +4,34 @@ import { VirtualKeyboard } from './VirtualKeyboard';
 import { normalizeHebrewInput, lettersMatch } from '../utils/hebrewKeyboard';
 import { sounds } from '../utils/audio';
 import { translations } from '../utils/translations';
-import { getGameSocket, getSessionToken, TurnStartedPayload, RoundWonPayload, ReactionPayload, RoomStatePayload } from '../utils/socket';
+import {
+  getCurrentSupabaseChannel,
+  getActiveRoomPin,
+  addSupabaseListener,
+  broadcastRoundStart,
+  broadcastCorrectGuess,
+  broadcastTurnTimeout,
+  broadcastReaction,
+  broadcastHint,
+  broadcastSettingsUpdate,
+  broadcastSyncState,
+  broadcastRequestSync,
+  trackPlayer,
+  TurnStartedPayload,
+  RoundWonPayload,
+  ReactionPayload,
+  RoomStatePayload,
+  RoundStartPayload,
+  CorrectGuessPayload,
+  TurnTimeoutPayload,
+  HintPayload,
+  SettingsUpdatePayload,
+  SyncStatePayload,
+  RequestSyncPayload,
+  encodeWordHash,
+  matchesWordHash,
+} from '../utils/supabaseGame';
+import { getPinFromUrl } from '../utils/url';
 import { VoiceGenderSelector } from './VoiceGenderSelector';
 import { WhatsAppIcon } from './WhatsAppShareButton';
 import {
@@ -96,10 +123,17 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // In Live Server mode:
   // Separate technical host from active turn holder (currentHolderId):
-  // If guesser: serverTurnData.image is null and serverTurnData.word is null!
-  const isServerHolder = serverTurnData
-    ? (serverTurnData.holderId ? (serverTurnData.holderId === myPlayerId) : serverTurnData.isHolder)
-    : (myPlayerId === activePlayerId);
+  // Non-host players joining room are ALWAYS guessers unless serverTurnData explicitly specifies them as holder
+  const isServerHolder = useMemo(() => {
+    if (serverTurnData && serverTurnData.holderId) {
+      return serverTurnData.holderId === myPlayerId;
+    }
+    if (serverTurnData && typeof serverTurnData.isHolder === 'boolean') {
+      return serverTurnData.isHolder;
+    }
+    const isMeHost = myPlayerId === 'p-host' || Boolean(players.find((p) => p.id === myPlayerId)?.isHost);
+    return isMeHost;
+  }, [serverTurnData, myPlayerId, players]);
 
   // Active players: Server authoritative list (strictly connected players), ranked by score
   const activePlayers = useMemo(() => {
@@ -124,12 +158,14 @@ export const GameTable: React.FC<GameTableProps> = ({
     cardId?: string;
     category?: string;
     wordLength?: number;
+    wordHash?: string;
   } | null>(() => {
     if (serverTurnData?.wordLength || serverTurnData?.category) {
       return {
         cardId: serverTurnData.cardId,
         category: serverTurnData.category,
         wordLength: serverTurnData.wordLength,
+        wordHash: serverTurnData.wordHash,
       };
     }
     return null;
@@ -142,26 +178,39 @@ export const GameTable: React.FC<GameTableProps> = ({
         cardId: serverTurnData.cardId,
         category: serverTurnData.category,
         wordLength: serverTurnData.wordLength,
+        wordHash: serverTurnData.wordHash,
       });
     }
-  }, [serverTurnData?.wordLength, serverTurnData?.category, serverTurnData?.cardId]);
+  }, [serverTurnData?.wordLength, serverTurnData?.category, serverTurnData?.cardId, serverTurnData?.wordHash]);
 
   // Holder sees the secret word and photo; guesser sees NO secret word and relies strictly on synced network card!
   const targetWord = isCurrentClientHolder ? (serverTurnData?.word || localTargetWord) : '';
-  const wordLength = isCurrentClientHolder
+  const rawWordLength = isCurrentClientHolder
     ? (serverTurnData?.wordLength || localTargetWord.length)
     : (syncedRoundCard?.wordLength || serverTurnData?.wordLength || 0);
 
+  // Requirement 2: ALWAYS render boxes! If wordLength has not arrived from host yet, default to at least 4 boxes
+  const wordLength = rawWordLength > 0 ? rawWordLength : 4;
+  const isWaitingForWordLength = !isCurrentClientHolder && rawWordLength === 0;
+
   const activeCategory = isCurrentClientHolder
     ? (serverTurnData?.category || (isEn ? (currentCard.category_en || currentCard.category) : currentCard.category))
-    : (syncedRoundCard?.category || serverTurnData?.category || '');
+    : (syncedRoundCard?.category || serverTurnData?.category || (isEn ? 'Category' : 'קטגוריה'));
 
   const activeHint = serverTurnData?.hint || (isCurrentClientHolder ? (isEn ? (currentCard.hint_en || currentCard.hint) : currentCard.hint) : null);
   const activeHolderName = serverTurnData?.holderName || activePlayers.find(p => p.id === activePlayerId)?.name || 'מחזיק';
   const activeHolderAvatar = serverTurnData?.holderAvatar || activePlayers.find(p => p.id === activePlayerId)?.avatar || '👑';
 
-  const [enteredLetters, setEnteredLetters] = useState<string[]>([]);
+  const [enteredLetters, setEnteredLetters] = useState<string[]>(() => new Array(wordLength).fill(''));
   const [activeBoxIndex, setActiveBoxIndex] = useState<number>(0);
+
+  // Guarantee boxes are kept in sync whenever wordLength changes
+  useEffect(() => {
+    setEnteredLetters((prev) => {
+      if (prev.length === wordLength) return prev;
+      return new Array(wordLength).fill('');
+    });
+  }, [wordLength]);
   const [timeLeft, setTimeLeft] = useState<number>(turnDuration);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
   const [isShaking, setIsShaking] = useState<boolean>(false);
@@ -185,22 +234,50 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Sync from incoming serverTurnData updates
   useEffect(() => {
-    if (serverTurnData?.roundStatus) {
-      setRoundStatus(serverTurnData.roundStatus);
+    if (serverTurnData) {
+      if (serverTurnData.roundStatus) {
+        setRoundStatus(serverTurnData.roundStatus);
+      }
+      const end = serverTurnData.roundEndsAt || serverTurnData.turnEndTime || 0;
+      setRoundEndsAt(end);
+
+      if (serverTurnData.roundStatus === 'active' && end > 0) {
+        const remaining = Math.max(0, Math.floor((end - Date.now()) / 1000));
+        setTimeLeft(remaining);
+        isHandledRef.current = false;
+      } else if (serverTurnData.roundStatus === 'waiting') {
+        setTimeLeft(serverTurnData.turnDuration || turnDuration);
+      }
+
+      if (serverTurnData.wordLength || serverTurnData.category) {
+        setSyncedRoundCard({
+          cardId: serverTurnData.cardId,
+          category: serverTurnData.category,
+          wordLength: serverTurnData.wordLength,
+          wordHash: serverTurnData.wordHash,
+        });
+
+        // Ensure boxes are filled with exact length for guesser
+        if (serverTurnData.wordLength && serverTurnData.wordLength > 0) {
+          setEnteredLetters((prev) => {
+            if (prev.length === serverTurnData.wordLength) return prev;
+            return new Array(serverTurnData.wordLength).fill('');
+          });
+          setActiveBoxIndex(0);
+        }
+      }
     }
-    const end = serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
-    setRoundEndsAt(end);
-  }, [serverTurnData?.roundStatus, serverTurnData?.roundEndsAt, serverTurnData?.turnEndTime]);
+  }, [serverTurnData, turnDuration]);
 
   const isHost = players.find(p => p.id === myPlayerId)?.isHost || myPlayerId === 'p-host';
 
   // Responsive sizing, spacing and font-sizes for word boxes based on word length
   const boxConfig = useMemo(() => {
-    // 1. Short words (up to 5 or 6 letters): preserve original comfortable size (48px-52px, gap-2)
+    // 1. Short words (up to 5 or 6 letters): comfortable 48px-56px boxes with touch-friendly targets
     if (wordLength <= 5) {
       return {
-        gapClass: 'gap-2',
-        boxClass: 'w-12 sm:w-13 h-12 sm:h-13 aspect-square rounded-2xl text-2xl sm:text-3xl',
+        gapClass: 'gap-2 sm:gap-2.5',
+        boxClass: 'w-12 sm:w-14 h-12 sm:h-14 min-w-[44px] min-h-[44px] aspect-square rounded-2xl text-2xl sm:text-3xl font-black shadow-sm',
         style: { aspectRatio: '1 / 1' } as React.CSSProperties,
       };
     }
@@ -208,7 +285,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (wordLength === 6) {
       return {
         gapClass: 'gap-1.5 sm:gap-2',
-        boxClass: 'w-11 sm:w-12 h-11 sm:h-12 aspect-square rounded-xl sm:rounded-2xl text-xl sm:text-2xl',
+        boxClass: 'w-11 sm:w-12 h-11 sm:h-12 min-w-[40px] min-h-[40px] aspect-square rounded-xl sm:rounded-2xl text-xl sm:text-2xl font-black shadow-sm',
         style: {
           width: 'calc((100% - 24px) / 6)',
           maxWidth: '48px',
@@ -221,7 +298,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (wordLength === 7) {
       return {
         gapClass: 'gap-1 sm:gap-1.5',
-        boxClass: 'max-w-[44px] aspect-square rounded-xl text-lg sm:text-xl',
+        boxClass: 'max-w-[44px] min-w-[36px] min-h-[36px] aspect-square rounded-xl text-lg sm:text-xl font-black shadow-sm',
         style: {
           width: 'calc((100% - 24px) / 7)',
           maxWidth: '44px',
@@ -233,7 +310,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (wordLength === 8) {
       return {
         gapClass: 'gap-1',
-        boxClass: 'max-w-[40px] aspect-square rounded-lg sm:rounded-xl text-base sm:text-lg',
+        boxClass: 'max-w-[40px] min-w-[32px] min-h-[32px] aspect-square rounded-lg sm:rounded-xl text-base sm:text-lg font-black shadow-sm',
         style: {
           width: 'calc((100% - 28px) / 8)',
           maxWidth: '40px',
@@ -247,8 +324,8 @@ export const GameTable: React.FC<GameTableProps> = ({
     const isVeryLong = wordLength >= 11;
     return {
       gapClass: 'gap-0.5 sm:gap-1',
-      boxClass: `aspect-square rounded-md sm:rounded-lg ${
-        isVeryLong ? 'text-xs sm:text-sm max-w-[30px]' : 'text-sm sm:text-base max-w-[36px]'
+      boxClass: `aspect-square rounded-md sm:rounded-lg font-black ${
+        isVeryLong ? 'text-xs sm:text-sm max-w-[30px] min-w-[26px] min-h-[26px]' : 'text-sm sm:text-base max-w-[36px] min-w-[30px] min-h-[30px]'
       }`,
       style: {
         width: `calc((100% - ${totalGaps}px) / ${wordLength})`,
@@ -269,111 +346,74 @@ export const GameTable: React.FC<GameTableProps> = ({
     }
   }, [serverTurnData?.serverTime]);
 
-  // Realtime Socket event subscriptions
+  // Realtime Supabase Channel event subscriptions
   useEffect(() => {
-    if (!isLiveServer || !roomPin) return;
-
-    const socket = getGameSocket();
-
-    const handleReaction = (data: ReactionPayload) => {
+    const unsubReaction = addSupabaseListener('reaction', (payload: ReactionPayload) => {
       let emoji = '💬';
       let text = '';
-      if (data.reaction === 'yes') {
+      if (payload.reaction === 'yes') {
         emoji = '✅';
         text = t.btnYes;
         sounds.soundClue('yes', language, currentVoiceGender);
-      } else if (data.reaction === 'no') {
+      } else if (payload.reaction === 'no') {
         emoji = '❌';
         text = t.btnNo;
         sounds.soundClue('no', language, currentVoiceGender);
-      } else if (data.reaction === 'hot') {
+      } else if (payload.reaction === 'hot') {
         emoji = '🔥';
         text = t.btnHot;
         sounds.soundClue('hot', language, currentVoiceGender);
-      } else if (data.reaction === 'cold') {
+      } else if (payload.reaction === 'cold') {
         emoji = '❄️';
         text = t.btnCold;
         sounds.soundClue('cold', language, currentVoiceGender);
       }
 
-      setFloatingReaction({ reactionType: data.reaction, emoji, text, sender: data.senderName });
+      setFloatingReaction({ reactionType: payload.reaction, emoji, text, sender: payload.senderName });
       setLastReaction(`${emoji} ${text}`);
       setTimeout(() => setFloatingReaction(null), 3000);
-    };
+    });
 
-    const handleHintRevealed = (data: { hint: string }) => {
+    const unsubHint = addSupabaseListener('hint', () => {
       sounds.soundHint();
       setShowHintText(true);
-    };
+    });
 
-    const handleRoundStarted = (data: {
-      roundEndsAt?: number;
-      endTime?: number;
-      roundEndTime?: number;
-      serverTime?: number;
-      turnDuration?: number;
-      cardIndex?: number;
-      cardId?: string;
-      category?: string;
-      wordLength?: number;
-      holderId?: string;
-      holderName?: string;
-    }) => {
+    const unsubRoundStart = addSupabaseListener('round_start', (payload: RoundStartPayload) => {
       sounds.soundSuccess();
-      if (data.serverTime) {
-        serverTimeOffsetRef.current = data.serverTime - Date.now();
-      }
-      const end = data.roundEndTime || data.endTime || data.roundEndsAt || (Date.now() + (data.turnDuration || turnDuration) * 1000);
+      const end = payload.roundEndsAt;
       setRoundEndsAt(end);
       setRoundStatus('active');
-      setTimeLeft(data.turnDuration || turnDuration);
+      const remainingSeconds = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      setTimeLeft(remainingSeconds);
       isHandledRef.current = false;
 
-      if (data.wordLength || data.category || data.cardId) {
+      if (payload.wordLength || payload.category || payload.cardId) {
         setSyncedRoundCard({
-          cardId: data.cardId,
-          category: data.category,
-          wordLength: data.wordLength,
+          cardId: payload.cardId,
+          category: payload.category,
+          wordLength: payload.wordLength,
+          wordHash: payload.wordHash,
         });
-        if (data.wordLength && data.wordLength > 0) {
-          setEnteredLetters(new Array(data.wordLength).fill(''));
+        if (payload.wordLength && payload.wordLength > 0) {
+          setEnteredLetters(new Array(payload.wordLength).fill(''));
           setActiveBoxIndex(0);
         }
       }
-    };
+    });
 
-    const handleSyncRoomState = (data: RoomStatePayload) => {
-      if (data.serverTime) {
-        serverTimeOffsetRef.current = data.serverTime - Date.now();
-      }
-      if (data.roundStatus) {
-        setRoundStatus(data.roundStatus);
-      }
-      if (data.roundStatus === 'active' && data.roundEndsAt) {
-        setRoundEndsAt(data.roundEndsAt);
-      } else if (data.roundStatus === 'waiting') {
-        setRoundEndsAt(0);
-        setTimeLeft(data.turnDuration || turnDuration);
-      }
-      if (data.currentCard) {
-        setSyncedRoundCard({
-          cardId: data.currentCard.id,
-          category: data.currentCard.category,
-          wordLength: data.currentCard.wordLength,
-        });
-        if (data.currentCard.wordLength && data.currentCard.wordLength > 0) {
-          setEnteredLetters((prev) => (prev.length === data.currentCard.wordLength ? prev : new Array(data.currentCard.wordLength).fill('')));
-        }
-      }
-      if (data.currentCard?.hint) {
-        setShowHintText(true);
-      }
-    };
-
-    const handleRoundWon = (data: RoundWonPayload) => {
+    const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload: CorrectGuessPayload) => {
       sounds.soundSuccess();
       setIsSuccess(true);
-      setWinnerCelebration(data);
+      setWinnerCelebration({
+        winnerId: payload.winnerId,
+        winnerName: payload.winnerName,
+        winnerAvatar: payload.winnerAvatar,
+        word: payload.word,
+        image: payload.imageUrl || '',
+        points: payload.points,
+        scores: [],
+      });
       setRoundStatus('waiting');
       setRoundEndsAt(0);
       isHandledRef.current = true;
@@ -381,9 +421,9 @@ export const GameTable: React.FC<GameTableProps> = ({
         setWinnerCelebration(null);
         setIsSuccess(false);
       }, 2500);
-    };
+    });
 
-    const handleTurnTimeout = (data: { word: string; image: string | null; reason: string }) => {
+    const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload: TurnTimeoutPayload) => {
       sounds.soundError();
       setRoundStatus('waiting');
       setRoundEndsAt(0);
@@ -391,34 +431,78 @@ export const GameTable: React.FC<GameTableProps> = ({
         winnerId: '',
         winnerName: isEn ? 'Time is up!' : 'הזמן נגמר!',
         winnerAvatar: '⏱️',
-        word: data.word,
-        image: data.image || '',
+        word: payload.word,
+        image: payload.imageUrl || '',
         points: 0,
         scores: [],
       });
       setTimeout(() => {
         setWinnerCelebration(null);
       }, 2400);
-    };
+    });
 
-    socket.on('REACTION_RECEIVED', handleReaction);
-    socket.on('HINT_REVEALED', handleHintRevealed);
-    socket.on('ROUND_STARTED', handleRoundStarted);
-    socket.on('SYNC_ROOM_STATE', handleSyncRoomState);
-    socket.on('ROOM_STATE', handleSyncRoomState);
-    socket.on('ROUND_WON', handleRoundWon);
-    socket.on('TURN_TIMEOUT', handleTurnTimeout);
+    const unsubSyncState = addSupabaseListener('sync_state', (payload: SyncStatePayload) => {
+      if (payload.wordLength || payload.category || payload.cardId) {
+        setSyncedRoundCard({
+          cardId: payload.cardId,
+          category: payload.category,
+          wordLength: payload.wordLength,
+          wordHash: payload.wordHash,
+        });
+        if (payload.wordLength && payload.wordLength > 0) {
+          setEnteredLetters(new Array(payload.wordLength).fill(''));
+          setActiveBoxIndex(0);
+        }
+      }
+      if (payload.roundStatus) {
+        setRoundStatus(payload.roundStatus);
+      }
+      if (payload.roundEndsAt && payload.roundStatus === 'active') {
+        setRoundEndsAt(payload.roundEndsAt);
+        const remaining = Math.max(0, Math.floor((payload.roundEndsAt - Date.now()) / 1000));
+        setTimeLeft(remaining);
+        isHandledRef.current = false;
+      }
+    });
+
+    const unsubRequestSync = addSupabaseListener('request_sync', () => {
+      if (isCurrentClientHolder) {
+        broadcastSyncState({
+          category: isEn ? (currentCard.category_en || currentCard.category) : currentCard.category,
+          wordLength: localTargetWord.length,
+          roundEndsAt: currentRoundEndsAt,
+          holderId: myPlayerId,
+          holderName: activeHolderName,
+          holderAvatar: activeHolderAvatar,
+          roundStatus: currentRoundStatus,
+          cardIndex: currentCardIndex,
+          cardId: currentCard.id,
+          wordHash: encodeWordHash(localTargetWord),
+          turnDuration: serverTurnData?.turnDuration || turnDuration,
+        });
+      }
+    });
+
+    // Request initial sync if joining as guesser (with quick retry)
+    let retryTimer: NodeJS.Timeout | null = null;
+    if (!isCurrentClientHolder) {
+      broadcastRequestSync(myPlayerId);
+      retryTimer = setTimeout(() => {
+        broadcastRequestSync(myPlayerId);
+      }, 500);
+    }
 
     return () => {
-      socket.off('REACTION_RECEIVED', handleReaction);
-      socket.off('HINT_REVEALED', handleHintRevealed);
-      socket.off('ROUND_STARTED', handleRoundStarted);
-      socket.off('SYNC_ROOM_STATE', handleSyncRoomState);
-      socket.off('ROOM_STATE', handleSyncRoomState);
-      socket.off('ROUND_WON', handleRoundWon);
-      socket.off('TURN_TIMEOUT', handleTurnTimeout);
+      if (retryTimer) clearTimeout(retryTimer);
+      unsubReaction();
+      unsubHint();
+      unsubRoundStart();
+      unsubCorrectGuess();
+      unsubTurnTimeout();
+      unsubSyncState();
+      unsubRequestSync();
     };
-  }, [isLiveServer, roomPin, t, isEn, language, currentVoiceGender, turnDuration]);
+  }, [t, isEn, language, currentVoiceGender, isCurrentClientHolder, activeCategory, localTargetWord, currentRoundEndsAt, myPlayerId, activeHolderName, activeHolderAvatar, currentRoundStatus, currentCardIndex, currentCard.id, serverTurnData?.turnDuration, turnDuration]);
 
   // Reset local state ONLY when turn, card, or wordLength actually changes
   const lastTurnSignatureRef = useRef<string>('');
@@ -488,34 +572,80 @@ export const GameTable: React.FC<GameTableProps> = ({
           isHandledRef.current = true;
           setRoundStatus('waiting');
           setRoundEndsAt(0);
-          if (!isLiveServer) {
-            sounds.soundError();
-            setWinnerCelebration({
-              winnerId: '',
-              winnerName: isEn ? 'Time is up!' : 'הזמן נגמר!',
-              winnerAvatar: '⏱️',
-              word: targetWord,
-              image: currentCard.imageUrl || currentCard.image,
-              points: 0,
-              scores: [],
+
+          sounds.soundError();
+          const currentHolderId = serverTurnData?.holderId || activePlayerId;
+          const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
+          const nextIndex = (currentIndex >= 0 ? (currentIndex + 1) : 0) % (activePlayers.length || 1);
+          const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
+          const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
+
+          setWinnerCelebration({
+            winnerId: '',
+            winnerName: isEn ? 'Time is up!' : 'הזמן נגמר!',
+            winnerAvatar: '⏱️',
+            word: targetWord || localTargetWord,
+            image: currentCard.imageUrl || currentCard.image,
+            points: 0,
+            scores: [],
+          });
+
+          if (isCurrentClientHolder) {
+            broadcastTurnTimeout({
+              word: targetWord || localTargetWord,
+              imageUrl: currentCard.imageUrl || currentCard.image,
+              reason: 'time_up',
+              nextHolderId: nextHolder.id,
+              nextIndex,
+              nextCardIndex,
             });
-            setTimeout(() => {
-              setWinnerCelebration(null);
-              onCardTimeout();
-            }, 2400);
           }
+
+          setTimeout(() => {
+            setWinnerCelebration(null);
+            onCardTimeout();
+          }, 2400);
         }
       }
     };
 
     updateCountdown();
-    const interval = setInterval(updateCountdown, 150);
+    const interval = setInterval(updateCountdown, 250);
 
     return () => clearInterval(interval);
-  }, [isSuccess, winnerCelebration, roundStatus, roundEndsAt, serverTurnData?.turnDuration, turnDuration, isLiveServer, targetWord, currentCard, onCardTimeout]);
+  }, [
+    isSuccess,
+    winnerCelebration,
+    roundStatus,
+    roundEndsAt,
+    serverTurnData?.turnDuration,
+    turnDuration,
+    targetWord,
+    currentCard,
+    onCardTimeout,
+    isCurrentClientHolder,
+    activePlayers,
+    activePlayerId,
+    currentCardIndex,
+    cards.length,
+    localTargetWord,
+    isEn,
+  ]);
 
-  // WhatsApp invitation share message & direct link
-  const currentPin = roomPin || '';
+  // Room PIN resolution: strictly network room PIN, zero Solo mode
+  const effectivePin = useMemo(() => {
+    if (roomPin && roomPin.trim()) return roomPin.trim();
+    if (typeof window !== 'undefined') {
+      const urlPin = getPinFromUrl();
+      if (urlPin && urlPin.trim()) return urlPin.trim();
+      const saved = localStorage.getItem('ttg_room_pin');
+      if (saved && saved.trim()) return saved.trim();
+    }
+    const channelPin = getActiveRoomPin();
+    if (channelPin && channelPin.trim()) return channelPin.trim();
+    return '7742';
+  }, [roomPin]);
+  const currentPin = effectivePin;
   const currentLang = language;
   const baseUrl = (typeof window !== 'undefined' && window.location.origin.includes('time-to-guess.netlify.app'))
     ? window.location.origin
@@ -549,6 +679,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     sounds.soundSuccess();
     const duration = serverTurnData?.turnDuration || turnDuration;
     const roundEndTime = Date.now() + duration * 1000;
+    const word = localTargetWord;
 
     // 1. Immediately update host/holder local state with 0ms delay:
     setRoundEndsAt(roundEndTime);
@@ -556,25 +687,19 @@ export const GameTable: React.FC<GameTableProps> = ({
     setTimeLeft(duration);
     isHandledRef.current = false;
 
-    // 2. Broadcast across network via WebSockets to all players with authoritative card info:
-    if (roomPin) {
-      const socket = getGameSocket();
-      socket.emit('START_ROUND', {
-        pin: roomPin,
-        sessionToken: getSessionToken(),
-        duration,
-        endTime: roundEndTime,
-        roundEndTime,
-        cardId: currentCard.id,
-        category: isEn ? (currentCard.category_en || currentCard.category) : currentCard.category,
-        wordLength: localTargetWord.length,
-        word: localTargetWord,
-        imageUrl: currentCard.imageUrl || currentCard.image,
-        image: currentCard.imageUrl || currentCard.image,
-        fallback: currentCard.fallback,
-        hint: isEn ? (currentCard.hint_en || currentCard.hint) : currentCard.hint,
-      });
-    }
+    // 2. Broadcast 'round_start' event across Supabase Realtime channel
+    broadcastRoundStart({
+      category: isEn ? (currentCard.category_en || currentCard.category) : currentCard.category,
+      wordLength: word.length,
+      roundEndsAt: roundEndTime,
+      holderId: myPlayerId,
+      holderName: activeHolderName,
+      holderAvatar: activeHolderAvatar,
+      cardIndex: currentCardIndex,
+      cardId: currentCard.id,
+      wordHash: encodeWordHash(word),
+      turnDuration: duration,
+    });
   };
 
   // Handle letter input
@@ -623,41 +748,16 @@ export const GameTable: React.FC<GameTableProps> = ({
     }
   };
 
-  // Submit guess to Server (or local fallback)
+  // Submit guess with Supabase Realtime validation & turn rotation
   const submitGuess = (fullWord: string, currentLetters: string[]) => {
-    if (isLiveServer && roomPin) {
-      // SERVER-AUTHORITATIVE VALIDATION
-      const socket = getGameSocket();
-      socket.emit(
-        'SUBMIT_GUESS',
-        {
-          pin: roomPin,
-          guess: fullWord,
-          sessionToken: getSessionToken(),
-        },
-        (res: { success: boolean; correct?: boolean; error?: string }) => {
-          if (res?.correct) {
-            sounds.soundSuccess();
-            setIsSuccess(true);
-            isHandledRef.current = true;
-          } else {
-            sounds.soundError();
-            setIsShaking(true);
-            setTimeout(() => {
-              setIsShaking(false);
-              setEnteredLetters(new Array(wordLength).fill(''));
-              setActiveBoxIndex(0);
-              inputRefs.current[0]?.focus();
-            }, 500);
-          }
-        }
-      );
-    } else {
-      // Local fallback validation
-      let isMatch = true;
+    let isMatch = false;
+    if (syncedRoundCard?.wordHash) {
+      isMatch = matchesWordHash(fullWord, syncedRoundCard.wordHash);
+    } else if (targetWord) {
       if (isEn) {
         isMatch = fullWord.toUpperCase() === targetWord.toUpperCase();
       } else {
+        isMatch = true;
         for (let i = 0; i < targetWord.length; i++) {
           if (!lettersMatch(currentLetters[i], targetWord[i])) {
             isMatch = false;
@@ -665,40 +765,73 @@ export const GameTable: React.FC<GameTableProps> = ({
           }
         }
       }
+    }
 
-      if (isMatch) {
-        sounds.soundSuccess();
-        setIsSuccess(true);
-        isHandledRef.current = true;
-        setRoundStatus('waiting');
-        setRoundEndsAt(0);
-        const bonus = Math.max(1, Math.floor(timeLeft / 3));
-        const winnerId = !isCurrentClientHolder ? myPlayerId : activePlayerId;
-        const winner = players.find((p) => p.id === winnerId);
-        setWinnerCelebration({
-          winnerId,
-          winnerName: winner?.name || (isEn ? 'Winner!' : 'ניצחון!'),
-          winnerAvatar: winner?.avatar || '🎉',
-          word: targetWord,
-          image: currentCard.imageUrl || currentCard.image,
-          points: 10 + bonus,
-          scores: [],
-        });
-        setTimeout(() => {
-          setWinnerCelebration(null);
-          setIsSuccess(false);
-          onCardSolved(winnerId, bonus);
-        }, 2400);
-      } else {
-        sounds.soundError();
-        setIsShaking(true);
-        setTimeout(() => {
-          setIsShaking(false);
-          setEnteredLetters(new Array(wordLength).fill(''));
-          setActiveBoxIndex(0);
-          inputRefs.current[0]?.focus();
-        }, 500);
-      }
+    if (isMatch) {
+      sounds.soundSuccess();
+      setIsSuccess(true);
+      isHandledRef.current = true;
+      setRoundStatus('waiting');
+      setRoundEndsAt(0);
+
+      const bonus = Math.max(1, Math.floor(timeLeft / 3));
+      const points = 10 + bonus;
+      const winnerId = myPlayerId;
+      const winner = activePlayers.find((p) => p.id === winnerId);
+
+      // Turn Rotation: next participant in activePlayers cyclically:
+      const currentHolderId = serverTurnData?.holderId || activePlayerId;
+      const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
+      const nextIndex = (currentIndex >= 0 ? (currentIndex + 1) : 0) % (activePlayers.length || 1);
+      const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
+      const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
+
+      setWinnerCelebration({
+        winnerId,
+        winnerName: winner?.name || (isEn ? 'Winner!' : 'ניצחון!'),
+        winnerAvatar: winner?.avatar || '🎉',
+        word: fullWord,
+        image: currentCard.imageUrl || currentCard.image,
+        points,
+        scores: [],
+      });
+
+      broadcastCorrectGuess({
+        winnerId,
+        winnerName: winner?.name || (isEn ? 'Winner!' : 'ניצחון!'),
+        winnerAvatar: winner?.avatar || '🎉',
+        word: fullWord,
+        imageUrl: currentCard.imageUrl || currentCard.image,
+        points,
+        nextHolderId: nextHolder.id,
+        nextIndex,
+        nextCardIndex,
+      });
+
+      // Update winner score in Supabase presence tracking
+      trackPlayer({
+        id: winnerId,
+        name: winner?.name || 'שחקן',
+        icon: winner?.avatar || '🎉',
+        score: (winner?.score || 0) + points,
+        streak: (winner?.streak || 0) + 1,
+        isHost: winner?.isHost ?? false,
+      });
+
+      setTimeout(() => {
+        setWinnerCelebration(null);
+        setIsSuccess(false);
+        onCardSolved(winnerId, bonus);
+      }, 2500);
+    } else {
+      sounds.soundError();
+      setIsShaking(true);
+      setTimeout(() => {
+        setIsShaking(false);
+        setEnteredLetters(new Array(wordLength).fill(''));
+        setActiveBoxIndex(0);
+        inputRefs.current[0]?.focus();
+      }, 500);
     }
   };
 
@@ -766,21 +899,17 @@ export const GameTable: React.FC<GameTableProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeBoxIndex, enteredLetters, wordLength, isSuccess, winnerCelebration, targetWord, isCurrentClientHolder, isEn]);
 
-  // Holder sends reaction to all devices via server
+  // Holder sends reaction to all devices via Supabase Realtime broadcast
   const sendHolderReaction = (reaction: 'yes' | 'no' | 'hot' | 'cold', label: string) => {
     // Play sound chime + formant vocalization + speak the word with chosen voice gender
     sounds.soundClue(reaction, language, currentVoiceGender);
-
     setLastReaction(label);
 
-    if (isLiveServer && roomPin) {
-      const socket = getGameSocket();
-      socket.emit('SEND_REACTION', {
-        pin: roomPin,
-        reaction,
-        sessionToken: getSessionToken(),
-      });
-    }
+    broadcastReaction({
+      reaction,
+      senderName: activeHolderName,
+      timestamp: Date.now(),
+    });
   };
 
   // Holder gives hint
@@ -788,31 +917,38 @@ export const GameTable: React.FC<GameTableProps> = ({
     sounds.soundHint();
     setShowHintText(true);
 
-    if (isLiveServer && roomPin) {
-      const socket = getGameSocket();
-      socket.emit('GIVE_HINT', { pin: roomPin, sessionToken: getSessionToken() });
-    }
+    broadcastHint({
+      hint: activeHint || currentCard.hint || '',
+    });
   };
 
   // Skip turn
   const handleSkipTurn = () => {
     sounds.soundWarning();
-    if (isLiveServer && roomPin) {
-      const socket = getGameSocket();
-      socket.emit('SKIP_TURN', { pin: roomPin, sessionToken: getSessionToken() });
-    } else {
-      onCardTimeout();
-    }
+    const currentHolderId = serverTurnData?.holderId || activePlayerId;
+    const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
+    const nextIndex = (currentIndex >= 0 ? (currentIndex + 1) : 0) % (activePlayers.length || 1);
+    const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
+    const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
+
+    broadcastTurnTimeout({
+      word: targetWord || localTargetWord,
+      imageUrl: currentCard.imageUrl || currentCard.image,
+      reason: 'skipped',
+      nextHolderId: nextHolder.id,
+      nextIndex,
+      nextCardIndex,
+    });
+    onCardTimeout();
   };
 
   // Change timer
   const handleSelectTimerDuration = (sec: number) => {
     sounds.soundSuccess();
     if (onChangeTurnDuration) onChangeTurnDuration(sec);
-    if (isLiveServer && roomPin) {
-      const socket = getGameSocket();
-      socket.emit('UPDATE_TIMER_DURATION', { pin: roomPin, duration: sec, sessionToken: getSessionToken() });
-    }
+    broadcastSettingsUpdate({
+      turnDuration: sec,
+    });
     setShowTimerPicker(false);
   };
 
@@ -858,22 +994,13 @@ export const GameTable: React.FC<GameTableProps> = ({
         </button>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* 2. Room PIN / Solo badge */}
+          {/* 2. Room PIN badge - ALWAYS displayed in network room (Zero Solo Mode) */}
           <div
             className="btn-3d btn-3d-dark h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm shrink-0 select-text"
-            title={roomPin ? `Room PIN: ${roomPin}` : 'Solo / Demo'}
+            title={`Room PIN: ${effectivePin}`}
           >
-            {isLiveServer && roomPin ? (
-              <>
-                <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" strokeWidth={2.2} />
-                <span className="text-emerald-300 font-mono tracking-wider font-black">PIN: {roomPin}</span>
-              </>
-            ) : (
-              <>
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse shrink-0" />
-                <span className="text-indigo-300 font-bold">Solo</span>
-              </>
-            )}
+            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" strokeWidth={2.2} />
+            <span className="text-emerald-300 font-mono tracking-wider font-black">PIN: {effectivePin}</span>
           </div>
 
           {/* 3. Language Switcher */}
@@ -1304,6 +1431,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                   readOnly
                   maxLength={1}
                   value={letter}
+                  placeholder={isWaitingForWordLength ? '•' : ''}
                   onClick={() => {
                     setActiveBoxIndex(index);
                     sounds.soundKeypress();
@@ -1318,6 +1446,8 @@ export const GameTable: React.FC<GameTableProps> = ({
                       ? 'bg-pink-500/25 border-2 border-pink-400 text-white -translate-y-1 shadow-[0_0_15px_rgba(244,114,182,0.5)] ring-2 ring-pink-400/80 z-10'
                       : letter
                       ? 'bg-white/15 border-2 border-white/30 text-white'
+                      : isWaitingForWordLength
+                      ? 'bg-white/5 border-2 border-white/20 text-white/30 animate-pulse'
                       : 'bg-white/5 border-2 border-white/15 text-white/50 hover:bg-white/10'
                   } ${isRevealedByHint ? 'text-amber-300' : ''}`}
                 />

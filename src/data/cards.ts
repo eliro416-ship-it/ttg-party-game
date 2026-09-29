@@ -95,8 +95,8 @@ export const DEFAULT_CARDS: CardItem[] = [
   },
   {
     id: 'card-giraffe',
-    word: 'ג\'ירפה',
-    word_he: 'ג\'ירפה',
+    word: 'גירפה',
+    word_he: 'גירפה',
     word_en: 'GIRAFFE',
     wordEn: 'GIRAFFE',
     category: 'חיות',
@@ -104,7 +104,7 @@ export const DEFAULT_CARDS: CardItem[] = [
     categoryEn: 'Animals',
     image: 'https://images.unsplash.com/photo-1534567153574-2b12153a87f0?auto=format&fit=crop&w=800&q=80',
     imageUrl: 'https://images.unsplash.com/photo-1534567153574-2b12153a87f0?auto=format&fit=crop&w=800&q=80',
-    fallback: generateCardFallback('ג\'ירפה', 'חיות', '🦒', '#b45309', '#78350f'),
+    fallback: generateCardFallback('גירפה', 'חיות', '🦒', '#b45309', '#78350f'),
     hint: 'החיה הגבוהה בעולם עם צוואר ארוך',
     hint_en: 'Tallest animal in the world with a long neck',
     hintEn: 'Tallest animal in the world with a long neck'
@@ -547,8 +547,8 @@ export const DEFAULT_CARDS: CardItem[] = [
   },
   {
     id: 'card-fries',
-    word: 'צ\'יפס',
-    word_he: 'צ\'יפס',
+    word: 'ציפס',
+    word_he: 'ציפס',
     word_en: 'FRIES',
     wordEn: 'FRIES',
     category: 'אוכל',
@@ -556,7 +556,7 @@ export const DEFAULT_CARDS: CardItem[] = [
     categoryEn: 'Food',
     image: 'https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?auto=format&fit=crop&w=800&q=80',
     imageUrl: 'https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?auto=format&fit=crop&w=800&q=80',
-    fallback: generateCardFallback('צ\'יפס', 'אוכל', '🍟', '#eab308', '#ca8a04'),
+    fallback: generateCardFallback('ציפס', 'אוכל', '🍟', '#eab308', '#ca8a04'),
     hint: 'רצועות תפוחי אדמה מטוגנות ופריכות',
     hint_en: 'Crispy fried potato batons',
     hintEn: 'Crispy fried potato batons'
@@ -806,20 +806,20 @@ export const DEFAULT_CARDS: CardItem[] = [
     hintEn: 'Captures moments and pictures with a camera'
   },
   {
-    id: 'card-dentist',
-    word: 'רופא שיניים',
-    word_he: 'רופא שיניים',
-    word_en: 'DENTIST',
-    wordEn: 'DENTIST',
+    id: 'card-scientist',
+    word: 'מדען',
+    word_he: 'מדען',
+    word_en: 'SCIENTIST',
+    wordEn: 'SCIENTIST',
     category: 'מקצועות',
     category_en: 'Professions',
     categoryEn: 'Professions',
-    image: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=800&q=80',
-    imageUrl: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=800&q=80',
-    fallback: generateCardFallback('רופא שיניים', 'מקצועות', '🦷', '#0284c7', '#0369a1'),
-    hint: 'מטפל בשיניים ומלמד לצחצח נכון',
-    hint_en: 'Specialist medical doctor who cares for teeth',
-    hintEn: 'Specialist medical doctor who cares for teeth'
+    image: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=800&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=800&q=80',
+    fallback: generateCardFallback('מדען', 'מקצועות', '🔬', '#0284c7', '#0369a1'),
+    hint: 'עובד במעבדה עם מבחנות ועורך מחקרים וניסויים',
+    hint_en: 'Works in a laboratory conducting research and scientific experiments',
+    hintEn: 'Works in a laboratory conducting research and scientific experiments'
   },
   {
     id: 'card-architect',
@@ -1035,8 +1035,8 @@ export const DEFAULT_CARDS: CardItem[] = [
   },
   {
     id: 'card-backpack',
-    word: 'תיק גב',
-    word_he: 'תיק גב',
+    word: 'ילקוט',
+    word_he: 'ילקוט',
     word_en: 'BACKPACK',
     wordEn: 'BACKPACK',
     category: 'חפצים',
@@ -1044,7 +1044,7 @@ export const DEFAULT_CARDS: CardItem[] = [
     categoryEn: 'Objects',
     image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=800&q=80',
     imageUrl: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=800&q=80',
-    fallback: generateCardFallback('תיק גב', 'חפצים', '🎒', '#3b82f6', '#1d4ed8'),
+    fallback: generateCardFallback('ילקוט', 'חפצים', '🎒', '#3b82f6', '#1d4ed8'),
     hint: 'סוחבים על הגב עם ספרים ומחברות ללימודים',
     hint_en: 'Bag carried on back with shoulder straps',
     hintEn: 'Bag carried on back with shoulder straps'

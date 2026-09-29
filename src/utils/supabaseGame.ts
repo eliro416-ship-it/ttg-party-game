@@ -1,0 +1,478 @@
+import { createClient, RealtimeChannel } from '@supabase/supabase-js';
+import { Player } from '../types/game';
+
+export const SUPABASE_URL = 'https://mjvglamfcaaanuoxlgau.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_I1TvNYw5RSrAb-qe6YgFyg_zsUb8kd1';
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  realtime: {
+    params: {
+      eventsPerSecond: 25,
+    },
+  },
+});
+
+export interface SupabasePresencePlayer {
+  id: string;
+  name: string;
+  icon?: string;
+  avatar?: string;
+  score: number;
+  streak?: number;
+  isHost?: boolean;
+}
+
+export interface RoundStartPayload {
+  category: string;
+  wordLength: number;
+  roundEndsAt: number;
+  holderId: string;
+  holderName?: string;
+  holderAvatar?: string;
+  cardIndex?: number;
+  cardId?: string;
+  word?: string;
+  wordHash?: string;
+  hint?: string | null;
+  turnDuration?: number;
+}
+
+export interface CorrectGuessPayload {
+  winnerId: string;
+  winnerName: string;
+  winnerAvatar: string;
+  word: string;
+  imageUrl?: string | null;
+  points: number;
+  nextHolderId: string;
+  nextIndex: number;
+  nextCardIndex: number;
+}
+
+export interface TurnTimeoutPayload {
+  word: string;
+  imageUrl?: string | null;
+  reason: 'time_up' | 'skipped';
+  nextHolderId: string;
+  nextIndex: number;
+  nextCardIndex: number;
+}
+
+export interface ReactionPayload {
+  reaction: 'yes' | 'no' | 'hot' | 'cold';
+  senderName: string;
+  timestamp: number;
+}
+
+export interface HintPayload {
+  hint: string;
+}
+
+export interface SyncStatePayload {
+  category: string;
+  wordLength: number;
+  roundEndsAt: number;
+  holderId: string;
+  holderName: string;
+  holderAvatar: string;
+  roundStatus: 'waiting' | 'active' | 'ended';
+  cardIndex?: number;
+  cardId?: string;
+  wordHash?: string;
+  turnDuration?: number;
+}
+
+export interface RequestSyncPayload {
+  playerId: string;
+}
+
+export interface SettingsUpdatePayload {
+  turnDuration: number;
+}
+
+export interface GameStartPayload {
+  holderId: string;
+  holderName: string;
+  holderAvatar: string;
+  turnDuration: number;
+  cardIndex: number;
+}
+
+export interface TurnStartedPayload {
+  isHolder: boolean;
+  roundStatus?: 'waiting' | 'active' | 'ended';
+  roundEndsAt?: number;
+  serverTime?: number;
+  cardId?: string;
+  cardIndex: number;
+  totalCards: number;
+  holderId: string;
+  holderName: string;
+  holderAvatar: string;
+  image: string | null;
+  imageUrl?: string | null;
+  fallback?: string | null;
+  word: string | null;
+  wordHash?: string;
+  category: string;
+  hint: string | null;
+  wordLength: number;
+  turnEndTime: number;
+  turnDuration: number;
+  players: (Player & { isHolder?: boolean; isOnline?: boolean })[];
+}
+
+export interface RoundWonPayload {
+  winnerId: string;
+  winnerName: string;
+  winnerAvatar: string;
+  word: string;
+  image?: string;
+  points: number;
+  scores?: { id: string; name: string; score: number; streak: number }[];
+}
+
+export interface RoomStatePayload {
+  pin: string;
+  status?: string;
+  players: Player[];
+  currentHolderIndex: number;
+  roundStatus: 'waiting' | 'active' | 'ended';
+  roundEndsAt: number | null;
+  turnDuration: number;
+  isHolder: boolean;
+  holderId: string;
+  holderName: string;
+  holderAvatar: string;
+  cardIndex: number;
+}
+
+// Global active channel and listener sets
+let activeChannel: RealtimeChannel | null = null;
+let activeRoomPin: string | null = null;
+let activePlayerId: string | null = null;
+let isChannelSubscribedState: boolean = false;
+
+// Event listener registries for clean dispatching without socket thrashing
+const presenceListeners = new Set<(players: Player[]) => void>();
+const gameStartListeners = new Set<(payload: GameStartPayload) => void>();
+const roundStartListeners = new Set<(payload: RoundStartPayload) => void>();
+const correctGuessListeners = new Set<(payload: CorrectGuessPayload) => void>();
+const turnTimeoutListeners = new Set<(payload: TurnTimeoutPayload) => void>();
+const reactionListeners = new Set<(payload: ReactionPayload) => void>();
+const hintListeners = new Set<(payload: HintPayload) => void>();
+const settingsListeners = new Set<(payload: SettingsUpdatePayload) => void>();
+const syncStateListeners = new Set<(payload: SyncStatePayload) => void>();
+const requestSyncListeners = new Set<(payload: RequestSyncPayload) => void>();
+const statusListeners = new Set<(status: string) => void>();
+
+/**
+ * Initializes and joins a dedicated Supabase Realtime room channel.
+ * Sets up all presence and broadcast listeners BEFORE subscribing.
+ */
+export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeChannel {
+  const cleanPin = pin.trim();
+  if (activeChannel && activeRoomPin === cleanPin && activePlayerId === playerId) {
+    return activeChannel;
+  }
+
+  if (activeChannel) {
+    try {
+      supabase.removeChannel(activeChannel);
+    } catch (e) {}
+    activeChannel = null;
+    isChannelSubscribedState = false;
+  }
+
+  activeRoomPin = cleanPin;
+  activePlayerId = playerId;
+
+  const channel = supabase.channel(`room_${cleanPin}`, {
+    config: {
+      broadcast: { self: false },
+      presence: { key: playerId },
+    },
+  });
+
+  // 1. Presence tracking: sync, join, leave
+  const handlePresenceChange = () => {
+    const state = channel.presenceState();
+    const players = extractPlayersFromPresence(state);
+    presenceListeners.forEach((listener) => {
+      try {
+        listener(players);
+      } catch (err) {
+        console.error('Error in presence listener:', err);
+      }
+    });
+  };
+
+  channel.on('presence', { event: 'sync' }, handlePresenceChange);
+  channel.on('presence', { event: 'join' }, handlePresenceChange);
+  channel.on('presence', { event: 'leave' }, handlePresenceChange);
+
+  // 2. Broadcast events
+  channel.on('broadcast', { event: 'game_start' }, ({ payload }) => {
+    gameStartListeners.forEach((fn) => fn(payload as GameStartPayload));
+  });
+
+  channel.on('broadcast', { event: 'round_start' }, ({ payload }) => {
+    roundStartListeners.forEach((fn) => fn(payload as RoundStartPayload));
+  });
+
+  channel.on('broadcast', { event: 'correct_guess' }, ({ payload }) => {
+    correctGuessListeners.forEach((fn) => fn(payload as CorrectGuessPayload));
+  });
+
+  channel.on('broadcast', { event: 'turn_timeout' }, ({ payload }) => {
+    turnTimeoutListeners.forEach((fn) => fn(payload as TurnTimeoutPayload));
+  });
+
+  channel.on('broadcast', { event: 'reaction' }, ({ payload }) => {
+    reactionListeners.forEach((fn) => fn(payload as ReactionPayload));
+  });
+
+  channel.on('broadcast', { event: 'hint' }, ({ payload }) => {
+    hintListeners.forEach((fn) => fn(payload as HintPayload));
+  });
+
+  channel.on('broadcast', { event: 'update_settings' }, ({ payload }) => {
+    settingsListeners.forEach((fn) => fn(payload as SettingsUpdatePayload));
+  });
+
+  channel.on('broadcast', { event: 'sync_state' }, ({ payload }) => {
+    syncStateListeners.forEach((fn) => fn(payload as SyncStatePayload));
+  });
+
+  channel.on('broadcast', { event: 'request_sync' }, ({ payload }) => {
+    requestSyncListeners.forEach((fn) => fn(payload as RequestSyncPayload));
+  });
+
+  // 3. Subscribe once all listeners are mounted
+  channel.subscribe((status) => {
+    isChannelSubscribedState = status === 'SUBSCRIBED';
+    statusListeners.forEach((fn) => fn(status));
+  });
+
+  activeChannel = channel;
+  return channel;
+}
+
+export function getCurrentSupabaseChannel(): RealtimeChannel | null {
+  return activeChannel;
+}
+
+export function getActiveRoomPin(): string | null {
+  return activeRoomPin;
+}
+
+export function isChannelSubscribed(): boolean {
+  return isChannelSubscribedState;
+}
+
+export function leaveSupabaseRoomChannel(): void {
+  if (activeChannel) {
+    try {
+      supabase.removeChannel(activeChannel);
+    } catch (e) {}
+    activeChannel = null;
+    activeRoomPin = null;
+    activePlayerId = null;
+    isChannelSubscribedState = false;
+  }
+}
+
+// Clean listener attachment helpers (safe to call anywhere, anytime)
+export function addSupabaseListener(event: 'presence', fn: (players: Player[]) => void): () => void;
+export function addSupabaseListener(event: 'game_start', fn: (payload: GameStartPayload) => void): () => void;
+export function addSupabaseListener(event: 'round_start', fn: (payload: RoundStartPayload) => void): () => void;
+export function addSupabaseListener(event: 'correct_guess', fn: (payload: CorrectGuessPayload) => void): () => void;
+export function addSupabaseListener(event: 'turn_timeout', fn: (payload: TurnTimeoutPayload) => void): () => void;
+export function addSupabaseListener(event: 'reaction', fn: (payload: ReactionPayload) => void): () => void;
+export function addSupabaseListener(event: 'hint', fn: (payload: HintPayload) => void): () => void;
+export function addSupabaseListener(event: 'update_settings', fn: (payload: SettingsUpdatePayload) => void): () => void;
+export function addSupabaseListener(event: 'sync_state', fn: (payload: SyncStatePayload) => void): () => void;
+export function addSupabaseListener(event: 'request_sync', fn: (payload: RequestSyncPayload) => void): () => void;
+export function addSupabaseListener(event: 'status', fn: (status: string) => void): () => void;
+export function addSupabaseListener(event: string, fn: any): () => void {
+  if (event === 'presence') presenceListeners.add(fn);
+  else if (event === 'game_start') gameStartListeners.add(fn);
+  else if (event === 'round_start') roundStartListeners.add(fn);
+  else if (event === 'correct_guess') correctGuessListeners.add(fn);
+  else if (event === 'turn_timeout') turnTimeoutListeners.add(fn);
+  else if (event === 'reaction') reactionListeners.add(fn);
+  else if (event === 'hint') hintListeners.add(fn);
+  else if (event === 'update_settings') settingsListeners.add(fn);
+  else if (event === 'sync_state') syncStateListeners.add(fn);
+  else if (event === 'request_sync') requestSyncListeners.add(fn);
+  else if (event === 'status') statusListeners.add(fn);
+
+  return () => {
+    if (event === 'presence') presenceListeners.delete(fn);
+    else if (event === 'game_start') gameStartListeners.delete(fn);
+    else if (event === 'round_start') roundStartListeners.delete(fn);
+    else if (event === 'correct_guess') correctGuessListeners.delete(fn);
+    else if (event === 'turn_timeout') turnTimeoutListeners.delete(fn);
+    else if (event === 'reaction') reactionListeners.delete(fn);
+    else if (event === 'hint') hintListeners.delete(fn);
+    else if (event === 'update_settings') settingsListeners.delete(fn);
+    else if (event === 'sync_state') syncStateListeners.delete(fn);
+    else if (event === 'request_sync') requestSyncListeners.delete(fn);
+    else if (event === 'status') statusListeners.delete(fn);
+  };
+}
+
+// Broadcasting Helper Functions
+export async function trackPlayer(player: {
+  id: string;
+  name: string;
+  icon?: string;
+  avatar?: string;
+  score: number;
+  streak?: number;
+  isHost?: boolean;
+}): Promise<void> {
+  if (activeChannel) {
+    await activeChannel.track({
+      id: player.id,
+      name: player.name,
+      icon: player.icon || player.avatar || '🦁',
+      score: player.score || 0,
+      streak: player.streak || 0,
+      isHost: Boolean(player.isHost),
+    });
+  }
+}
+
+export function broadcastGameStart(payload: GameStartPayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'game_start',
+      payload,
+    });
+  }
+}
+
+export function broadcastRoundStart(payload: RoundStartPayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'round_start',
+      payload,
+    });
+  }
+}
+
+export function broadcastCorrectGuess(payload: CorrectGuessPayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'correct_guess',
+      payload,
+    });
+  }
+}
+
+export function broadcastTurnTimeout(payload: TurnTimeoutPayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'turn_timeout',
+      payload,
+    });
+  }
+}
+
+export function broadcastReaction(payload: ReactionPayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'reaction',
+      payload,
+    });
+  }
+}
+
+export function broadcastHint(payload: HintPayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'hint',
+      payload,
+    });
+  }
+}
+
+export function broadcastSettingsUpdate(payload: SettingsUpdatePayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'update_settings',
+      payload,
+    });
+  }
+}
+
+export function broadcastSyncState(payload: SyncStatePayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'sync_state',
+      payload,
+    });
+  }
+}
+
+export function broadcastRequestSync(playerId: string): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'request_sync',
+      payload: { playerId },
+    });
+  }
+}
+
+/**
+ * Converts Supabase presenceState dictionary into a clean, deduplicated Player array.
+ * Strictly connected players only (zero mock data).
+ */
+export function extractPlayersFromPresence(presenceState: Record<string, any[]>): Player[] {
+  const map = new Map<string, Player>();
+
+  for (const presences of Object.values(presenceState)) {
+    if (!Array.isArray(presences)) continue;
+    for (const p of presences) {
+      if (p && p.id) {
+        map.set(p.id, {
+          id: p.id,
+          name: p.name || 'שחקן',
+          avatar: p.icon || p.avatar || '🦁',
+          score: typeof p.score === 'number' ? p.score : 0,
+          streak: typeof p.streak === 'number' ? p.streak : 0,
+          isHost: Boolean(p.isHost),
+          isOnline: true,
+        });
+      }
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+/**
+ * Helper to encode word for verification
+ */
+export function encodeWordHash(word: string): string {
+  try {
+    return btoa(encodeURIComponent(word.trim().toLowerCase()));
+  } catch {
+    return word.trim().toLowerCase();
+  }
+}
+
+export function matchesWordHash(guess: string, wordHash: string): boolean {
+  if (!guess || !wordHash) return false;
+  return encodeWordHash(guess) === wordHash;
+}

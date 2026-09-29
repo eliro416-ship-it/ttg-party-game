@@ -12,7 +12,26 @@ import { ShareModal } from './components/ShareModal';
 import { IntroVideoModal } from './components/IntroVideoModal';
 import { AnimatedQuestionMarksBackground } from './components/AnimatedQuestionMarksBackground';
 import { sounds } from './utils/audio';
-import { getGameSocket, getSessionToken, TurnStartedPayload, RoomStatePayload } from './utils/socket';
+import {
+  getSupabaseRoomChannel,
+  getCurrentSupabaseChannel,
+  leaveSupabaseRoomChannel,
+  extractPlayersFromPresence,
+  addSupabaseListener,
+  trackPlayer,
+  broadcastGameStart,
+  broadcastSettingsUpdate,
+  broadcastSyncState,
+  encodeWordHash,
+  TurnStartedPayload,
+  RoomStatePayload,
+  RoundStartPayload,
+  CorrectGuessPayload,
+  TurnTimeoutPayload,
+  GameStartPayload,
+  SettingsUpdatePayload,
+  SyncStatePayload,
+} from './utils/supabaseGame';
 import { getPinFromUrl, getLangFromUrl } from './utils/url';
 
 export default function App() {
@@ -32,7 +51,11 @@ export default function App() {
     if (initialPinParam && initialPinParam.trim()) {
       return initialPinParam.trim();
     }
-    return '7742';
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ttg_room_pin');
+      if (saved && saved.trim()) return saved.trim();
+    }
+    return '';
   });
 
   const [hasPurchasedLicense, setHasPurchasedLicense] = useState<boolean>(false);
@@ -158,9 +181,15 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('game_turn_duration', newSettings.turnDuration.toString());
     }
-    const socket = getGameSocket();
-    socket.emit('UPDATE_TIMER_DURATION', { pin, duration: newSettings.turnDuration, sessionToken: getSessionToken() });
-  }, [pin]);
+    const channel = getCurrentSupabaseChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'update_settings',
+        payload: { turnDuration: newSettings.turnDuration },
+      });
+    }
+  }, []);
 
   const handleChangeTurnDuration = useCallback((duration: number) => {
     setSettings((prev) => {
@@ -170,6 +199,14 @@ export default function App() {
       }
       return updated;
     });
+    const channel = getCurrentSupabaseChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'update_settings',
+        payload: { turnDuration: duration },
+      });
+    }
   }, []);
 
   // Players: Real connected players only (zero mock data)
@@ -210,191 +247,261 @@ export default function App() {
     return all.filter((c) => settings.selectedCategories.includes(c.category));
   }, [shuffledDeck, customCards, settings.selectedCategories]);
 
-  // Real-time WebSocket event listeners
+  // Supabase Realtime Channel, Presence, and Broadcast Engine
   useEffect(() => {
-    const socket = getGameSocket();
+    const isRoomActive = joinedRoom || hostStep === 'lobby' || hostStep === 'game' || screen === 'player-lobby' || screen === 'game' || Boolean(pin);
+    if (!isRoomActive || !pin || !pin.trim()) return;
 
-    const onConnect = () => {
-      setIsLiveServer(true);
-    };
+    // Connect to room channel (singleton will reuse or establish)
+    getSupabaseRoomChannel(pin.trim(), myPlayerId);
 
-    const onDisconnect = () => {
-      setIsLiveServer(false);
-    };
+    // 1. Connection status listener
+    const unsubStatus = addSupabaseListener('status', async (status) => {
+      if (status === 'SUBSCRIBED') {
+        setIsLiveServer(true);
+        const myPlayer = players.find((p) => p.id === myPlayerId);
+        const isHost = myPlayerId === 'p-host' || myPlayer?.isHost || false;
+        const myName = myPlayer?.name || (isHost ? (language === 'en' ? 'Host' : 'מארח/ת') : (language === 'en' ? 'Player' : 'שחקן'));
+        const myAvatar = myPlayer?.avatar || (isHost ? '👑' : '🦁');
 
-    const onRoomUpdated = (roomData: {
-      pin: string;
-      status: string;
-      turnDuration: number;
-      players: Player[];
-    }) => {
-      if (roomData.players) {
-        setPlayers(roomData.players);
+        await trackPlayer({
+          id: myPlayerId,
+          name: myName,
+          icon: myAvatar,
+          score: myPlayer?.score || 0,
+          streak: myPlayer?.streak || 0,
+          isHost,
+        });
       }
-      if (roomData.turnDuration) {
-        setSettings((prev) => ({ ...prev, turnDuration: roomData.turnDuration }));
-      }
-    };
+    });
 
-    const onRoomState = (data: RoomStatePayload) => {
-      if (data.pin) {
-        setPin(data.pin);
+    // 2. Presence tracking: update leaderboard strictly with connected players (zero mock data)
+    const unsubPresence = addSupabaseListener('presence', (presencePlayers) => {
+      if (presencePlayers && presencePlayers.length > 0) {
+        setPlayers((prev) => {
+          return presencePlayers.map((p) => {
+            const existing = prev.find((x) => x.id === p.id);
+            return {
+              ...p,
+              score: Math.max(p.score, existing?.score || 0),
+              streak: Math.max(p.streak || 0, existing?.streak || 0),
+            };
+          });
+        });
       }
-      if (data.players && data.players.length > 0) {
-        setPlayers(
-          data.players.map((p) => ({
-            id: p.id,
-            name: p.name,
-            avatar: p.icon || p.avatar || '🦁',
-            score: p.score ?? 0,
-            streak: p.streak ?? 0,
-            isHost: p.isHost ?? false,
-            isOnline: p.isOnline ?? true,
-          }))
-        );
-      }
-      if (typeof data.currentHolderIndex === 'number') {
-        setActivePlayerIndex(data.currentHolderIndex);
-      }
-      if (typeof data.cardIndex === 'number') {
-        setCurrentCardIndex(data.cardIndex);
-      }
-      if (data.turnDuration) {
-        setSettings((prev) => ({ ...prev, turnDuration: data.turnDuration }));
-      }
+    });
 
-      setServerTurnData({
-        isHolder: data.isHolder,
-        roundStatus: data.roundStatus,
-        roundEndsAt: data.roundEndsAt || 0,
-        turnEndTime: data.roundEndsAt || 0,
-        serverTime: data.serverTime || Date.now(),
-        turnDuration: data.turnDuration || settings.turnDuration,
-        cardIndex: data.cardIndex,
+    // 3. Game start broadcast
+    const unsubGameStart = addSupabaseListener('game_start', (payload) => {
+      setJoinedRoom(true);
+      setScreen('game');
+      if (payload.turnDuration) {
+        setSettings((prev) => ({ ...prev, turnDuration: payload.turnDuration }));
+      }
+      if (payload.holderId !== myPlayerId) {
+        setServerTurnData({
+          isHolder: false,
+          roundStatus: 'waiting',
+          roundEndsAt: 0,
+          turnEndTime: 0,
+          turnDuration: payload.turnDuration || settings.turnDuration,
+          cardIndex: payload.cardIndex || 0,
+          totalCards: 50,
+          holderId: payload.holderId,
+          holderName: payload.holderName,
+          holderAvatar: payload.holderAvatar,
+          image: null,
+          imageUrl: null,
+          fallback: null,
+          word: null,
+          category: '',
+          hint: null,
+          wordLength: 0,
+          players: [],
+        });
+      }
+    });
+
+    // 4. Round start broadcast: synchronizes category, wordLength, and exact roundEndsAt timestamp
+    const unsubRoundStart = addSupabaseListener('round_start', (payload) => {
+      setJoinedRoom(true);
+      setScreen('game');
+      const isHolder = payload.holderId === myPlayerId;
+      setServerTurnData((prev) => ({
+        isHolder,
+        roundStatus: 'active',
+        roundEndsAt: payload.roundEndsAt,
+        turnEndTime: payload.roundEndsAt,
+        turnDuration: payload.turnDuration || settings.turnDuration,
+        cardIndex: payload.cardIndex ?? 0,
         totalCards: 50,
-        holderId: data.holderId,
-        holderName: data.holderName,
-        holderAvatar: data.holderAvatar,
-        cardId: data.currentCard.id,
-        image: data.currentCard.imageUrl || data.currentCard.image || null,
-        imageUrl: data.currentCard.imageUrl || data.currentCard.image || null,
-        fallback: data.currentCard.fallback || null,
-        word: data.currentCard.word || null,
-        category: data.currentCard.category,
-        hint: data.currentCard.hint || null,
-        wordLength: data.currentCard.wordLength,
-        players: data.players.map((p) => ({
-          ...p,
-          avatar: p.icon || p.avatar || '🦁',
-          isHolder: p.id === data.holderId,
-          isOnline: p.isOnline ?? true,
-        })),
+        holderId: payload.holderId,
+        holderName: payload.holderName || '',
+        holderAvatar: payload.holderAvatar || '👑',
+        cardId: payload.cardId,
+        image: isHolder ? prev?.image || null : null,
+        imageUrl: isHolder ? prev?.imageUrl || null : null,
+        fallback: null,
+        word: isHolder ? prev?.word || null : null,
+        wordHash: payload.wordHash,
+        category: payload.category,
+        hint: payload.hint || null,
+        wordLength: payload.wordLength,
+        players: [],
+      }));
+    });
+
+    // 5. Correct guess broadcast: turn rotation cyclically across participants
+    const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload) => {
+      setPlayers((prev) =>
+        prev.map((p) => {
+          if (p.id === payload.winnerId) {
+            return {
+              ...p,
+              score: p.score + payload.points,
+              streak: (p.streak || 0) + 1,
+            };
+          }
+          return p;
+        })
+      );
+
+      const isMeNewHolder = myPlayerId === payload.nextHolderId;
+      const nextCard = activeDeck[payload.nextCardIndex] || DEFAULT_CARDS[0];
+      const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
+
+      setCurrentCardIndex(payload.nextCardIndex);
+      setServerTurnData({
+        isHolder: isMeNewHolder,
+        roundStatus: 'waiting',
+        roundEndsAt: 0,
+        turnEndTime: 0,
+        turnDuration: settings.turnDuration,
+        cardIndex: payload.nextCardIndex,
+        totalCards: Math.min(activeDeck.length, 50),
+        holderId: payload.nextHolderId,
+        holderName: payload.nextHolderId === myPlayerId ? (players.find((p) => p.id === myPlayerId)?.name || 'מחזיק') : '',
+        holderAvatar: '👑',
+        cardId: nextCard.id,
+        image: isMeNewHolder ? (nextCard.imageUrl || nextCard.image) : null,
+        imageUrl: isMeNewHolder ? (nextCard.imageUrl || nextCard.image) : null,
+        fallback: isMeNewHolder ? nextCard.fallback : null,
+        word: isMeNewHolder ? nextWord : null,
+        wordHash: undefined,
+        category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
+        hint: null,
+        wordLength: nextWord.length,
+        players: [],
       });
+    });
 
-      // Transition to game screen only when the game is actively IN_PROGRESS
-      if (data.status === 'IN_PROGRESS') {
-        setJoinedRoom(true);
-        setScreen('game');
-      }
-    };
+    // 6. Turn timeout broadcast: advance holder cyclically
+    const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload) => {
+      const isMeNewHolder = myPlayerId === payload.nextHolderId;
+      const nextCard = activeDeck[payload.nextCardIndex] || DEFAULT_CARDS[0];
+      const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
 
-    const onTurnStarted = (data: TurnStartedPayload) => {
-      setServerTurnData(data);
-      setCurrentCardIndex(data.cardIndex);
-      if (data.players) {
-        setPlayers(data.players);
+      setCurrentCardIndex(payload.nextCardIndex);
+      setServerTurnData({
+        isHolder: isMeNewHolder,
+        roundStatus: 'waiting',
+        roundEndsAt: 0,
+        turnEndTime: 0,
+        turnDuration: settings.turnDuration,
+        cardIndex: payload.nextCardIndex,
+        totalCards: Math.min(activeDeck.length, 50),
+        holderId: payload.nextHolderId,
+        holderName: payload.nextHolderId === myPlayerId ? (players.find((p) => p.id === myPlayerId)?.name || 'מחזיק') : '',
+        holderAvatar: '👑',
+        cardId: nextCard.id,
+        image: isMeNewHolder ? (nextCard.imageUrl || nextCard.image) : null,
+        imageUrl: isMeNewHolder ? (nextCard.imageUrl || nextCard.image) : null,
+        fallback: isMeNewHolder ? nextCard.fallback : null,
+        word: isMeNewHolder ? nextWord : null,
+        wordHash: undefined,
+        category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
+        hint: null,
+        wordLength: nextWord.length,
+        players: [],
+      });
+    });
+
+    // 7. Settings update
+    const unsubSettings = addSupabaseListener('update_settings', (payload) => {
+      if (payload.turnDuration) {
+        setSettings((prev) => ({ ...prev, turnDuration: payload.turnDuration }));
       }
+    });
+
+    // 8. Initial Room State Sync: when a participant enters an active round, sync state immediately
+    const unsubSyncState = addSupabaseListener('sync_state', (payload: SyncStatePayload) => {
       setJoinedRoom(true);
       setScreen('game');
-    };
+      const isHolder = payload.holderId === myPlayerId;
+      setServerTurnData((prev) => ({
+        isHolder,
+        roundStatus: payload.roundStatus,
+        roundEndsAt: payload.roundEndsAt,
+        turnEndTime: payload.roundEndsAt,
+        turnDuration: payload.turnDuration || settings.turnDuration,
+        cardIndex: payload.cardIndex ?? prev?.cardIndex ?? 0,
+        totalCards: 50,
+        holderId: payload.holderId,
+        holderName: payload.holderName || prev?.holderName || '',
+        holderAvatar: payload.holderAvatar || prev?.holderAvatar || '👑',
+        cardId: payload.cardId,
+        image: isHolder ? prev?.image || null : null,
+        imageUrl: isHolder ? prev?.imageUrl || null : null,
+        fallback: null,
+        word: isHolder ? prev?.word || null : null,
+        wordHash: payload.wordHash,
+        category: payload.category,
+        hint: null,
+        wordLength: payload.wordLength > 0 ? payload.wordLength : 4,
+        players: [],
+      }));
+    });
 
-    const onRoundStarted = (data: {
-      roundEndsAt?: number;
-      endTime?: number;
-      roundEndTime?: number;
-      serverTime?: number;
-      turnDuration: number;
-      cardIndex: number;
-      cardId?: string;
-      category?: string;
-      wordLength?: number;
-      holderId: string;
-      holderName: string;
-    }) => {
-      const end = data.roundEndTime || data.endTime || data.roundEndsAt || (Date.now() + data.turnDuration * 1000);
-      setServerTurnData((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          roundStatus: 'active',
-          roundEndsAt: end,
-          turnEndTime: end,
-          serverTime: data.serverTime || Date.now(),
-          turnDuration: data.turnDuration,
-          cardIndex: data.cardIndex,
-          cardId: data.cardId || prev.cardId,
-          category: data.category || prev.category,
-          wordLength: data.wordLength || prev.wordLength,
-          holderId: data.holderId,
-          holderName: data.holderName,
-        };
-      });
-      setJoinedRoom(true);
-      setScreen('game');
-    };
-
-    const onGameOver = (data: { players: Player[] }) => {
-      if (data.players) {
-        setPlayers(data.players);
+    // 9. Host/Holder responds to request_sync from newly joined guessers
+    const unsubRequestSync = addSupabaseListener('request_sync', () => {
+      if (myPlayerId === 'p-host' || serverTurnData?.isHolder) {
+        const currentCard = activeDeck[currentCardIndex] || DEFAULT_CARDS[0];
+        const currentWord = (language === 'en' ? (currentCard.word_en || currentCard.word) : (currentCard.word_he || currentCard.word)).trim();
+        broadcastSyncState({
+          category: language === 'en' ? (currentCard.category_en || currentCard.category) : currentCard.category,
+          wordLength: currentWord.length,
+          roundEndsAt: serverTurnData?.roundEndsAt || 0,
+          holderId: serverTurnData?.holderId || myPlayerId,
+          holderName: serverTurnData?.holderName || (language === 'en' ? 'Host' : 'מארח/ת'),
+          holderAvatar: serverTurnData?.holderAvatar || '👑',
+          roundStatus: serverTurnData?.roundStatus || 'waiting',
+          cardIndex: currentCardIndex,
+          cardId: currentCard.id,
+          wordHash: encodeWordHash(currentWord),
+          turnDuration: settings.turnDuration,
+        });
       }
-      setIsGameOverModalOpen(true);
-    };
-
-    const onRoundWon = (data: {
-      winnerId: string;
-      winnerName: string;
-      points: number;
-      scores?: Array<{ id: string; name: string; score: number; streak: number }>;
-    }) => {
-      if (data.scores && data.scores.length > 0) {
-        setPlayers((prev) =>
-          prev.map((p) => {
-            const found = data.scores!.find((s) => s.id === p.id);
-            return found ? { ...p, score: found.score, streak: found.streak } : p;
-          })
-        );
-      }
-    };
-
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('ROOM_UPDATED', onRoomUpdated);
-    socket.on('SYNC_ROOM_STATE', onRoomState);
-    socket.on('ROOM_STATE', onRoomState);
-    socket.on('TURN_STARTED', onTurnStarted);
-    socket.on('ROUND_STARTED', onRoundStarted);
-    socket.on('ROUND_WON', onRoundWon);
-    socket.on('GAME_OVER', onGameOver);
+    });
 
     return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-      socket.off('ROOM_UPDATED', onRoomUpdated);
-      socket.off('SYNC_ROOM_STATE', onRoomState);
-      socket.off('ROOM_STATE', onRoomState);
-      socket.off('TURN_STARTED', onTurnStarted);
-      socket.off('ROUND_STARTED', onRoundStarted);
-      socket.off('ROUND_WON', onRoundWon);
-      socket.off('GAME_OVER', onGameOver);
+      unsubStatus();
+      unsubPresence();
+      unsubGameStart();
+      unsubRoundStart();
+      unsubCorrectGuess();
+      unsubTurnTimeout();
+      unsubSettings();
+      unsubSyncState();
+      unsubRequestSync();
     };
-  }, []);
+  }, [pin, joinedRoom, hostStep, screen, myPlayerId, activeDeck, language, settings.turnDuration]);
 
   const handleToggleMute = () => {
     const updated = sounds.toggleMute();
     setIsMuted(updated);
   };
 
-  // Host generates PIN via Server or local generator with immediate smooth transition to lobby
+  // Host generates PIN via Supabase Realtime Channel
   const handleGenerateRoom = useCallback((customTurnDuration?: number) => {
     setIsGeneratingPin(false);
     const chosenDuration = customTurnDuration || settings.turnDuration;
@@ -407,14 +514,15 @@ export default function App() {
       localStorage.setItem('game_turn_duration', chosenDuration.toString());
     } catch (e) {}
 
-    // 2. Save settings & host info in state
+    // 2. Save settings & host info in state (Strictly no mock players Danny/דני)
+    const hostName = language === 'en' ? 'Host' : 'מארח/ת';
     setSettings((prev) => ({ ...prev, turnDuration: chosenDuration }));
     setHasPurchasedLicense(true);
     setMyPlayerId('p-host');
     setPlayers([
       {
         id: 'p-host',
-        name: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
+        name: hostName,
         avatar: '👑',
         score: 0,
         isHost: true,
@@ -423,39 +531,8 @@ export default function App() {
       },
     ]);
 
-    // 3. Immediately transition to 'lobby' step - guaranteed 0ms UI freeze or blocking
+    // 3. Immediately transition to 'lobby' step
     setHostStep('lobby');
-
-    // 4. Background socket registration
-    try {
-      const socket = getGameSocket();
-      const token = getSessionToken();
-
-      socket.emit(
-        'CREATE_ROOM',
-        {
-          hostName: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
-          avatar: '👑',
-          sessionToken: token,
-          turnDuration: chosenDuration,
-          language,
-        },
-        (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[] } }) => {
-          if (res?.success && res.pin) {
-            setPin(res.pin);
-            try {
-              localStorage.setItem('ttg_room_pin', res.pin);
-            } catch (e) {}
-            if (res.player?.id) setMyPlayerId(res.player.id);
-            if (res.room?.players && res.room.players.length > 0) {
-              setPlayers(res.room.players);
-            }
-          }
-        }
-      );
-    } catch (err) {
-      console.warn('Socket CREATE_ROOM exception:', err);
-    }
   }, [language, settings.turnDuration]);
 
   const handleGeneratePin = useCallback(() => {
@@ -486,12 +563,12 @@ export default function App() {
     const firstWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
     const hostPlayer = players.find((p) => p.isHost) || players[0] || {
       id: hostId,
-      name: language === 'en' ? 'Host (Danny)' : 'מארח/ת (דני)',
+      name: language === 'en' ? 'Host' : 'מארח/ת',
       avatar: '👑',
     };
 
     // 3. Immediately prepare serverTurnData so host sees:
-    // Selected image, secret word, 4 response buttons ("כן", "לא", "חם", "קר"), and "התחל סיבוב! 🚀"
+    // Selected image, secret word, response buttons ("כן", "לא", "חם", "קר"), and "התחל סיבוב! 🚀"
     // The timer on the picture stands in waiting (roundStatus: 'waiting') until host clicks "התחל סיבוב! 🚀"
     setServerTurnData({
       isHolder: true,
@@ -515,25 +592,21 @@ export default function App() {
       players: players.map((p, idx) => ({ ...p, isHolder: idx === 0, isOnline: true })),
     });
 
-    // 4. Broadcast START_GAME to the socket server with host's deck and selected initial card
-    const socket = getGameSocket();
-    socket.emit('START_GAME', {
-      pin,
-      sessionToken: getSessionToken(),
-      turnDuration: settings.turnDuration,
-      language,
-      deck: activeDeck,
-      initialCard: {
-        cardId: firstCard.id,
-        category: language === 'en' ? (firstCard.category_en || firstCard.category) : firstCard.category,
-        wordLength: firstWord.length,
-        word: firstWord,
-        imageUrl: firstCard.imageUrl || firstCard.image,
-        image: firstCard.imageUrl || firstCard.image,
-        fallback: firstCard.fallback,
-        hint: language === 'en' ? (firstCard.hint_en || firstCard.hint) : firstCard.hint,
-      },
-    });
+    // 4. Broadcast game_start via Supabase Realtime channel
+    const channel = getCurrentSupabaseChannel();
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'game_start',
+        payload: {
+          holderId: hostPlayer.id,
+          holderName: hostPlayer.name,
+          holderAvatar: hostPlayer.avatar || '👑',
+          turnDuration: settings.turnDuration,
+          cardIndex: 0,
+        },
+      });
+    }
   };
 
   const handleQuickStart = useCallback(() => {
@@ -567,29 +640,31 @@ export default function App() {
     }
   }, []);
 
-  // Player joins room with immediate transition & guaranteed background sync
+  // Player joins room with immediate transition & Supabase Realtime presence connection
   const handleJoinGame = (
     enteredPin: string,
     playerName: string,
     avatar: string,
     _onError?: (err: string) => void
   ) => {
+    const cleanPin = enteredPin.trim();
+
     // 1. Immediately save player profile & room PIN
     try {
-      localStorage.setItem('player_name', playerName);
+      localStorage.setItem('player_name', playerName.trim());
       localStorage.setItem('player_avatar', avatar);
-      localStorage.setItem('ttg_room_pin', enteredPin);
+      localStorage.setItem('ttg_room_pin', cleanPin);
     } catch (e) {}
 
     const newPlayerId = 'p-' + Math.random().toString(36).substring(2, 9);
-    setPin(enteredPin);
+    setPin(cleanPin);
     setMyPlayerId(newPlayerId);
 
     // 2. Set joining player locally until room state syncs real connected players
     setPlayers([
       {
         id: newPlayerId,
-        name: playerName,
+        name: playerName.trim(),
         avatar,
         score: 0,
         streak: 0,
@@ -599,7 +674,7 @@ export default function App() {
     ]);
 
     // 3. Immediately set initial game state for guesser: mystery card, waiting timer, host holding
-    // Guesser NEVER draws an independent local card; waits for authoritative room state from host/server!
+    // Default wordLength: 4 ensures boxes are ALWAYS visible from the very first frame!
     setServerTurnData({
       cardIndex: 0,
       totalCards: 50,
@@ -617,7 +692,7 @@ export default function App() {
       word: null,
       category: '',
       hint: null,
-      wordLength: 0,
+      wordLength: 4,
       players: [],
     });
 
@@ -625,86 +700,12 @@ export default function App() {
     setJoinedRoom(true);
     setScreen('game');
 
-    // Clean up URL query parameters
+    // Keep URL query parameter synchronized with active room PIN
     try {
       const url = new URL(window.location.href);
-      url.searchParams.delete('pin');
-      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+      url.searchParams.set('pin', cleanPin);
+      window.history.replaceState({}, '', url.toString());
     } catch (e) {}
-
-    // 5. Asynchronous background WebSockets connection (resilient & non-blocking)
-    try {
-      const socket = getGameSocket();
-      const token = getSessionToken();
-
-      socket.emit(
-        'JOIN_ROOM',
-        {
-          pin: enteredPin,
-          name: playerName,
-          avatar,
-          sessionToken: token,
-        },
-        (res: { success: boolean; pin?: string; player?: Player; room?: { players: Player[]; status: string }; roomState?: RoomStatePayload; error?: string }) => {
-          if (res?.player?.id) {
-            setMyPlayerId(res.player.id);
-            try {
-              localStorage.setItem('ttg_player_id', res.player.id);
-            } catch (e) {}
-          }
-          if (res?.success && res.roomState) {
-            setPin(res.roomState.pin);
-            setPlayers(
-              res.roomState.players.map((p) => ({
-                id: p.id,
-                name: p.name,
-                avatar: p.icon || p.avatar || '🦁',
-                score: p.score ?? 0,
-                streak: p.streak ?? 0,
-                isHost: p.isHost ?? false,
-                isOnline: p.isOnline ?? true,
-              }))
-            );
-            setActivePlayerIndex(res.roomState.currentHolderIndex);
-            setCurrentCardIndex(res.roomState.cardIndex);
-            setServerTurnData({
-              isHolder: res.roomState.isHolder,
-              roundStatus: res.roomState.roundStatus,
-              roundEndsAt: res.roomState.roundEndsAt || 0,
-              turnEndTime: res.roomState.roundEndsAt || 0,
-              turnDuration: res.roomState.turnDuration || settings.turnDuration,
-              cardIndex: res.roomState.cardIndex,
-              totalCards: 50,
-              holderId: res.roomState.holderId,
-              holderName: res.roomState.holderName,
-              holderAvatar: res.roomState.holderAvatar,
-              cardId: res.roomState.currentCard.id,
-              image: res.roomState.currentCard.imageUrl || res.roomState.currentCard.image || null,
-              imageUrl: res.roomState.currentCard.imageUrl || res.roomState.currentCard.image || null,
-              fallback: res.roomState.currentCard.fallback || null,
-              word: res.roomState.currentCard.word || null,
-              category: res.roomState.currentCard.category,
-              hint: res.roomState.currentCard.hint || null,
-              wordLength: res.roomState.currentCard.wordLength,
-              players: res.roomState.players.map((p) => ({
-                ...p,
-                avatar: p.icon || p.avatar || '🦁',
-                isHolder: p.id === res.roomState!.holderId,
-                isOnline: p.isOnline ?? true,
-              })),
-            });
-          } else if (res?.success && res.player && res.room) {
-            setPin(res.pin || enteredPin);
-            setMyPlayerId(res.player.id);
-            if (res.room.players && res.room.players.length > 0) {
-              setPlayers(res.room.players);
-            }
-          }
-        }
-      );
-    } catch (err) {
-      console.warn('Background JOIN_ROOM sync notice:', err);
-    }
   };
 
   const handleCardSolved = useCallback((winnerPlayerId: string, bonusPoints: number) => {
@@ -831,7 +832,7 @@ export default function App() {
   }, []);
 
   const currentPinFromUrl = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('pin') : null) || initialPinParam || getPinFromUrl();
-  const activePlayer = players[activePlayerIndex] || players[0];
+  const activePlayer = players[activePlayerIndex] || players[0] || { id: 'p-host', name: 'מארח', avatar: '👑', score: 0, streak: 0, isHost: true, isOnline: true };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-3 sm:p-5 bg-gradient-to-br from-[#120E2E] via-[#2A1045] to-[#0A0D1A] text-white relative overflow-hidden">
