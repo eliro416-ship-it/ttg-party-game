@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { CardItem, Player, Language, VoiceGender } from '../types/game';
 import { VirtualKeyboard } from './VirtualKeyboard';
+import { GameTimer } from './GameTimer';
 import { normalizeHebrewInput, lettersMatch } from '../utils/hebrewKeyboard';
 import { sounds } from '../utils/audio';
 import { translations } from '../utils/translations';
@@ -64,6 +65,7 @@ interface GameTableProps {
   cards: CardItem[];
   currentCardIndex: number;
   players: Player[];
+  currentHolderId?: string;
   activePlayerId: string;
   myPlayerId: string;
   turnDuration: number;
@@ -87,6 +89,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   cards,
   currentCardIndex,
   players,
+  currentHolderId,
   activePlayerId,
   myPlayerId,
   turnDuration = 15,
@@ -121,19 +124,29 @@ export const GameTable: React.FC<GameTableProps> = ({
     onChangeVoiceGender?.(gender);
   };
 
-  // In Live Server mode:
-  // Separate technical host from active turn holder (currentHolderId):
-  // Non-host players joining room are ALWAYS guessers unless serverTurnData explicitly specifies them as holder
-  const isServerHolder = useMemo(() => {
-    if (serverTurnData && serverTurnData.holderId) {
-      return serverTurnData.holderId === myPlayerId;
+  // User Requirement 2: Strict Role Check
+  // 1. Stable, unambiguous local player ID
+  const activeMyPlayerId = String(
+    myPlayerId || (typeof window !== 'undefined' ? localStorage.getItem('ttg_player_id') : '') || 'p-host'
+  ).trim();
+
+  // 2. Authoritative currentHolderId tracking across round turns & events
+  const [liveHolderId, setLiveHolderId] = useState<string>(() => {
+    return String(currentHolderId || serverTurnData?.holderId || 'p-host').trim();
+  });
+
+  useEffect(() => {
+    const nextHolder = currentHolderId || serverTurnData?.holderId;
+    if (nextHolder) {
+      setLiveHolderId(String(nextHolder).trim());
     }
-    if (serverTurnData && typeof serverTurnData.isHolder === 'boolean') {
-      return serverTurnData.isHolder;
-    }
-    const isMeHost = myPlayerId === 'p-host' || Boolean(players.find((p) => p.id === myPlayerId)?.isHost);
-    return isMeHost;
-  }, [serverTurnData, myPlayerId, players]);
+  }, [currentHolderId, serverTurnData?.holderId]);
+
+  const effectiveHolderId = String(currentHolderId || liveHolderId || serverTurnData?.holderId || 'p-host').trim();
+
+  // 3. Clean comparison: const isHolder = String(myPlayerId) === String(currentHolderId);
+  const isHolder = activeMyPlayerId === effectiveHolderId;
+  const isCurrentClientHolder = isHolder;
 
   // Active players: Server authoritative list (strictly connected players), ranked by score
   const activePlayers = useMemo(() => {
@@ -142,11 +155,6 @@ export const GameTable: React.FC<GameTableProps> = ({
       : players;
     return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   }, [serverTurnData?.players, players]);
-
-  // Role Simulation toggle for single-screen / solo demo testing
-  const [simulatedRole, setSimulatedRole] = useState<'holder' | 'guesser' | null>(null);
-
-  const isCurrentClientHolder = simulatedRole ? simulatedRole === 'holder' : isServerHolder;
 
   // Active card and words (client fallback for holder or server authoritative payload)
   const currentCard = cards[currentCardIndex] || cards[0];
@@ -198,20 +206,12 @@ export const GameTable: React.FC<GameTableProps> = ({
     : (syncedRoundCard?.category || serverTurnData?.category || (isEn ? 'Category' : 'קטגוריה'));
 
   const activeHint = serverTurnData?.hint || (isCurrentClientHolder ? (isEn ? (currentCard.hint_en || currentCard.hint) : currentCard.hint) : null);
-  const activeHolderName = serverTurnData?.holderName || activePlayers.find(p => p.id === activePlayerId)?.name || 'מחזיק';
-  const activeHolderAvatar = serverTurnData?.holderAvatar || activePlayers.find(p => p.id === activePlayerId)?.avatar || '👑';
+  const activeHolder = activePlayers.find((p) => p.id === effectiveHolderId);
+  const activeHolderName = serverTurnData?.holderName || activeHolder?.name || (isEn ? 'Host' : 'מארח/ת');
+  const activeHolderAvatar = serverTurnData?.holderAvatar || activeHolder?.avatar || '👑';
 
-  const [enteredLetters, setEnteredLetters] = useState<string[]>(() => new Array(wordLength).fill(''));
-  const [activeBoxIndex, setActiveBoxIndex] = useState<number>(0);
-
-  // Guarantee boxes are kept in sync whenever wordLength changes
-  useEffect(() => {
-    setEnteredLetters((prev) => {
-      if (prev.length === wordLength) return prev;
-      return new Array(wordLength).fill('');
-    });
-  }, [wordLength]);
-  const [timeLeft, setTimeLeft] = useState<number>(turnDuration);
+  // User's active typed guess: isolated and resilient against timer & sync ticks
+  const [currentGuess, setCurrentGuess] = useState<string>('');
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [showHintText, setShowHintText] = useState<boolean>(Boolean(serverTurnData?.hint));
@@ -232,7 +232,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const currentRoundStatus: 'waiting' | 'active' | 'ended' = roundStatus;
   const currentRoundEndsAt: number = roundEndsAt;
 
-  // Sync from incoming serverTurnData updates
+  // Sync from incoming serverTurnData updates (preserves currentGuess!)
   useEffect(() => {
     if (serverTurnData) {
       if (serverTurnData.roundStatus) {
@@ -241,12 +241,8 @@ export const GameTable: React.FC<GameTableProps> = ({
       const end = serverTurnData.roundEndsAt || serverTurnData.turnEndTime || 0;
       setRoundEndsAt(end);
 
-      if (serverTurnData.roundStatus === 'active' && end > 0) {
-        const remaining = Math.max(0, Math.floor((end - Date.now()) / 1000));
-        setTimeLeft(remaining);
+      if (serverTurnData.roundStatus === 'active') {
         isHandledRef.current = false;
-      } else if (serverTurnData.roundStatus === 'waiting') {
-        setTimeLeft(serverTurnData.turnDuration || turnDuration);
       }
 
       if (serverTurnData.wordLength || serverTurnData.category) {
@@ -256,18 +252,9 @@ export const GameTable: React.FC<GameTableProps> = ({
           wordLength: serverTurnData.wordLength,
           wordHash: serverTurnData.wordHash,
         });
-
-        // Ensure boxes are filled with exact length for guesser
-        if (serverTurnData.wordLength && serverTurnData.wordLength > 0) {
-          setEnteredLetters((prev) => {
-            if (prev.length === serverTurnData.wordLength) return prev;
-            return new Array(serverTurnData.wordLength).fill('');
-          });
-          setActiveBoxIndex(0);
-        }
       }
     }
-  }, [serverTurnData, turnDuration]);
+  }, [serverTurnData]);
 
   const isHost = players.find(p => p.id === myPlayerId)?.isHost || myPlayerId === 'p-host';
 
@@ -335,7 +322,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     };
   }, [wordLength]);
 
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const isHandledRef = useRef<boolean>(false);
   const serverTimeOffsetRef = useRef<number>(0);
 
@@ -384,9 +370,12 @@ export const GameTable: React.FC<GameTableProps> = ({
       const end = payload.roundEndsAt;
       setRoundEndsAt(end);
       setRoundStatus('active');
-      const remainingSeconds = Math.max(0, Math.floor((end - Date.now()) / 1000));
-      setTimeLeft(remainingSeconds);
+      if (payload.holderId) {
+        setLiveHolderId(String(payload.holderId));
+      }
       isHandledRef.current = false;
+      setCurrentGuess('');
+      setIsSuccess(false);
 
       if (payload.wordLength || payload.category || payload.cardId) {
         setSyncedRoundCard({
@@ -395,16 +384,15 @@ export const GameTable: React.FC<GameTableProps> = ({
           wordLength: payload.wordLength,
           wordHash: payload.wordHash,
         });
-        if (payload.wordLength && payload.wordLength > 0) {
-          setEnteredLetters(new Array(payload.wordLength).fill(''));
-          setActiveBoxIndex(0);
-        }
       }
     });
 
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload: CorrectGuessPayload) => {
       sounds.soundSuccess();
       setIsSuccess(true);
+      if (payload.nextHolderId) {
+        setLiveHolderId(String(payload.nextHolderId));
+      }
       setWinnerCelebration({
         winnerId: payload.winnerId,
         winnerName: payload.winnerName,
@@ -420,11 +408,15 @@ export const GameTable: React.FC<GameTableProps> = ({
       setTimeout(() => {
         setWinnerCelebration(null);
         setIsSuccess(false);
+        setCurrentGuess('');
       }, 2500);
     });
 
     const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload: TurnTimeoutPayload) => {
       sounds.soundError();
+      if (payload.nextHolderId) {
+        setLiveHolderId(String(payload.nextHolderId));
+      }
       setRoundStatus('waiting');
       setRoundEndsAt(0);
       setWinnerCelebration({
@@ -438,29 +430,32 @@ export const GameTable: React.FC<GameTableProps> = ({
       });
       setTimeout(() => {
         setWinnerCelebration(null);
+        setCurrentGuess('');
       }, 2400);
     });
 
     const unsubSyncState = addSupabaseListener('sync_state', (payload: SyncStatePayload) => {
+      if (payload.holderId) {
+        setLiveHolderId(String(payload.holderId));
+      }
       if (payload.wordLength || payload.category || payload.cardId) {
-        setSyncedRoundCard({
-          cardId: payload.cardId,
-          category: payload.category,
-          wordLength: payload.wordLength,
-          wordHash: payload.wordHash,
+        setSyncedRoundCard((prev) => {
+          if (prev?.cardId === payload.cardId && prev?.wordLength === payload.wordLength) {
+            return prev;
+          }
+          return {
+            cardId: payload.cardId,
+            category: payload.category,
+            wordLength: payload.wordLength,
+            wordHash: payload.wordHash,
+          };
         });
-        if (payload.wordLength && payload.wordLength > 0) {
-          setEnteredLetters(new Array(payload.wordLength).fill(''));
-          setActiveBoxIndex(0);
-        }
       }
       if (payload.roundStatus) {
         setRoundStatus(payload.roundStatus);
       }
       if (payload.roundEndsAt && payload.roundStatus === 'active') {
         setRoundEndsAt(payload.roundEndsAt);
-        const remaining = Math.max(0, Math.floor((payload.roundEndsAt - Date.now()) / 1000));
-        setTimeLeft(remaining);
         isHandledRef.current = false;
       }
     });
@@ -504,132 +499,76 @@ export const GameTable: React.FC<GameTableProps> = ({
     };
   }, [t, isEn, language, currentVoiceGender, isCurrentClientHolder, activeCategory, localTargetWord, currentRoundEndsAt, myPlayerId, activeHolderName, activeHolderAvatar, currentRoundStatus, currentCardIndex, currentCard.id, serverTurnData?.turnDuration, turnDuration]);
 
-  // Reset local state ONLY when turn, card, or wordLength actually changes
-  const lastTurnSignatureRef = useRef<string>('');
-
+  // Reset local guess state ONLY when card/round actually changes
+  const lastCardIdRef = useRef<string>('');
   useEffect(() => {
-    const currentSignature = `${serverTurnData?.holderId || activePlayerId}_${serverTurnData?.cardId || currentCardIndex}_${wordLength}_${serverTurnData?.cardIndex || 0}`;
-    const hasTurnChanged = lastTurnSignatureRef.current !== currentSignature;
-
-    if (hasTurnChanged) {
-      lastTurnSignatureRef.current = currentSignature;
+    const activeCardId = serverTurnData?.cardId || currentCard.id || String(currentCardIndex);
+    if (lastCardIdRef.current !== activeCardId) {
+      lastCardIdRef.current = activeCardId;
       isHandledRef.current = false;
-      const activeLength = wordLength;
-      if (activeLength > 0) {
-        setEnteredLetters(new Array(activeLength).fill(''));
-      } else {
-        setEnteredLetters([]);
-      }
-      setActiveBoxIndex(0);
+      setCurrentGuess('');
       setIsSuccess(false);
       setIsShaking(false);
       setShowHintText(Boolean(serverTurnData?.hint));
       setRevealedIndices([]);
       setLastReaction(null);
-      setSimulatedRole(null);
-
-      const focusTimer = setTimeout(() => {
-        if (inputRefs.current[0]) {
-          inputRefs.current[0]?.focus();
-        }
-      }, 150);
-
-      return () => clearTimeout(focusTimer);
     }
+  }, [serverTurnData?.cardId, currentCard.id, currentCardIndex, serverTurnData?.hint]);
+
+  // Isolated time-up handler invoked when GameTimer reaches 0s
+  const handleTimeUp = useCallback(() => {
+    if (isHandledRef.current) return;
+    isHandledRef.current = true;
+    setRoundStatus('waiting');
+    setRoundEndsAt(0);
+
+    sounds.soundError();
+    const currentHolderId = serverTurnData?.holderId || activePlayerId;
+    const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
+    const nextIndex = (currentIndex >= 0 ? currentIndex + 1 : 0) % (activePlayers.length || 1);
+    const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
+    const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
+
+    setWinnerCelebration({
+      winnerId: '',
+      winnerName: isEn ? 'Time is up!' : 'הזמן נגמר!',
+      winnerAvatar: '⏱️',
+      word: targetWord || localTargetWord,
+      image: currentCard.imageUrl || currentCard.image,
+      points: 0,
+      scores: [],
+    });
+
+    if (isCurrentClientHolder) {
+      broadcastTurnTimeout({
+        word: targetWord || localTargetWord,
+        imageUrl: currentCard.imageUrl || currentCard.image,
+        reason: 'time_up',
+        nextHolderId: nextHolder.id,
+        nextIndex,
+        nextCardIndex,
+      });
+    }
+
+    setTimeout(() => {
+      setWinnerCelebration(null);
+      setCurrentGuess('');
+      onCardTimeout();
+    }, 2400);
   }, [
+    isCurrentClientHolder,
     serverTurnData?.holderId,
     activePlayerId,
-    serverTurnData?.cardId,
-    currentCardIndex,
-    wordLength,
-    serverTurnData?.cardIndex,
-    serverTurnData?.hint,
-  ]);
-
-  // Server-Synchronized Timer Countdown with clock-drift compensation
-  useEffect(() => {
-    if (isSuccess || winnerCelebration) return;
-
-    if (roundStatus !== 'active' || !roundEndsAt) {
-      // Waiting state: timer stands at the chosen turn duration and DOES NOT RUN!
-      setTimeLeft(serverTurnData?.turnDuration || turnDuration);
-      return;
-    }
-
-    const updateCountdown = () => {
-      // Server/Host Timestamp Sync with clock-drift cancellation:
-      const currentServerTime = Date.now() + serverTimeOffsetRef.current;
-      const msRemaining = roundEndsAt - currentServerTime;
-      const remainingSeconds = Math.max(0, Math.ceil(msRemaining / 1000));
-      setTimeLeft(remainingSeconds);
-
-      if (remainingSeconds <= 4 && remainingSeconds > 0) {
-        sounds.soundTick();
-      }
-
-      if (remainingSeconds === 0) {
-        if (!isHandledRef.current) {
-          isHandledRef.current = true;
-          setRoundStatus('waiting');
-          setRoundEndsAt(0);
-
-          sounds.soundError();
-          const currentHolderId = serverTurnData?.holderId || activePlayerId;
-          const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
-          const nextIndex = (currentIndex >= 0 ? (currentIndex + 1) : 0) % (activePlayers.length || 1);
-          const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
-          const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
-
-          setWinnerCelebration({
-            winnerId: '',
-            winnerName: isEn ? 'Time is up!' : 'הזמן נגמר!',
-            winnerAvatar: '⏱️',
-            word: targetWord || localTargetWord,
-            image: currentCard.imageUrl || currentCard.image,
-            points: 0,
-            scores: [],
-          });
-
-          if (isCurrentClientHolder) {
-            broadcastTurnTimeout({
-              word: targetWord || localTargetWord,
-              imageUrl: currentCard.imageUrl || currentCard.image,
-              reason: 'time_up',
-              nextHolderId: nextHolder.id,
-              nextIndex,
-              nextCardIndex,
-            });
-          }
-
-          setTimeout(() => {
-            setWinnerCelebration(null);
-            onCardTimeout();
-          }, 2400);
-        }
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 250);
-
-    return () => clearInterval(interval);
-  }, [
-    isSuccess,
-    winnerCelebration,
-    roundStatus,
-    roundEndsAt,
-    serverTurnData?.turnDuration,
-    turnDuration,
-    targetWord,
-    currentCard,
-    onCardTimeout,
-    isCurrentClientHolder,
     activePlayers,
-    activePlayerId,
+    myPlayerId,
     currentCardIndex,
     cards.length,
-    localTargetWord,
     isEn,
+    targetWord,
+    localTargetWord,
+    currentCard.imageUrl,
+    currentCard.image,
+    onCardTimeout,
   ]);
 
   // Room PIN resolution: strictly network room PIN, zero Solo mode
@@ -681,11 +620,11 @@ export const GameTable: React.FC<GameTableProps> = ({
     const roundEndTime = Date.now() + duration * 1000;
     const word = localTargetWord;
 
-    // 1. Immediately update host/holder local state with 0ms delay:
+    // 1. Immediately update host/holder local state:
     setRoundEndsAt(roundEndTime);
     setRoundStatus('active');
-    setTimeLeft(duration);
     isHandledRef.current = false;
+    setCurrentGuess('');
 
     // 2. Broadcast 'round_start' event across Supabase Realtime channel
     broadcastRoundStart({
@@ -702,66 +641,24 @@ export const GameTable: React.FC<GameTableProps> = ({
     });
   };
 
-  // Handle letter input
-  const handleLetterInput = (letter: string, atIndex: number) => {
-    if (isSuccess || !letter) return;
-
-    sounds.soundKeypress();
-
-    const charToInsert = isEn ? letter.toUpperCase() : letter;
-    const newLetters = [...enteredLetters];
-    newLetters[atIndex] = charToInsert;
-    setEnteredLetters(newLetters);
-
-    // Advance to next empty box
-    let nextIndex = atIndex + 1;
-    while (nextIndex < wordLength && newLetters[nextIndex] !== '') {
-      nextIndex++;
-    }
-
-    if (nextIndex < wordLength) {
-      setActiveBoxIndex(nextIndex);
-      inputRefs.current[nextIndex]?.focus();
-    }
-
-    // If word is completely filled, submit for validation if round is active
-    const fullWord = newLetters.join('');
-    if (fullWord.length === wordLength && !newLetters.includes('')) {
-      if (currentRoundStatus === 'active') {
-        submitGuess(fullWord, newLetters);
-      }
-    }
-  };
-
-  const handleBackspace = (atIndex: number) => {
-    if (isSuccess) return;
-
-    const newLetters = [...enteredLetters];
-    if (newLetters[atIndex]) {
-      newLetters[atIndex] = '';
-      setEnteredLetters(newLetters);
-    } else if (atIndex > 0) {
-      newLetters[atIndex - 1] = '';
-      setEnteredLetters(newLetters);
-      setActiveBoxIndex(atIndex - 1);
-      inputRefs.current[atIndex - 1]?.focus();
-    }
-  };
-
   // Submit guess with Supabase Realtime validation & turn rotation
-  const submitGuess = (fullWord: string, currentLetters: string[]) => {
+  const submitGuess = useCallback((guessWord: string) => {
+    if (isSuccess || isHandledRef.current) return;
+
     let isMatch = false;
     if (syncedRoundCard?.wordHash) {
-      isMatch = matchesWordHash(fullWord, syncedRoundCard.wordHash);
+      isMatch = matchesWordHash(guessWord, syncedRoundCard.wordHash);
     } else if (targetWord) {
       if (isEn) {
-        isMatch = fullWord.toUpperCase() === targetWord.toUpperCase();
+        isMatch = guessWord.toUpperCase() === targetWord.toUpperCase();
       } else {
-        isMatch = true;
-        for (let i = 0; i < targetWord.length; i++) {
-          if (!lettersMatch(currentLetters[i], targetWord[i])) {
-            isMatch = false;
-            break;
+        isMatch = guessWord.length === targetWord.length;
+        if (isMatch) {
+          for (let i = 0; i < targetWord.length; i++) {
+            if (!lettersMatch(guessWord[i], targetWord[i])) {
+              isMatch = false;
+              break;
+            }
           }
         }
       }
@@ -774,7 +671,8 @@ export const GameTable: React.FC<GameTableProps> = ({
       setRoundStatus('waiting');
       setRoundEndsAt(0);
 
-      const bonus = Math.max(1, Math.floor(timeLeft / 3));
+      const secondsRemaining = currentRoundEndsAt > 0 ? Math.max(0, Math.floor((currentRoundEndsAt - Date.now()) / 1000)) : 0;
+      const bonus = Math.max(1, Math.floor(secondsRemaining / 3));
       const points = 10 + bonus;
       const winnerId = myPlayerId;
       const winner = activePlayers.find((p) => p.id === winnerId);
@@ -782,7 +680,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       // Turn Rotation: next participant in activePlayers cyclically:
       const currentHolderId = serverTurnData?.holderId || activePlayerId;
       const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
-      const nextIndex = (currentIndex >= 0 ? (currentIndex + 1) : 0) % (activePlayers.length || 1);
+      const nextIndex = (currentIndex >= 0 ? currentIndex + 1 : 0) % (activePlayers.length || 1);
       const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
       const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
 
@@ -790,7 +688,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         winnerId,
         winnerName: winner?.name || (isEn ? 'Winner!' : 'ניצחון!'),
         winnerAvatar: winner?.avatar || '🎉',
-        word: fullWord,
+        word: guessWord,
         image: currentCard.imageUrl || currentCard.image,
         points,
         scores: [],
@@ -800,7 +698,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         winnerId,
         winnerName: winner?.name || (isEn ? 'Winner!' : 'ניצחון!'),
         winnerAvatar: winner?.avatar || '🎉',
-        word: fullWord,
+        word: guessWord,
         imageUrl: currentCard.imageUrl || currentCard.image,
         points,
         nextHolderId: nextHolder.id,
@@ -821,6 +719,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       setTimeout(() => {
         setWinnerCelebration(null);
         setIsSuccess(false);
+        setCurrentGuess('');
         onCardSolved(winnerId, bonus);
       }, 2500);
     } else {
@@ -828,12 +727,52 @@ export const GameTable: React.FC<GameTableProps> = ({
       setIsShaking(true);
       setTimeout(() => {
         setIsShaking(false);
-        setEnteredLetters(new Array(wordLength).fill(''));
-        setActiveBoxIndex(0);
-        inputRefs.current[0]?.focus();
+        setCurrentGuess('');
       }, 500);
     }
-  };
+  }, [
+    isSuccess,
+    syncedRoundCard?.wordHash,
+    targetWord,
+    isEn,
+    currentRoundEndsAt,
+    myPlayerId,
+    activePlayers,
+    serverTurnData?.holderId,
+    activePlayerId,
+    currentCardIndex,
+    cards.length,
+    currentCard.imageUrl,
+    currentCard.image,
+    onCardSolved,
+  ]);
+
+  // Handle letter typing from virtual keyboard or physical keyboard
+  const handleKeyPress = useCallback((letter: string) => {
+    if (isSuccess || winnerCelebration) return;
+    if (isCurrentClientHolder) return;
+    if (currentRoundStatus !== 'active') return;
+
+    const char = isEn ? letter.toUpperCase() : (normalizeHebrewInput(letter) || letter);
+    if (!char) return;
+
+    setCurrentGuess((prev) => {
+      if (prev.length >= wordLength) return prev;
+      const nextGuess = prev + char;
+      if (nextGuess.length === wordLength) {
+        setTimeout(() => {
+          submitGuess(nextGuess);
+        }, 40);
+      }
+      return nextGuess;
+    });
+  }, [isSuccess, winnerCelebration, isCurrentClientHolder, currentRoundStatus, isEn, wordLength, submitGuess]);
+
+  // Handle backspace
+  const handleBackspace = useCallback(() => {
+    if (isSuccess || winnerCelebration) return;
+    setCurrentGuess((prev) => prev.slice(0, -1));
+  }, [isSuccess, winnerCelebration]);
 
   // Physical keyboard listener
   useEffect(() => {
@@ -844,35 +783,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       if (e.key === 'Backspace') {
         e.preventDefault();
-        handleBackspace(activeBoxIndex);
-        return;
-      }
-
-      if (e.key === 'ArrowRight' && activeBoxIndex < wordLength - 1 && isEn) {
-        e.preventDefault();
-        setActiveBoxIndex(activeBoxIndex + 1);
-        inputRefs.current[activeBoxIndex + 1]?.focus();
-        return;
-      }
-
-      if (e.key === 'ArrowLeft' && activeBoxIndex > 0 && isEn) {
-        e.preventDefault();
-        setActiveBoxIndex(activeBoxIndex - 1);
-        inputRefs.current[activeBoxIndex - 1]?.focus();
-        return;
-      }
-
-      if (e.key === 'ArrowRight' && activeBoxIndex > 0 && !isEn) {
-        e.preventDefault();
-        setActiveBoxIndex(activeBoxIndex - 1);
-        inputRefs.current[activeBoxIndex - 1]?.focus();
-        return;
-      }
-
-      if (e.key === 'ArrowLeft' && activeBoxIndex < wordLength - 1 && !isEn) {
-        e.preventDefault();
-        setActiveBoxIndex(activeBoxIndex + 1);
-        inputRefs.current[activeBoxIndex + 1]?.focus();
+        handleBackspace();
         return;
       }
 
@@ -882,14 +793,14 @@ export const GameTable: React.FC<GameTableProps> = ({
           if (/^[a-zA-Z]$/.test(e.key)) {
             e.preventDefault();
             sounds.soundKeypress();
-            handleLetterInput(e.key.toUpperCase(), activeBoxIndex);
+            handleKeyPress(e.key.toUpperCase());
           }
         } else {
           const hebrewChar = normalizeHebrewInput(e.key);
           if (hebrewChar) {
             e.preventDefault();
             sounds.soundKeypress();
-            handleLetterInput(hebrewChar, activeBoxIndex);
+            handleKeyPress(hebrewChar);
           }
         }
       }
@@ -897,7 +808,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeBoxIndex, enteredLetters, wordLength, isSuccess, winnerCelebration, targetWord, isCurrentClientHolder, isEn]);
+  }, [handleKeyPress, handleBackspace, isSuccess, winnerCelebration, isCurrentClientHolder, isEn]);
 
   // Holder sends reaction to all devices via Supabase Realtime broadcast
   const sendHolderReaction = (reaction: 'yes' | 'no' | 'hot' | 'cold', label: string) => {
@@ -951,8 +862,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     });
     setShowTimerPicker(false);
   };
-
-  const timerPercentage = Math.max(0, Math.min(100, (timeLeft / (serverTurnData?.turnDuration || turnDuration)) * 100));
 
   return (
     <div className="w-full flex flex-col items-center animate-fadeIn select-none relative" dir={isEn ? 'ltr' : 'rtl'}>
@@ -1097,46 +1006,17 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       {/* Main Game Display Frame */}
       <div className="w-full relative rounded-3xl overflow-hidden border-2 border-white/20 shadow-2xl bg-slate-900 mb-2 group aspect-[4/3] max-h-[220px] sm:max-h-[240px] flex items-center justify-center">
-        {/* Floating Overlay Timer Badge inside the image frame */}
-        <div
-          className={`absolute top-3 ${isEn ? 'right-3' : 'left-3'} z-20 flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border shadow-xl transition-all ${
-            timeLeft <= 4 ? 'border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.6)]' : 'border-white/20'
-          }`}
-        >
-          <TimerIcon
-            className={`w-3.5 h-3.5 ${
-              currentRoundStatus === 'waiting'
-                ? 'text-amber-400'
-                : timeLeft <= 4
-                ? 'text-rose-400 animate-pulse'
-                : 'text-emerald-400'
-            }`}
-            strokeWidth={2.4}
+        {/* Floating Overlay Timer Badge inside the image frame (Isolated component - zero screen re-renders) */}
+        <div className={`absolute top-3 ${isEn ? 'right-3' : 'left-3'} z-20`}>
+          <GameTimer
+            roundStatus={currentRoundStatus}
+            roundEndsAt={currentRoundEndsAt}
+            turnDuration={serverTurnData?.turnDuration || turnDuration}
+            isEn={isEn}
+            onTimeUp={handleTimeUp}
+            showTimerPicker={showTimerPicker}
+            onToggleTimerPicker={() => setShowTimerPicker((prev) => !prev)}
           />
-          <span
-            className={`font-mono font-black text-xs sm:text-sm tracking-tight ${
-              currentRoundStatus === 'waiting'
-                ? 'text-amber-300'
-                : timeLeft <= 4
-                ? 'text-rose-400 animate-ping font-extrabold'
-                : 'text-white'
-            }`}
-          >
-            {currentRoundStatus === 'waiting' ? (turnDuration === 60 ? '1m' : `${turnDuration}s`) : `${timeLeft}s`}
-          </span>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              sounds.soundKeypress();
-              setShowTimerPicker(!showTimerPicker);
-            }}
-            title={isEn ? 'Change turn timer' : 'שנה זמן טיימר'}
-            className="text-slate-400 hover:text-pink-300 transition-colors cursor-pointer"
-          >
-            <Settings className="w-3 h-3" strokeWidth={2} />
-          </button>
         </div>
 
         {isCurrentClientHolder ? (
@@ -1417,51 +1297,41 @@ export const GameTable: React.FC<GameTableProps> = ({
             dir={isEn ? 'ltr' : 'rtl'}
           >
             {Array.from({ length: wordLength }).map((_, index) => {
-              const letter = enteredLetters[index] || '';
+              const letter = currentGuess[index] || '';
               const isRevealedByHint = revealedIndices.includes(index);
-              const isCurrentFocus = activeBoxIndex === index;
+              const isCurrentFocus = currentGuess.length === index && currentRoundStatus === 'active';
 
               return (
-                <input
+                <div
                   key={index}
-                  ref={(el) => {
-                    inputRefs.current[index] = el;
-                  }}
-                  type="text"
-                  readOnly
-                  maxLength={1}
-                  value={letter}
-                  placeholder={isWaitingForWordLength ? '•' : ''}
-                  onClick={() => {
-                    setActiveBoxIndex(index);
-                    sounds.soundKeypress();
-                  }}
                   style={boxConfig.style}
-                  className={`min-w-0 shrink-0 p-0 text-center font-black select-none uppercase transition-all cursor-pointer leading-none flex items-center justify-center ${
+                  className={`min-w-0 shrink-0 p-0 text-center font-black select-none uppercase transition-all leading-none flex items-center justify-center ${
                     boxConfig.boxClass
                   } ${
                     isSuccess
                       ? 'bg-emerald-500/30 border-2 border-emerald-400 text-emerald-100 scale-105 shadow-lg shadow-emerald-500/30 z-10'
                       : isCurrentFocus
-                      ? 'bg-pink-500/25 border-2 border-pink-400 text-white -translate-y-1 shadow-[0_0_15px_rgba(244,114,182,0.5)] ring-2 ring-pink-400/80 z-10'
+                      ? 'bg-pink-500/25 border-2 border-pink-400 text-white -translate-y-1 shadow-[0_0_15px_rgba(244,114,182,0.5)] ring-2 ring-pink-400/80 z-10 animate-pulse'
                       : letter
-                      ? 'bg-white/15 border-2 border-white/30 text-white'
+                      ? 'bg-white/15 border-2 border-white/40 text-white shadow-sm'
                       : isWaitingForWordLength
                       ? 'bg-white/5 border-2 border-white/20 text-white/30 animate-pulse'
-                      : 'bg-white/5 border-2 border-white/15 text-white/50 hover:bg-white/10'
+                      : 'bg-white/5 border-2 border-white/15 text-white/50'
                   } ${isRevealedByHint ? 'text-amber-300' : ''}`}
-                />
+                >
+                  {letter || (isWaitingForWordLength ? '•' : '')}
+                </div>
               );
             })}
           </div>
 
           {/* Onscreen Virtual Keyboard */}
           <VirtualKeyboard
-            onLetterPress={(letter) => handleLetterInput(letter, activeBoxIndex)}
-            onBackspace={() => handleBackspace(activeBoxIndex)}
+            onLetterPress={handleKeyPress}
+            onBackspace={handleBackspace}
             onHintClick={handleGiveHint}
             canHint={!isSuccess}
-            disabled={isSuccess}
+            disabled={isSuccess || isShaking}
             language={language}
           />
         </div>

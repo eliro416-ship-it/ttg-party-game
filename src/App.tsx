@@ -212,7 +212,15 @@ export default function App() {
   // Players: Real connected players only (zero mock data)
   const [players, setPlayers] = useState<Player[]>([]);
 
-  const [myPlayerId, setMyPlayerId] = useState<string>('p-host');
+  // Persistent, stable myPlayerId & authoritative currentHolderId
+  const [myPlayerId, setMyPlayerId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ttg_player_id');
+      if (saved && saved.trim()) return saved.trim();
+    }
+    return 'p-host';
+  });
+  const [currentHolderId, setCurrentHolderId] = useState<string>('p-host');
   const [activePlayerIndex, setActivePlayerIndex] = useState<number>(0);
   const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
   const [totalCardsSolved, setTotalCardsSolved] = useState<number>(0);
@@ -295,10 +303,14 @@ export default function App() {
     const unsubGameStart = addSupabaseListener('game_start', (payload) => {
       setJoinedRoom(true);
       setScreen('game');
+      if (payload.holderId) {
+        setCurrentHolderId(String(payload.holderId));
+      }
       if (payload.turnDuration) {
         setSettings((prev) => ({ ...prev, turnDuration: payload.turnDuration }));
       }
-      if (payload.holderId !== myPlayerId) {
+      const isHolder = String(myPlayerId) === String(payload.holderId);
+      if (!isHolder) {
         setServerTurnData({
           isHolder: false,
           roundStatus: 'waiting',
@@ -316,7 +328,7 @@ export default function App() {
           word: null,
           category: '',
           hint: null,
-          wordLength: 0,
+          wordLength: 4,
           players: [],
         });
       }
@@ -326,7 +338,10 @@ export default function App() {
     const unsubRoundStart = addSupabaseListener('round_start', (payload) => {
       setJoinedRoom(true);
       setScreen('game');
-      const isHolder = payload.holderId === myPlayerId;
+      if (payload.holderId) {
+        setCurrentHolderId(String(payload.holderId));
+      }
+      const isHolder = String(myPlayerId) === String(payload.holderId);
       setServerTurnData((prev) => ({
         isHolder,
         roundStatus: 'active',
@@ -346,7 +361,7 @@ export default function App() {
         wordHash: payload.wordHash,
         category: payload.category,
         hint: payload.hint || null,
-        wordLength: payload.wordLength,
+        wordLength: payload.wordLength > 0 ? payload.wordLength : 4,
         players: [],
       }));
     });
@@ -366,7 +381,10 @@ export default function App() {
         })
       );
 
-      const isMeNewHolder = myPlayerId === payload.nextHolderId;
+      if (payload.nextHolderId) {
+        setCurrentHolderId(String(payload.nextHolderId));
+      }
+      const isMeNewHolder = String(myPlayerId) === String(payload.nextHolderId);
       const nextCard = activeDeck[payload.nextCardIndex] || DEFAULT_CARDS[0];
       const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
 
@@ -397,7 +415,10 @@ export default function App() {
 
     // 6. Turn timeout broadcast: advance holder cyclically
     const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload) => {
-      const isMeNewHolder = myPlayerId === payload.nextHolderId;
+      if (payload.nextHolderId) {
+        setCurrentHolderId(String(payload.nextHolderId));
+      }
+      const isMeNewHolder = String(myPlayerId) === String(payload.nextHolderId);
       const nextCard = activeDeck[payload.nextCardIndex] || DEFAULT_CARDS[0];
       const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
 
@@ -437,7 +458,10 @@ export default function App() {
     const unsubSyncState = addSupabaseListener('sync_state', (payload: SyncStatePayload) => {
       setJoinedRoom(true);
       setScreen('game');
-      const isHolder = payload.holderId === myPlayerId;
+      if (payload.holderId) {
+        setCurrentHolderId(String(payload.holderId));
+      }
+      const isHolder = String(myPlayerId) === String(payload.holderId);
       setServerTurnData((prev) => ({
         isHolder,
         roundStatus: payload.roundStatus,
@@ -519,6 +543,10 @@ export default function App() {
     setSettings((prev) => ({ ...prev, turnDuration: chosenDuration }));
     setHasPurchasedLicense(true);
     setMyPlayerId('p-host');
+    setCurrentHolderId('p-host');
+    try {
+      localStorage.setItem('ttg_player_id', 'p-host');
+    } catch (e) {}
     setPlayers([
       {
         id: 'p-host',
@@ -556,12 +584,16 @@ export default function App() {
     setActivePlayerIndex(0);
     setCurrentCardIndex(0);
     setPlayedCardIds(new Set());
-    const hostId = myPlayerId || 'p-host';
+    const hostId = 'p-host';
     setMyPlayerId(hostId);
+    setCurrentHolderId(hostId);
+    try {
+      localStorage.setItem('ttg_player_id', hostId);
+    } catch (e) {}
 
     const firstCard = activeDeck[0] || DEFAULT_CARDS[0];
     const firstWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
-    const hostPlayer = players.find((p) => p.isHost) || players[0] || {
+    const hostPlayer = {
       id: hostId,
       name: language === 'en' ? 'Host' : 'מארח/ת',
       avatar: '👑',
@@ -578,7 +610,7 @@ export default function App() {
       turnDuration: settings.turnDuration,
       cardIndex: 0,
       totalCards: Math.min(activeDeck.length, 50),
-      holderId: hostPlayer.id,
+      holderId: hostId,
       holderName: hostPlayer.name,
       holderAvatar: hostPlayer.avatar || '👑',
       cardId: firstCard.id,
@@ -589,7 +621,7 @@ export default function App() {
       category: language === 'en' ? (firstCard.category_en || firstCard.category) : firstCard.category,
       hint: null,
       wordLength: firstWord.length,
-      players: players.map((p, idx) => ({ ...p, isHolder: idx === 0, isOnline: true })),
+      players: players.map((p) => ({ ...p, isHolder: p.id === hostId, isOnline: true })),
     });
 
     // 4. Broadcast game_start via Supabase Realtime channel
@@ -599,7 +631,7 @@ export default function App() {
         type: 'broadcast',
         event: 'game_start',
         payload: {
-          holderId: hostPlayer.id,
+          holderId: hostId,
           holderName: hostPlayer.name,
           holderAvatar: hostPlayer.avatar || '👑',
           turnDuration: settings.turnDuration,
@@ -613,6 +645,14 @@ export default function App() {
     setJoinedRoom(true);
     const soloId = 'p-host';
     setMyPlayerId(soloId);
+    setCurrentHolderId(soloId);
+    try {
+      localStorage.setItem('ttg_player_id', soloId);
+    } catch (e) {}
+
+    const firstCard = activeDeck[0] || DEFAULT_CARDS[0];
+    const firstWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
+
     setPlayers([
       {
         id: soloId,
@@ -629,8 +669,31 @@ export default function App() {
     setTotalCardsSolved(0);
     setPlayedCardIds(new Set());
     setShuffledDeck(shuffleDeck([...DEFAULT_CARDS]));
+
+    setServerTurnData({
+      isHolder: true,
+      roundStatus: 'waiting',
+      roundEndsAt: 0,
+      turnEndTime: 0,
+      turnDuration: settings.turnDuration,
+      cardIndex: 0,
+      totalCards: Math.min(activeDeck.length, 50),
+      holderId: soloId,
+      holderName: language === 'en' ? 'Player 1' : 'שחקן 1',
+      holderAvatar: '🦁',
+      cardId: firstCard.id,
+      image: firstCard.imageUrl || firstCard.image,
+      imageUrl: firstCard.imageUrl || firstCard.image,
+      fallback: firstCard.fallback || null,
+      word: firstWord,
+      category: language === 'en' ? (firstCard.category_en || firstCard.category) : firstCard.category,
+      hint: null,
+      wordLength: firstWord.length,
+      players: [],
+    });
+
     setScreen('game');
-  }, [language]);
+  }, [language, activeDeck, settings.turnDuration]);
 
   const handleTransitionFromIntroToDashboard = useCallback(() => {
     setIsIntroVideoOpen(false);
@@ -659,6 +722,10 @@ export default function App() {
     const newPlayerId = 'p-' + Math.random().toString(36).substring(2, 9);
     setPin(cleanPin);
     setMyPlayerId(newPlayerId);
+    setCurrentHolderId('p-host');
+    try {
+      localStorage.setItem('ttg_player_id', newPlayerId);
+    } catch (e) {}
 
     // 2. Set joining player locally until room state syncs real connected players
     setPlayers([
@@ -845,6 +912,11 @@ export default function App() {
         {screen === 'welcome' && !currentPinFromUrl && !joinedRoom && (
           <RoleSelectScreen
             onOpenHost={() => {
+              setMyPlayerId('p-host');
+              setCurrentHolderId('p-host');
+              try {
+                localStorage.setItem('ttg_player_id', 'p-host');
+              } catch (e) {}
               setHostStep('create');
               setScreen('host');
             }}
@@ -925,7 +997,8 @@ export default function App() {
             cards={activeDeck}
             currentCardIndex={currentCardIndex}
             players={players}
-            activePlayerId={serverTurnData ? serverTurnData.holderId : activePlayer.id}
+            currentHolderId={currentHolderId}
+            activePlayerId={currentHolderId}
             myPlayerId={myPlayerId}
             turnDuration={settings.turnDuration}
             roomPin={pin}
