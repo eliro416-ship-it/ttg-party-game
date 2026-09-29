@@ -44,20 +44,19 @@ export default function App() {
   const initialPinParam = initialParams?.get('pin') || getPinFromUrl();
   const initialLangParam = initialParams?.get('lang') || getLangFromUrl();
 
+  const hasDirectInvite = Boolean(initialPinParam && initialPinParam.trim().length >= 4);
+  const [isDirectInvite, setIsDirectInvite] = useState<boolean>(() => hasDirectInvite);
+
   const [screen, setScreen] = useState<GameScreen>(() => {
-    if (initialPinParam && initialPinParam.trim()) {
+    if (hasDirectInvite) {
       return 'player-join';
     }
     return 'welcome';
   });
 
   const [pin, setPin] = useState<string>(() => {
-    if (initialPinParam && initialPinParam.trim()) {
+    if (hasDirectInvite && initialPinParam) {
       return initialPinParam.trim();
-    }
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ttg_room_pin');
-      if (saved && saved.trim()) return saved.trim();
     }
     return '';
   });
@@ -100,9 +99,10 @@ export default function App() {
     const pinParam = params.get('pin') || getPinFromUrl();
     const langParam = params.get('lang') || getLangFromUrl();
 
-    if (pinParam) {
+    if (pinParam && pinParam.trim().length >= 4) {
       const cleanPin = pinParam.trim();
       setPin(cleanPin); // שמירת ה-PIN
+      setIsDirectInvite(true);
       if (langParam === 'he' || langParam === 'en') {
         setLanguage(langParam);
         localStorage.setItem('ttg_lang', langParam);
@@ -113,6 +113,8 @@ export default function App() {
       setIsIntroVideoOpen(false); // דילוג על הסרטון בכניסה עם PIN
     } else {
       // כניסה רגילה לאתר – הצגת סרטון הפתיחה המלא עם אפשרות דילוג
+      setIsDirectInvite(false);
+      setPin('');
       setIsIntroVideoOpen(true);
     }
   }, []);
@@ -797,6 +799,8 @@ export default function App() {
     setIsIntroVideoOpen(false);
     const p = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('pin') : null) || getPinFromUrl();
     if (!p) {
+      setIsDirectInvite(false);
+      setPin('');
       setScreen('welcome');
     }
   }, []);
@@ -921,7 +925,6 @@ export default function App() {
     } catch (e) {}
   }, []);
 
-  const currentPinFromUrl = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('pin') : null) || initialPinParam || getPinFromUrl();
   const activePlayer = players[activePlayerIndex] || players[0] || { id: 'p-host', name: 'מארח', avatar: '👑', score: 0, streak: 0, isHost: true, isOnline: true };
 
   return (
@@ -931,8 +934,8 @@ export default function App() {
 
       {/* Main glassmorphic card container */}
       <div className={`relative z-10 w-full ${joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[460px]'} ${screen === 'host' ? 'p-3 sm:p-5 max-h-[98dvh] sm:max-h-none flex flex-col justify-between overflow-hidden' : 'p-4 sm:p-6'} bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[28px] sm:rounded-[32px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all`}>
-        {/* Welcome / Role Select screen - NEVER rendered if pin exists in URL or if already joined */}
-        {screen === 'welcome' && !currentPinFromUrl && !joinedRoom && (
+        {/* Welcome / Role Select screen */}
+        {screen === 'welcome' && !joinedRoom && (
           <RoleSelectScreen
             onOpenHost={() => {
               setMyPlayerId('p-host');
@@ -943,7 +946,16 @@ export default function App() {
               setHostStep('create');
               setScreen('host');
             }}
-            onOpenPlayer={() => setScreen('player-join')}
+            onOpenPlayer={() => {
+              try {
+                if (window.location.search.includes('pin=')) {
+                  window.history.replaceState({}, '', window.location.pathname);
+                }
+              } catch (e) {}
+              setIsDirectInvite(false);
+              setPin('');
+              setScreen('player-join');
+            }}
             onQuickStart={handleQuickStart}
             onOpenVideo={() => setIsIntroVideoOpen(true)}
             turnDuration={settings.turnDuration}
@@ -983,16 +995,19 @@ export default function App() {
         )}
 
         {/* Player Join Screen - shown ONLY when participant is not yet connected */}
-        {!joinedRoom && (screen === 'player-join' || screen === 'join' || Boolean(currentPinFromUrl)) && (
+        {!joinedRoom && (screen === 'player-join' || screen === 'join') && (
           <PlayerJoinScreen
             onJoin={handleJoinGame}
             onBack={() => {
               try {
                 window.history.replaceState({}, '', window.location.pathname);
               } catch (e) {}
+              setIsDirectInvite(false);
+              setPin('');
               setScreen('welcome');
             }}
-            defaultPin={pin || currentPinFromUrl || ''}
+            defaultPin={isDirectInvite ? pin : ''}
+            isDirectLink={isDirectInvite}
             language={language}
             onToggleLanguage={handleToggleLanguage}
           />

@@ -1,15 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowRight, ArrowLeft, Sparkles, Gamepad2, User, KeyRound, Globe } from 'lucide-react';
-import { sounds } from '../utils/audio';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Gamepad2,
+  KeyRound,
+  User,
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  Globe,
+} from 'lucide-react';
 import { Language } from '../types/game';
 import { translations } from '../utils/translations';
-import { getPinFromUrl } from '../utils/url';
+import { sounds } from '../utils/audio';
 
 interface PlayerJoinScreenProps {
-  onJoin: (pin: string, name: string, avatar: string, onError: (err: string) => void) => void;
+  onJoin: (pin: string, name: string, avatar: string, onError?: (msg: string) => void) => void;
   onBack: () => void;
   defaultPin?: string;
-  language?: Language;
+  isDirectLink?: boolean;
+  language: Language;
   onToggleLanguage?: () => void;
 }
 
@@ -19,34 +27,35 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
   onJoin,
   onBack,
   defaultPin = '',
+  isDirectLink = false,
   language = 'he',
   onToggleLanguage,
 }) => {
   const t = translations[language];
   const isEn = language === 'en';
 
-  const [pin, setPin] = useState(() => {
-    const urlPin = getPinFromUrl();
-    if (urlPin) return urlPin;
-    if (defaultPin) return defaultPin;
-    return '';
-  });
+  // Only auto-fill when coming from an explicit direct invite link (?pin=XXXX)
+  const initialPin = isDirectLink && defaultPin ? defaultPin.trim() : '';
+  const [pin, setPin] = useState(initialPin);
+  const [isAutoFilled, setIsAutoFilled] = useState(Boolean(isDirectLink && initialPin));
   const [name, setName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('🦁');
   const [error, setError] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
-  const nameInputRef = React.useRef<HTMLInputElement>(null);
-  const pinInputRef = React.useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const pinInputRef = useRef<HTMLInputElement>(null);
 
+  // Sync if defaultPin or isDirectLink changes
   useEffect(() => {
-    const urlPin = getPinFromUrl();
-    if (urlPin) {
-      setPin(urlPin);
-    } else if (defaultPin) {
-      setPin(defaultPin);
+    if (isDirectLink && defaultPin && defaultPin.trim()) {
+      setPin(defaultPin.trim());
+      setIsAutoFilled(true);
+    } else if (!isDirectLink) {
+      setPin('');
+      setIsAutoFilled(false);
     }
-  }, [defaultPin]);
+  }, [defaultPin, isDirectLink]);
 
   useEffect(() => {
     const savedName = localStorage.getItem('player_name');
@@ -54,9 +63,9 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
     const savedAvatar = localStorage.getItem('player_avatar');
     if (savedAvatar) setSelectedAvatar(savedAvatar);
 
-    // If PIN is already provided (e.g. from URL), immediately focus the name input for seamless joining
-    const currentPin = getPinFromUrl() || defaultPin;
-    if (currentPin && currentPin.trim()) {
+    // If PIN is auto-filled from direct link, focus the name input;
+    // Otherwise in manual entry, focus the PIN input so user can type immediately
+    if (isDirectLink && defaultPin && defaultPin.trim()) {
       setTimeout(() => {
         nameInputRef.current?.focus();
       }, 50);
@@ -65,33 +74,49 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
         pinInputRef.current?.focus();
       }, 50);
     }
-  }, [defaultPin]);
+  }, [isDirectLink, defaultPin]);
+
+  // Validation: Button active ONLY after at least 4 digits PIN and a player name entered
+  const isPinValid = pin.trim().length >= 4;
+  const isNameValid = name.trim().length >= 1;
+  const canSubmit = isPinValid && isNameValid && !isJoining;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmit) return;
 
-    if (!pin.trim()) {
+    if (!isPinValid) {
       sounds.soundError();
-      setError(isEn ? 'Please enter a valid room PIN' : 'אנא הזן/י קוד PIN תקין שקיבלת מהמארח/ת');
+      setError(isEn ? 'Please enter at least 4 digits for the room PIN' : 'אנא הזן/י לפחות 4 ספרות לקוד ה-PIN');
       return;
     }
-    if (!name.trim()) {
+    if (!isNameValid) {
       sounds.soundError();
       setError(isEn ? 'Please enter your name' : 'אנא הזן/י את שמך כדי שנדע מי משחק/ת');
       return;
     }
 
-    localStorage.setItem('player_name', name.trim());
-    localStorage.setItem('player_avatar', selectedAvatar);
-    localStorage.setItem('ttg_room_pin', pin.trim());
+    setIsJoining(true);
+    try {
+      localStorage.setItem('player_name', name.trim());
+      localStorage.setItem('player_avatar', selectedAvatar);
+      localStorage.setItem('ttg_room_pin', pin.trim());
+      localStorage.removeItem('ttg_current_guess');
+    } catch (e) {}
 
     sounds.soundSuccess();
     setError('');
 
     // Instant transition directly to game screen:
-    onJoin(pin.trim(), name.trim(), selectedAvatar, (errMessage: string) => {
+    onJoin(pin.trim(), name.trim(), selectedAvatar, (errMessage?: string) => {
+      setIsJoining(false);
       sounds.soundError();
-      setError(errMessage || (isEn ? 'Invalid room PIN code! Ask host for PIN.' : 'קוד PIN שגוי! בקש/י את הקוד התקין מהמארח/ת.'));
+      setError(
+        errMessage ||
+          (isEn
+            ? 'Invalid room PIN code! Ask host for PIN.'
+            : 'קוד PIN שגוי! בקש/י את הקוד התקין מהמארח/ת.')
+      );
     });
   };
 
@@ -124,7 +149,6 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
               <span>{t.langBtn}</span>
             </button>
           )}
-
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 text-xs font-bold border border-pink-500/30">
             <Gamepad2 className="w-3.5 h-3.5 text-pink-400" />
             <span>{isEn ? 'Player' : 'משתתף/ת'}</span>
@@ -153,7 +177,8 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
               <KeyRound className="w-4 h-4 text-amber-400" />
               {t.labelPin}:
             </label>
-            {pin && pin.length >= 4 && (
+            {/* Show badge ONLY when auto-filled from direct link */}
+            {isAutoFilled && isDirectLink && pin.length >= 4 && (
               <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30 animate-fadeIn">
                 {isEn ? 'PIN auto-filled ✨' : 'הוזן אוטומטית מהקישור ✨'}
               </span>
@@ -162,9 +187,12 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
           <input
             ref={pinInputRef}
             type="text"
+            inputMode="numeric"
             value={pin}
             onChange={(e) => {
-              setPin(e.target.value);
+              const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6);
+              setPin(val);
+              setIsAutoFilled(false);
               setError('');
             }}
             placeholder={isEn ? 'e.g. 7742' : 'למשל: 7742'}
@@ -219,12 +247,17 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
           </div>
         </div>
 
-        {/* Submit */}
+        {/* Submit - active ONLY when at least 4 digits PIN and name are entered */}
         <button
           type="submit"
-          className="btn-3d btn-3d-pink w-full mt-3 py-4 px-6 text-white font-black text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-lg active:scale-98 transition-all"
+          disabled={!canSubmit}
+          className={`btn-3d w-full mt-3 py-4 px-6 text-white font-black text-lg rounded-2xl flex items-center justify-center gap-2.5 shadow-lg transition-all ${
+            canSubmit
+              ? 'btn-3d-pink cursor-pointer active:scale-98 opacity-100'
+              : 'bg-white/10 border-2 border-white/15 opacity-40 cursor-not-allowed pointer-events-none text-slate-400'
+          }`}
         >
-          <span className="shimmer-sweep" />
+          {canSubmit && <span className="shimmer-sweep" />}
           <Sparkles className="w-5 h-5 text-white drop-shadow" />
           <span>{t.btnJoin}</span>
         </button>

@@ -215,6 +215,16 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // User's active typed guess: isolated and resilient against timer & sync ticks
   const [currentGuess, setCurrentGuess] = useState<string>('');
+
+  // Guarantee clean guess state on room entry / table mount and whenever room or player changes
+  useEffect(() => {
+    setCurrentGuess('');
+    setIsSuccess(false);
+    setIsShaking(false);
+    try {
+      localStorage.removeItem('ttg_current_guess');
+    } catch (e) {}
+  }, [myPlayerId, roomPin]);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [showHintText, setShowHintText] = useState<boolean>(Boolean(serverTurnData?.hint));
