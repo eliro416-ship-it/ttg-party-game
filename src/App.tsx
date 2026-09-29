@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { GameScreen, Player, RoomSettings, CardItem, Language, VoiceGender, HostStep } from './types/game';
 import { DEFAULT_CARDS, shuffleDeck } from './data/cards';
 import { RoleSelectScreen } from './components/RoleSelectScreen';
@@ -22,12 +22,16 @@ import {
   broadcastGameStart,
   broadcastSettingsUpdate,
   broadcastSyncState,
+  broadcastNewTurn,
+  broadcastScoreUpdate,
   encodeWordHash,
   TurnStartedPayload,
   RoomStatePayload,
   RoundStartPayload,
   CorrectGuessPayload,
   TurnTimeoutPayload,
+  NewTurnPayload,
+  ScoreUpdatePayload,
   GameStartPayload,
   SettingsUpdatePayload,
   SyncStatePayload,
@@ -226,6 +230,21 @@ export default function App() {
   const [totalCardsSolved, setTotalCardsSolved] = useState<number>(0);
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState<boolean>(false);
 
+  // Authoritative Host refs to prevent closure staleness across network events
+  const playersRef = useRef<Player[]>(players);
+  playersRef.current = players;
+
+  const currentHolderIdRef = useRef<string>(currentHolderId);
+  currentHolderIdRef.current = currentHolderId;
+
+  const holderIndexRef = useRef<number>(activePlayerIndex);
+  holderIndexRef.current = activePlayerIndex;
+
+  const cardIndexRef = useRef<number>(currentCardIndex);
+  cardIndexRef.current = currentCardIndex;
+
+  const scoresRef = useRef<Record<string, number>>({});
+
   // Custom cards
   const [customCards, setCustomCards] = useState<CardItem[]>(() => {
     const saved = localStorage.getItem('game_custom_cards');
@@ -254,6 +273,49 @@ export default function App() {
     }
     return all.filter((c) => settings.selectedCategories.includes(c.category));
   }, [shuffledDeck, customCards, settings.selectedCategories]);
+
+  // Authoritative Turn Rotation managed strictly by the Host
+  const advanceHostTurn = useCallback(() => {
+    if (myPlayerId !== 'p-host') return;
+
+    const currentPlayers = playersRef.current;
+    if (!currentPlayers || currentPlayers.length === 0) return;
+
+    // 1. Calculate next player index:
+    // nextIndex = (currentHolderIndex + 1) % players.length
+    // newHolderId = players[nextIndex].id
+    const currentHolder = currentHolderIdRef.current;
+    const currentHolderIndex = currentPlayers.findIndex((p: Player) => p.id === currentHolder);
+    const nextIndex = currentHolderIndex >= 0 ? (currentHolderIndex + 1) % currentPlayers.length : 0;
+    const nextPlayer = currentPlayers[nextIndex] || currentPlayers[0];
+    const newHolderId = nextPlayer.id;
+
+    // 2. Advance card index and pick next card from activeDeck
+    const nextCardIndex = (cardIndexRef.current + 1) % (activeDeck.length || 1);
+    cardIndexRef.current = nextCardIndex;
+    setCurrentCardIndex(nextCardIndex);
+    const newCard = activeDeck[nextCardIndex] || DEFAULT_CARDS[0];
+
+    const cardWord = (language === 'en' ? (newCard.word_en || newCard.word) : (newCard.word_he || newCard.word)).trim();
+
+    // 3. Official NEW_TURN payload
+    const newTurnPayload: NewTurnPayload = {
+      holderId: newHolderId,
+      holderName: nextPlayer.name,
+      holderAvatar: nextPlayer.avatar || '👑',
+      category: language === 'en' ? (newCard.category_en || newCard.category) : newCard.category,
+      wordLength: cardWord.length,
+      card: newCard,
+      cardIndex: nextCardIndex,
+      wordHash: encodeWordHash(cardWord),
+    };
+
+    // 4. Host broadcasts official NEW_TURN event to all devices
+    broadcastNewTurn(newTurnPayload);
+  }, [myPlayerId, activeDeck, language]);
+
+  const advanceHostTurnRef = useRef<() => void>(() => {});
+  advanceHostTurnRef.current = advanceHostTurn;
 
   // Supabase Realtime Channel, Presence, and Broadcast Engine
   useEffect(() => {
@@ -288,11 +350,13 @@ export default function App() {
       if (presencePlayers && presencePlayers.length > 0) {
         setPlayers((prev) => {
           return presencePlayers.map((p) => {
+            const networkScore = scoresRef.current[p.id];
             const existing = prev.find((x) => x.id === p.id);
+            const score = networkScore !== undefined ? networkScore : (existing?.score !== undefined ? existing.score : p.score);
             return {
               ...p,
-              score: Math.max(p.score, existing?.score || 0),
-              streak: Math.max(p.streak || 0, existing?.streak || 0),
+              score,
+              streak: existing?.streak || p.streak || 0,
             };
           });
         });
@@ -305,6 +369,7 @@ export default function App() {
       setScreen('game');
       if (payload.holderId) {
         setCurrentHolderId(String(payload.holderId));
+        currentHolderIdRef.current = String(payload.holderId);
       }
       if (payload.turnDuration) {
         setSettings((prev) => ({ ...prev, turnDuration: payload.turnDuration }));
@@ -340,6 +405,7 @@ export default function App() {
       setScreen('game');
       if (payload.holderId) {
         setCurrentHolderId(String(payload.holderId));
+        currentHolderIdRef.current = String(payload.holderId);
       }
       const isHolder = String(myPlayerId) === String(payload.holderId);
       setServerTurnData((prev) => ({
@@ -366,95 +432,107 @@ export default function App() {
       }));
     });
 
-    // 5. Correct guess broadcast: turn rotation cyclically across participants
+    // 5. Correct guess broadcast: Host authoritatively updates scores and schedules next turn
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload) => {
-      setPlayers((prev) =>
-        prev.map((p) => {
-          if (p.id === payload.winnerId) {
-            return {
-              ...p,
-              score: p.score + payload.points,
-              streak: (p.streak || 0) + 1,
-            };
-          }
-          return p;
-        })
-      );
+      if (myPlayerId === 'p-host') {
+        const points = payload.points || 10;
+        const currentScore = scoresRef.current[payload.winnerId] || 0;
+        const updatedScores = {
+          ...scoresRef.current,
+          [payload.winnerId]: currentScore + points,
+        };
+        scoresRef.current = updatedScores;
+        broadcastScoreUpdate({ scores: updatedScores });
 
-      if (payload.nextHolderId) {
-        setCurrentHolderId(String(payload.nextHolderId));
+        setPlayers((prev) =>
+          prev.map((p) => ({
+            ...p,
+            score: updatedScores[p.id] !== undefined ? updatedScores[p.id] : p.score,
+            streak: p.id === payload.winnerId ? (p.streak || 0) + 1 : p.streak,
+          }))
+        );
+
+        setTimeout(() => {
+          advanceHostTurnRef.current();
+        }, 2500);
       }
-      const isMeNewHolder = String(myPlayerId) === String(payload.nextHolderId);
-      const nextCard = activeDeck[payload.nextCardIndex] || DEFAULT_CARDS[0];
-      const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
+    });
 
-      setCurrentCardIndex(payload.nextCardIndex);
+    // 6. Turn timeout broadcast: Host authoritatively advances turn
+    const unsubTurnTimeout = addSupabaseListener('turn_timeout', () => {
+      if (myPlayerId === 'p-host') {
+        setTimeout(() => {
+          advanceHostTurnRef.current();
+        }, 2400);
+      }
+    });
+
+    // 7. Skip turn broadcast: Host authoritatively advances turn
+    const unsubSkipTurn = addSupabaseListener('skip_turn', () => {
+      if (myPlayerId === 'p-host') {
+        advanceHostTurnRef.current();
+      }
+    });
+
+    // 8. Authoritative NEW_TURN broadcast from Host: all devices update exact same state
+    const unsubNewTurn = addSupabaseListener('new_turn', (payload: NewTurnPayload) => {
+      setJoinedRoom(true);
+      setScreen('game');
+      setCurrentHolderId(String(payload.holderId));
+      currentHolderIdRef.current = String(payload.holderId);
+      if (payload.cardIndex !== undefined) {
+        setCurrentCardIndex(payload.cardIndex);
+        cardIndexRef.current = payload.cardIndex;
+      }
+
+      const isHolder = String(myPlayerId).trim() === String(payload.holderId).trim();
+      const cardWord = (language === 'en' ? (payload.card.word_en || payload.card.word) : (payload.card.word_he || payload.card.word)).trim();
+
       setServerTurnData({
-        isHolder: isMeNewHolder,
+        isHolder,
         roundStatus: 'waiting',
         roundEndsAt: 0,
         turnEndTime: 0,
         turnDuration: settings.turnDuration,
-        cardIndex: payload.nextCardIndex,
+        cardIndex: payload.cardIndex ?? 0,
         totalCards: Math.min(activeDeck.length, 50),
-        holderId: payload.nextHolderId,
-        holderName: payload.nextHolderId === myPlayerId ? (players.find((p) => p.id === myPlayerId)?.name || 'מחזיק') : '',
-        holderAvatar: '👑',
-        cardId: nextCard.id,
-        image: isMeNewHolder ? (nextCard.imageUrl || nextCard.image) : null,
-        imageUrl: isMeNewHolder ? (nextCard.imageUrl || nextCard.image) : null,
-        fallback: isMeNewHolder ? nextCard.fallback : null,
-        word: isMeNewHolder ? nextWord : null,
-        wordHash: undefined,
-        category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
+        holderId: payload.holderId,
+        holderName: payload.holderName,
+        holderAvatar: payload.holderAvatar || '👑',
+        cardId: payload.card.id,
+        image: isHolder ? (payload.card.imageUrl || payload.card.image) : null,
+        imageUrl: isHolder ? (payload.card.imageUrl || payload.card.image) : null,
+        fallback: isHolder ? payload.card.fallback : null,
+        word: isHolder ? cardWord : null,
+        wordHash: payload.wordHash || encodeWordHash(cardWord),
+        category: payload.category,
         hint: null,
-        wordLength: nextWord.length,
+        wordLength: payload.wordLength,
         players: [],
       });
     });
 
-    // 6. Turn timeout broadcast: advance holder cyclically
-    const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload) => {
-      if (payload.nextHolderId) {
-        setCurrentHolderId(String(payload.nextHolderId));
+    // 9. Authoritative SCORE_UPDATE broadcast from Host: all devices sync scores
+    const unsubScoreUpdate = addSupabaseListener('score_update', (payload: ScoreUpdatePayload) => {
+      if (payload.scores) {
+        scoresRef.current = { ...scoresRef.current, ...payload.scores };
+        setPlayers((prev) =>
+          prev.map((p) => ({
+            ...p,
+            score: payload.scores[p.id] !== undefined ? payload.scores[p.id] : (p.score || 0),
+          }))
+        );
       }
-      const isMeNewHolder = String(myPlayerId) === String(payload.nextHolderId);
-      const nextCard = activeDeck[payload.nextCardIndex] || DEFAULT_CARDS[0];
-      const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
-
-      setCurrentCardIndex(payload.nextCardIndex);
-      setServerTurnData({
-        isHolder: isMeNewHolder,
-        roundStatus: 'waiting',
-        roundEndsAt: 0,
-        turnEndTime: 0,
-        turnDuration: settings.turnDuration,
-        cardIndex: payload.nextCardIndex,
-        totalCards: Math.min(activeDeck.length, 50),
-        holderId: payload.nextHolderId,
-        holderName: payload.nextHolderId === myPlayerId ? (players.find((p) => p.id === myPlayerId)?.name || 'מחזיק') : '',
-        holderAvatar: '👑',
-        cardId: nextCard.id,
-        image: isMeNewHolder ? (nextCard.imageUrl || nextCard.image) : null,
-        imageUrl: isMeNewHolder ? (nextCard.imageUrl || nextCard.image) : null,
-        fallback: isMeNewHolder ? nextCard.fallback : null,
-        word: isMeNewHolder ? nextWord : null,
-        wordHash: undefined,
-        category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
-        hint: null,
-        wordLength: nextWord.length,
-        players: [],
-      });
     });
 
-    // 7. Settings update
+    // 10. Settings update
     const unsubSettings = addSupabaseListener('update_settings', (payload) => {
       if (payload.turnDuration) {
         setSettings((prev) => ({ ...prev, turnDuration: payload.turnDuration }));
       }
     });
 
-    // 8. Initial Room State Sync: when a participant enters an active round, sync state immediately
+    // 11. Initial Room State Sync: when a participant enters an active round, sync state immediately
     const unsubSyncState = addSupabaseListener('sync_state', (payload: SyncStatePayload) => {
       setJoinedRoom(true);
       setScreen('game');
@@ -486,10 +564,10 @@ export default function App() {
       }));
     });
 
-    // 9. Host/Holder responds to request_sync from newly joined guessers
+    // 12. Host responds to request_sync from newly joined guessers
     const unsubRequestSync = addSupabaseListener('request_sync', () => {
-      if (myPlayerId === 'p-host' || serverTurnData?.isHolder) {
-        const currentCard = activeDeck[currentCardIndex] || DEFAULT_CARDS[0];
+      if (myPlayerId === 'p-host') {
+        const currentCard = activeDeck[cardIndexRef.current] || DEFAULT_CARDS[0];
         const currentWord = (language === 'en' ? (currentCard.word_en || currentCard.word) : (currentCard.word_he || currentCard.word)).trim();
         broadcastSyncState({
           category: language === 'en' ? (currentCard.category_en || currentCard.category) : currentCard.category,
@@ -499,10 +577,23 @@ export default function App() {
           holderName: serverTurnData?.holderName || (language === 'en' ? 'Host' : 'מארח/ת'),
           holderAvatar: serverTurnData?.holderAvatar || '👑',
           roundStatus: serverTurnData?.roundStatus || 'waiting',
-          cardIndex: currentCardIndex,
+          cardIndex: cardIndexRef.current,
           cardId: currentCard.id,
           wordHash: encodeWordHash(currentWord),
           turnDuration: settings.turnDuration,
+        });
+
+        broadcastScoreUpdate({ scores: scoresRef.current });
+
+        broadcastNewTurn({
+          holderId: serverTurnData?.holderId || currentHolderId || 'p-host',
+          holderName: serverTurnData?.holderName || (language === 'en' ? 'Host' : 'מארח/ת'),
+          holderAvatar: serverTurnData?.holderAvatar || '👑',
+          category: language === 'en' ? (currentCard.category_en || currentCard.category) : currentCard.category,
+          wordLength: currentWord.length,
+          card: currentCard,
+          cardIndex: cardIndexRef.current,
+          wordHash: encodeWordHash(currentWord),
         });
       }
     });
@@ -514,6 +605,9 @@ export default function App() {
       unsubRoundStart();
       unsubCorrectGuess();
       unsubTurnTimeout();
+      unsubSkipTurn();
+      unsubNewTurn();
+      unsubScoreUpdate();
       unsubSettings();
       unsubSyncState();
       unsubRequestSync();
@@ -624,21 +718,25 @@ export default function App() {
       players: players.map((p) => ({ ...p, isHolder: p.id === hostId, isOnline: true })),
     });
 
-    // 4. Broadcast game_start via Supabase Realtime channel
-    const channel = getCurrentSupabaseChannel();
-    if (channel) {
-      channel.send({
-        type: 'broadcast',
-        event: 'game_start',
-        payload: {
-          holderId: hostId,
-          holderName: hostPlayer.name,
-          holderAvatar: hostPlayer.avatar || '👑',
-          turnDuration: settings.turnDuration,
-          cardIndex: 0,
-        },
-      });
-    }
+    // 4. Broadcast game_start and authoritative NEW_TURN via Supabase Realtime channel
+    broadcastGameStart({
+      holderId: hostId,
+      holderName: hostPlayer.name,
+      holderAvatar: hostPlayer.avatar || '👑',
+      turnDuration: settings.turnDuration,
+      cardIndex: 0,
+    });
+
+    broadcastNewTurn({
+      holderId: hostId,
+      holderName: hostPlayer.name,
+      holderAvatar: hostPlayer.avatar || '👑',
+      category: language === 'en' ? (firstCard.category_en || firstCard.category) : firstCard.category,
+      wordLength: firstWord.length,
+      card: firstCard,
+      cardIndex: 0,
+      wordHash: encodeWordHash(firstWord),
+    });
   };
 
   const handleQuickStart = useCallback(() => {
@@ -776,104 +874,29 @@ export default function App() {
   };
 
   const handleCardSolved = useCallback((winnerPlayerId: string, bonusPoints: number) => {
-    setPlayers((prev) =>
-      prev.map((p) => {
-        if (p.id === winnerPlayerId) {
-          return {
-            ...p,
-            score: p.score + 10 + bonusPoints,
-            streak: p.streak + 1,
-          };
-        }
-        return p;
-      })
-    );
+    // Host authoritatively updates scores and schedules next turn
+    if (myPlayerId === 'p-host') {
+      const currentScore = scoresRef.current[winnerPlayerId] || 0;
+      const updatedScores = {
+        ...scoresRef.current,
+        [winnerPlayerId]: currentScore + 10 + bonusPoints,
+      };
+      scoresRef.current = updatedScores;
+      broadcastScoreUpdate({ scores: updatedScores });
 
-    const currentCard = activeDeck[currentCardIndex];
-    if (currentCard) {
-      setPlayedCardIds((prev) => new Set(prev).add(currentCard.id));
+      setTimeout(() => {
+        advanceHostTurnRef.current();
+      }, 2500);
     }
-
-    setTotalCardsSolved((prev) => prev + 1);
-
-    if (currentCardIndex + 1 >= activeDeck.length || totalCardsSolved + 1 >= 25) {
-      setIsGameOverModalOpen(true);
-    } else {
-      const nextCardIndex = (currentCardIndex + 1) % activeDeck.length;
-      const nextPlayerIndex = (activePlayerIndex + 1) % players.length;
-      setCurrentCardIndex(nextCardIndex);
-      setActivePlayerIndex(nextPlayerIndex);
-
-      // Local cyclic turn rotation:
-      const nextHolder = players[nextPlayerIndex];
-      const nextCard = activeDeck[nextCardIndex];
-      const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
-      const isHolder = myPlayerId === nextHolder?.id;
-
-      setServerTurnData({
-        isHolder,
-        roundStatus: 'waiting',
-        roundEndsAt: 0,
-        turnEndTime: 0,
-        turnDuration: settings.turnDuration,
-        cardIndex: nextCardIndex,
-        totalCards: Math.min(activeDeck.length, 50),
-        holderId: nextHolder?.id || 'p-host',
-        holderName: nextHolder?.name || 'מחזיק',
-        holderAvatar: nextHolder?.avatar || '👑',
-        cardId: nextCard.id,
-        image: isHolder ? (nextCard.imageUrl || nextCard.image) : null,
-        imageUrl: isHolder ? (nextCard.imageUrl || nextCard.image) : null,
-        fallback: isHolder ? nextCard.fallback : null,
-        word: isHolder ? nextWord : null,
-        category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
-        hint: null,
-        wordLength: nextWord.length,
-        players: players.map((p) => ({ ...p, isHolder: p.id === nextHolder?.id, isOnline: true })),
-      });
-    }
-  }, [activeDeck, currentCardIndex, players, totalCardsSolved, activePlayerIndex, myPlayerId, language, settings.turnDuration]);
+  }, [myPlayerId]);
 
   const handleCardTimeout = useCallback(() => {
-    setPlayers((prev) =>
-      prev.map((p, idx) => (idx === activePlayerIndex ? { ...p, streak: 0 } : p))
-    );
-    const currentCard = activeDeck[currentCardIndex];
-    if (currentCard) {
-      setPlayedCardIds((prev) => new Set(prev).add(currentCard.id));
+    if (myPlayerId === 'p-host') {
+      setTimeout(() => {
+        advanceHostTurnRef.current();
+      }, 2400);
     }
-    const nextCardIndex = (currentCardIndex + 1) % activeDeck.length;
-    const nextPlayerIndex = (activePlayerIndex + 1) % players.length;
-    setCurrentCardIndex(nextCardIndex);
-    setActivePlayerIndex(nextPlayerIndex);
-
-    const nextHolder = players[nextPlayerIndex];
-    const nextCard = activeDeck[nextCardIndex];
-    const nextWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
-    const isHolder = myPlayerId === nextHolder?.id;
-
-    setServerTurnData({
-      isHolder,
-      roundStatus: 'waiting',
-      roundEndsAt: 0,
-      turnEndTime: 0,
-      turnDuration: settings.turnDuration,
-      cardIndex: nextCardIndex,
-      totalCards: Math.min(activeDeck.length, 50),
-      holderId: nextHolder?.id || 'p-host',
-      holderName: nextHolder?.name || 'מחזיק',
-      holderAvatar: nextHolder?.avatar || '👑',
-      cardId: nextCard.id,
-      image: isHolder ? (nextCard.imageUrl || nextCard.image) : null,
-      imageUrl: isHolder ? (nextCard.imageUrl || nextCard.image) : null,
-      fallback: isHolder ? nextCard.fallback : null,
-      word: isHolder ? nextWord : null,
-      category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
-      hint: null,
-      wordLength: nextWord.length,
-      players: players.map((p) => ({ ...p, isHolder: p.id === nextHolder?.id, isOnline: true })),
-    });
-  }, [activeDeck, activePlayerIndex, currentCardIndex, players, myPlayerId, language, settings.turnDuration]);
+  }, [myPlayerId]);
 
   const handleRestartGame = useCallback(() => {
     setIsGameOverModalOpen(false);

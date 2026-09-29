@@ -17,6 +17,7 @@ import {
   broadcastSettingsUpdate,
   broadcastSyncState,
   broadcastRequestSync,
+  broadcastSkipTurn,
   trackPlayer,
   TurnStartedPayload,
   RoundWonPayload,
@@ -25,6 +26,7 @@ import {
   RoundStartPayload,
   CorrectGuessPayload,
   TurnTimeoutPayload,
+  NewTurnPayload,
   HintPayload,
   SettingsUpdatePayload,
   SyncStatePayload,
@@ -156,8 +158,9 @@ export const GameTable: React.FC<GameTableProps> = ({
     return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   }, [serverTurnData?.players, players]);
 
-  // Active card and words (client fallback for holder or server authoritative payload)
-  const currentCard = cards[currentCardIndex] || cards[0];
+  // Active card: received authoritatively from Host via NEW_TURN, or fallback to deck
+  const [activeTurnCard, setActiveTurnCard] = useState<CardItem | null>(null);
+  const currentCard = activeTurnCard || cards[currentCardIndex] || cards[0];
   const localTargetWord = (isEn ? (currentCard.word_en || currentCard.word) : (currentCard.word_he || currentCard.word)).trim();
 
   // If guesser: NEVER draw or guess local card!
@@ -390,9 +393,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload: CorrectGuessPayload) => {
       sounds.soundSuccess();
       setIsSuccess(true);
-      if (payload.nextHolderId) {
-        setLiveHolderId(String(payload.nextHolderId));
-      }
       setWinnerCelebration({
         winnerId: payload.winnerId,
         winnerName: payload.winnerName,
@@ -414,9 +414,6 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload: TurnTimeoutPayload) => {
       sounds.soundError();
-      if (payload.nextHolderId) {
-        setLiveHolderId(String(payload.nextHolderId));
-      }
       setRoundStatus('waiting');
       setRoundEndsAt(0);
       setWinnerCelebration({
@@ -432,6 +429,30 @@ export const GameTable: React.FC<GameTableProps> = ({
         setWinnerCelebration(null);
         setCurrentGuess('');
       }, 2400);
+    });
+
+    // Authoritative NEW_TURN broadcast from Host
+    const unsubNewTurn = addSupabaseListener('new_turn', (payload: NewTurnPayload) => {
+      if (payload.holderId) {
+        setLiveHolderId(String(payload.holderId));
+      }
+      setRoundStatus('waiting');
+      setRoundEndsAt(0);
+      isHandledRef.current = false;
+      setCurrentGuess('');
+      setIsSuccess(false);
+      setIsShaking(false);
+      setWinnerCelebration(null);
+
+      if (payload.card) {
+        setActiveTurnCard(payload.card);
+      }
+      setSyncedRoundCard({
+        cardId: payload.card?.id,
+        category: payload.category,
+        wordLength: payload.wordLength,
+        wordHash: payload.wordHash || (payload.card ? encodeWordHash(isEn ? (payload.card.word_en || payload.card.word) : (payload.card.word_he || payload.card.word)) : undefined),
+      });
     });
 
     const unsubSyncState = addSupabaseListener('sync_state', (payload: SyncStatePayload) => {
@@ -460,24 +481,6 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
     });
 
-    const unsubRequestSync = addSupabaseListener('request_sync', () => {
-      if (isCurrentClientHolder) {
-        broadcastSyncState({
-          category: isEn ? (currentCard.category_en || currentCard.category) : currentCard.category,
-          wordLength: localTargetWord.length,
-          roundEndsAt: currentRoundEndsAt,
-          holderId: myPlayerId,
-          holderName: activeHolderName,
-          holderAvatar: activeHolderAvatar,
-          roundStatus: currentRoundStatus,
-          cardIndex: currentCardIndex,
-          cardId: currentCard.id,
-          wordHash: encodeWordHash(localTargetWord),
-          turnDuration: serverTurnData?.turnDuration || turnDuration,
-        });
-      }
-    });
-
     // Request initial sync if joining as guesser (with quick retry)
     let retryTimer: NodeJS.Timeout | null = null;
     if (!isCurrentClientHolder) {
@@ -494,8 +497,8 @@ export const GameTable: React.FC<GameTableProps> = ({
       unsubRoundStart();
       unsubCorrectGuess();
       unsubTurnTimeout();
+      unsubNewTurn();
       unsubSyncState();
-      unsubRequestSync();
     };
   }, [t, isEn, language, currentVoiceGender, isCurrentClientHolder, activeCategory, localTargetWord, currentRoundEndsAt, myPlayerId, activeHolderName, activeHolderAvatar, currentRoundStatus, currentCardIndex, currentCard.id, serverTurnData?.turnDuration, turnDuration]);
 
@@ -523,11 +526,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     setRoundEndsAt(0);
 
     sounds.soundError();
-    const currentHolderId = serverTurnData?.holderId || activePlayerId;
-    const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
-    const nextIndex = (currentIndex >= 0 ? currentIndex + 1 : 0) % (activePlayers.length || 1);
-    const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
-    const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
 
     setWinnerCelebration({
       winnerId: '',
@@ -539,37 +537,26 @@ export const GameTable: React.FC<GameTableProps> = ({
       scores: [],
     });
 
-    if (isCurrentClientHolder) {
-      broadcastTurnTimeout({
-        word: targetWord || localTargetWord,
-        imageUrl: currentCard.imageUrl || currentCard.image,
-        reason: 'time_up',
-        nextHolderId: nextHolder.id,
-        nextIndex,
-        nextCardIndex,
-      });
-    }
-
-    setTimeout(() => {
-      setWinnerCelebration(null);
-      setCurrentGuess('');
-      onCardTimeout();
-    }, 2400);
+    // Broadcast turn_timeout so Host authoritatively advances turn
+    broadcastTurnTimeout({
+      word: targetWord || localTargetWord,
+      imageUrl: currentCard.imageUrl || currentCard.image,
+      reason: 'time_up',
+      nextHolderId: '',
+      nextIndex: 0,
+      nextCardIndex: 0,
+    });
   }, [
-    isCurrentClientHolder,
-    serverTurnData?.holderId,
-    activePlayerId,
-    activePlayers,
-    myPlayerId,
-    currentCardIndex,
-    cards.length,
-    isEn,
     targetWord,
     localTargetWord,
     currentCard.imageUrl,
     currentCard.image,
-    onCardTimeout,
+    isEn,
   ]);
+
+  const handleToggleTimerPicker = useCallback(() => {
+    setShowTimerPicker((prev) => !prev);
+  }, []);
 
   // Room PIN resolution: strictly network room PIN, zero Solo mode
   const effectivePin = useMemo(() => {
@@ -677,13 +664,6 @@ export const GameTable: React.FC<GameTableProps> = ({
       const winnerId = myPlayerId;
       const winner = activePlayers.find((p) => p.id === winnerId);
 
-      // Turn Rotation: next participant in activePlayers cyclically:
-      const currentHolderId = serverTurnData?.holderId || activePlayerId;
-      const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
-      const nextIndex = (currentIndex >= 0 ? currentIndex + 1 : 0) % (activePlayers.length || 1);
-      const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
-      const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
-
       setWinnerCelebration({
         winnerId,
         winnerName: winner?.name || (isEn ? 'Winner!' : 'ניצחון!'),
@@ -701,27 +681,10 @@ export const GameTable: React.FC<GameTableProps> = ({
         word: guessWord,
         imageUrl: currentCard.imageUrl || currentCard.image,
         points,
-        nextHolderId: nextHolder.id,
-        nextIndex,
-        nextCardIndex,
+        nextHolderId: '',
+        nextIndex: 0,
+        nextCardIndex: 0,
       });
-
-      // Update winner score in Supabase presence tracking
-      trackPlayer({
-        id: winnerId,
-        name: winner?.name || 'שחקן',
-        icon: winner?.avatar || '🎉',
-        score: (winner?.score || 0) + points,
-        streak: (winner?.streak || 0) + 1,
-        isHost: winner?.isHost ?? false,
-      });
-
-      setTimeout(() => {
-        setWinnerCelebration(null);
-        setIsSuccess(false);
-        setCurrentGuess('');
-        onCardSolved(winnerId, bonus);
-      }, 2500);
     } else {
       sounds.soundError();
       setIsShaking(true);
@@ -744,7 +707,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     cards.length,
     currentCard.imageUrl,
     currentCard.image,
-    onCardSolved,
   ]);
 
   // Handle letter typing from virtual keyboard or physical keyboard
@@ -833,24 +795,14 @@ export const GameTable: React.FC<GameTableProps> = ({
     });
   };
 
-  // Skip turn
+  // Skip turn: Host advances turn; guest requests skip from Host
   const handleSkipTurn = () => {
     sounds.soundWarning();
-    const currentHolderId = serverTurnData?.holderId || activePlayerId;
-    const currentIndex = activePlayers.findIndex((p) => p.id === currentHolderId);
-    const nextIndex = (currentIndex >= 0 ? (currentIndex + 1) : 0) % (activePlayers.length || 1);
-    const nextHolder = activePlayers[nextIndex] || activePlayers[0] || { id: myPlayerId, name: 'שחקן' };
-    const nextCardIndex = (currentCardIndex + 1) % (cards.length || 1);
-
-    broadcastTurnTimeout({
-      word: targetWord || localTargetWord,
-      imageUrl: currentCard.imageUrl || currentCard.image,
-      reason: 'skipped',
-      nextHolderId: nextHolder.id,
-      nextIndex,
-      nextCardIndex,
-    });
-    onCardTimeout();
+    if (myPlayerId === 'p-host') {
+      onCardTimeout();
+    } else {
+      broadcastSkipTurn(myPlayerId);
+    }
   };
 
   // Change timer
@@ -1015,7 +967,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             isEn={isEn}
             onTimeUp={handleTimeUp}
             showTimerPicker={showTimerPicker}
-            onToggleTimerPicker={() => setShowTimerPicker((prev) => !prev)}
+            onToggleTimerPicker={handleToggleTimerPicker}
           />
         </div>
 

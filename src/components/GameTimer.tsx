@@ -12,16 +12,16 @@ interface GameTimerProps {
   onToggleTimerPicker?: () => void;
 }
 
-export const GameTimer: React.FC<GameTimerProps> = React.memo(({
-  roundStatus,
-  roundEndsAt,
-  turnDuration,
-  isEn,
-  onTimeUp,
-  showTimerPicker = false,
-  onToggleTimerPicker,
-}) => {
-  const [timeLeft, setTimeLeft] = useState<number>(() => {
+// Subcomponent: Strictly isolated text node for the timer seconds
+// ZERO global setState — only this tiny text re-renders on the second tick!
+const CountdownText: React.FC<{
+  roundStatus: 'waiting' | 'active' | 'ended';
+  roundEndsAt: number;
+  turnDuration: number;
+  onTimeUp: () => void;
+  onWarningChange?: (isWarning: boolean) => void;
+}> = React.memo(({ roundStatus, roundEndsAt, turnDuration, onTimeUp, onWarningChange }) => {
+  const [displaySeconds, setDisplaySeconds] = useState<number>(() => {
     if (roundStatus === 'active' && roundEndsAt > Date.now()) {
       return Math.max(0, Math.ceil((roundEndsAt - Date.now()) / 1000));
     }
@@ -31,48 +31,93 @@ export const GameTimer: React.FC<GameTimerProps> = React.memo(({
   const onTimeUpRef = useRef(onTimeUp);
   onTimeUpRef.current = onTimeUp;
 
-  const isHandledRef = useRef<boolean>(false);
+  const onWarningChangeRef = useRef(onWarningChange);
+  onWarningChangeRef.current = onWarningChange;
 
-  // Reset handled flag whenever a new round starts
+  const isHandledRef = useRef<boolean>(false);
+  const lastTickedSecondRef = useRef<number>(-1);
+
+  // Reset handled flag whenever a new round starts or endsAt changes
   useEffect(() => {
     if (roundStatus === 'active') {
       isHandledRef.current = false;
+      lastTickedSecondRef.current = -1;
     }
   }, [roundStatus, roundEndsAt]);
 
   useEffect(() => {
-    if (roundStatus !== 'active' || !roundEndsAt) {
-      setTimeLeft(turnDuration);
+    if (roundStatus !== 'active' || !roundEndsAt || roundEndsAt <= Date.now()) {
+      setDisplaySeconds(turnDuration);
+      lastTickedSecondRef.current = -1;
+      onWarningChangeRef.current?.(false);
       return;
     }
 
-    const updateCountdown = () => {
+    const checkSeconds = () => {
       const msRemaining = roundEndsAt - Date.now();
       const remainingSeconds = Math.max(0, Math.ceil(msRemaining / 1000));
-      setTimeLeft(remainingSeconds);
 
-      if (remainingSeconds <= 4 && remainingSeconds > 0) {
+      setDisplaySeconds((prev) => (prev !== remainingSeconds ? remainingSeconds : prev));
+
+      const isWarn = remainingSeconds <= 4 && remainingSeconds > 0;
+      onWarningChangeRef.current?.(isWarn);
+
+      if (remainingSeconds <= 4 && remainingSeconds > 0 && lastTickedSecondRef.current !== remainingSeconds) {
+        lastTickedSecondRef.current = remainingSeconds;
         sounds.soundTick();
       }
 
       if (remainingSeconds === 0 && !isHandledRef.current) {
         isHandledRef.current = true;
+        onWarningChangeRef.current?.(false);
         onTimeUpRef.current();
       }
     };
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 250);
+    checkSeconds();
+    const interval = setInterval(checkSeconds, 200);
 
     return () => clearInterval(interval);
   }, [roundStatus, roundEndsAt, turnDuration]);
 
-  const isWarning = roundStatus === 'active' && timeLeft <= 4 && timeLeft > 0;
+  if (roundStatus === 'waiting') {
+    return (
+      <span className="font-mono font-black text-xs sm:text-sm tracking-tight tabular-nums select-none text-amber-300">
+        {turnDuration === 60 ? '1m' : `${turnDuration}s`}
+      </span>
+    );
+  }
+
+  const isWarn = displaySeconds <= 4 && displaySeconds > 0;
+
+  return (
+    <span
+      className={`font-mono font-black text-xs sm:text-sm tracking-tight tabular-nums select-none ${
+        isWarn ? 'text-rose-400 font-extrabold' : 'text-white'
+      }`}
+    >
+      {displaySeconds}s
+    </span>
+  );
+});
+
+CountdownText.displayName = 'CountdownText';
+
+export const GameTimer: React.FC<GameTimerProps> = React.memo(({
+  roundStatus,
+  roundEndsAt,
+  turnDuration,
+  isEn,
+  onTimeUp,
+  showTimerPicker = false,
+  onToggleTimerPicker,
+}) => {
+  const [isWarning, setIsWarning] = useState<boolean>(false);
 
   return (
     <div
-      className={`flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border shadow-xl transition-all ${
-        isWarning ? 'border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.6)]' : 'border-white/20'
+      className={`flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border shadow-xl transition-colors ${
+        isWarning ? 'border-rose-500/80 shadow-[0_0_12px_rgba(244,63,94,0.5)]' : 'border-white/20'
       }`}
     >
       <TimerIcon
@@ -80,26 +125,19 @@ export const GameTimer: React.FC<GameTimerProps> = React.memo(({
           roundStatus === 'waiting'
             ? 'text-amber-400'
             : isWarning
-            ? 'text-rose-400 animate-pulse'
+            ? 'text-rose-400'
             : 'text-emerald-400'
         }`}
         strokeWidth={2.4}
       />
-      <span
-        className={`font-mono font-black text-xs sm:text-sm tracking-tight ${
-          roundStatus === 'waiting'
-            ? 'text-amber-300'
-            : isWarning
-            ? 'text-rose-400 animate-ping font-extrabold'
-            : 'text-white'
-        }`}
-      >
-        {roundStatus === 'waiting'
-          ? turnDuration === 60
-            ? '1m'
-            : `${turnDuration}s`
-          : `${timeLeft}s`}
-      </span>
+
+      <CountdownText
+        roundStatus={roundStatus}
+        roundEndsAt={roundEndsAt}
+        turnDuration={turnDuration}
+        onTimeUp={onTimeUp}
+        onWarningChange={setIsWarning}
+      />
 
       {onToggleTimerPicker && (
         <button
@@ -120,3 +158,4 @@ export const GameTimer: React.FC<GameTimerProps> = React.memo(({
 });
 
 GameTimer.displayName = 'GameTimer';
+
