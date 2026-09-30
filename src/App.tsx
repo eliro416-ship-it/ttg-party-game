@@ -410,12 +410,15 @@ export default function App() {
         currentHolderIdRef.current = String(payload.holderId);
       }
       const isHolder = String(myPlayerId) === String(payload.holderId);
+      const duration = Number(payload.turnDuration || payload.duration) || settings.turnDuration || 60;
+      const endsAt = Number(payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
+
       setServerTurnData((prev) => ({
         isHolder,
         roundStatus: 'active',
-        roundEndsAt: payload.roundEndsAt,
-        turnEndTime: payload.roundEndsAt,
-        turnDuration: payload.turnDuration || settings.turnDuration,
+        roundEndsAt: endsAt,
+        turnEndTime: endsAt,
+        turnDuration: duration,
         cardIndex: payload.cardIndex ?? 0,
         totalCards: 50,
         holderId: payload.holderId,

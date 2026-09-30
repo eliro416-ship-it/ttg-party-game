@@ -249,10 +249,17 @@ export const GameTable: React.FC<GameTableProps> = ({
   useEffect(() => {
     if (serverTurnData) {
       if (serverTurnData.roundStatus) {
-        setRoundStatus(serverTurnData.roundStatus);
+        // If local state is already active and the round hasn't expired, prevent stale waiting state from reverting it
+        if (serverTurnData.roundStatus === 'waiting' && roundStatus === 'active' && roundEndsAt > Date.now()) {
+          // Keep active
+        } else {
+          setRoundStatus(serverTurnData.roundStatus);
+        }
       }
       const end = serverTurnData.roundEndsAt || serverTurnData.turnEndTime || 0;
-      setRoundEndsAt(end);
+      if (end > 0) {
+        setRoundEndsAt(end);
+      }
 
       if (serverTurnData.roundStatus === 'active') {
         isHandledRef.current = false;
@@ -267,7 +274,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         });
       }
     }
-  }, [serverTurnData]);
+  }, [serverTurnData, roundStatus, roundEndsAt]);
 
   const isHost = players.find(p => p.id === myPlayerId)?.isHost || myPlayerId === 'p-host';
 
@@ -379,8 +386,12 @@ export const GameTable: React.FC<GameTableProps> = ({
     });
 
     const unsubRoundStart = addSupabaseListener('round_start', (payload: RoundStartPayload) => {
-      sounds.soundSuccess();
-      const end = payload.roundEndsAt;
+      try {
+        sounds?.soundSuccess?.();
+      } catch (e) {}
+
+      const duration = Number(payload.turnDuration || payload.duration) || 60;
+      const end = Number(payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
       setRoundEndsAt(end);
       setRoundStatus('active');
       if (payload.holderId) {
@@ -609,33 +620,75 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Start round handler (Host or current holder clicks "התחל סיבוב! 🚀")
   const handleStartRound = () => {
-    sounds.soundSuccess();
-    const duration = serverTurnData?.turnDuration || turnDuration;
-    const roundEndTime = Date.now() + (duration * 1000);
-    const activeCard = activeTurnCard || cards[currentCardIndex] || cards[0];
-    const word = (isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word)).trim();
-    const cleanWordLength = word.trim().length;
-    const resolvedHolderId = activeMyPlayerId || myPlayerId || effectiveHolderId || 'p-host';
+    // 1. Sensory feedback (sound and vibration) with full error suppression
+    try {
+      if (typeof sounds !== 'undefined' && sounds) {
+        if (typeof (sounds as any).soundStartRound === 'function') {
+          (sounds as any).soundStartRound();
+        } else if (typeof sounds.soundSuccess === 'function') {
+          sounds.soundSuccess();
+        }
+      }
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    } catch (e) {
+      console.warn('Audio/Vibration error:', e);
+    }
 
-    // 1. Immediately update host/holder local state:
-    setRoundEndsAt(roundEndTime);
+    // 2. Mandatory Local State Update FIRST (Local State First - independent of network)
+    const duration = Number(serverTurnData?.turnDuration || turnDuration) || 60;
+    const endsAt = Date.now() + duration * 1000;
+
     setRoundStatus('active');
+    setRoundEndsAt(endsAt);
     isHandledRef.current = false;
     setCurrentGuess('');
 
-    // 2. Broadcast 'round_start' event across Supabase Realtime channel with required properties:
-    broadcastRoundStart({
-      category: isEn ? (activeCard.category_en || activeCard.category) : activeCard.category,
-      wordLength: cleanWordLength,
-      roundEndsAt: roundEndTime,
-      holderId: resolvedHolderId,
-      holderName: activeHolderName,
-      holderAvatar: activeHolderAvatar,
-      cardIndex: currentCardIndex,
-      cardId: activeCard.id,
-      wordHash: encodeWordHash(word),
-      turnDuration: duration,
-    });
+    // 3. Resolve active card, word length and categories safely without throwing
+    const activeCard = activeTurnCard || (cards && cards[currentCardIndex]) || (cards && cards[0]) || null;
+    let cleanWord = '';
+    let categoryName = '';
+    if (activeCard) {
+      const rawWord = isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word);
+      if (typeof rawWord === 'string') {
+        cleanWord = rawWord.trim();
+      }
+      categoryName = isEn ? (activeCard.category_en || activeCard.category) : activeCard.category;
+    }
+    const cleanWordLength = cleanWord.length > 0 ? cleanWord.length : 4;
+    const resolvedHolderId = activeMyPlayerId || myPlayerId || effectiveHolderId || 'p-host';
+
+    let hashedWord: string | undefined = undefined;
+    if (cleanWord) {
+      try {
+        hashedWord = encodeWordHash(cleanWord);
+      } catch (e) {
+        console.warn('Error encoding word hash:', e);
+      }
+    }
+
+    // 4. Safe Network Broadcast (Safe Execution)
+    try {
+      const payload: RoundStartPayload = {
+        category: categoryName || activeCategory || '',
+        wordLength: cleanWordLength,
+        roundEndsAt: endsAt,
+        roundEndTime: endsAt,
+        duration: duration,
+        holderId: resolvedHolderId,
+        holderName: activeHolderName || '',
+        holderAvatar: activeHolderAvatar || '👑',
+        cardIndex: currentCardIndex,
+        cardId: activeCard?.id,
+        wordHash: hashedWord,
+        turnDuration: duration,
+      };
+
+      broadcastRoundStart(payload);
+    } catch (networkError) {
+      console.error('Network broadcast failed:', networkError);
+    }
   };
 
   // Submit guess with Supabase Realtime validation & turn rotation
@@ -1153,7 +1206,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
             </span>
             <span className="text-xs sm:text-sm font-extrabold text-emerald-200">
-              {isEn ? 'Round in progress! Players are guessing...' : 'הסיבוב בעיצומו! השחקנים מנחשים...'}
+              {isEn ? '⏱️ Round in progress! Players are guessing...' : '⏱️ הסיבוב בעיצומו! המנחשים מקלידים...'}
             </span>
           </div>
         ) : null
@@ -1253,8 +1306,16 @@ export const GameTable: React.FC<GameTableProps> = ({
       ) : (
         /* GUESSER INTERACTION AREA */
         <div className="w-full flex flex-col items-center animate-fadeIn">
-          <p className="text-xs sm:text-sm text-slate-300 font-bold mb-1.5 text-center">
-            {t.guessLabel}
+          <p className="text-xs sm:text-sm font-bold mb-1.5 text-center flex items-center justify-center gap-1.5">
+            {currentRoundStatus === 'waiting' ? (
+              <span className="text-amber-300 animate-pulse">
+                {isEn ? '⏳ Waiting for round to start...' : '⏳ ממתינים לתחילת הסיבוב...'}
+              </span>
+            ) : (
+              <span className="text-slate-300">
+                {t.guessLabel}
+              </span>
+            )}
           </p>
 
           {/* Responsive & Elastic Letter Boxes Container */}
@@ -1299,7 +1360,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             onBackspace={handleBackspace}
             onHintClick={handleGiveHint}
             canHint={!isSuccess}
-            disabled={isSuccess || isShaking}
+            disabled={isSuccess || isShaking || currentRoundStatus !== 'active'}
             language={language}
           />
         </div>

@@ -41,6 +41,8 @@ export interface RoundStartPayload {
   category: string;
   wordLength: number;
   roundEndsAt: number;
+  roundEndTime?: number;
+  duration?: number;
   holderId: string;
   holderName?: string;
   holderAvatar?: string;
@@ -248,9 +250,37 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
     scoreUpdateListeners.forEach((fn) => fn(payload as ScoreUpdatePayload));
   });
 
-  channel.on('broadcast', { event: 'round_start' }, ({ payload }) => {
-    roundStartListeners.forEach((fn) => fn(payload as RoundStartPayload));
-  });
+  const handleRoundStartBroadcast = ({ payload }: { payload: any }) => {
+    if (!payload) return;
+    const duration = Number(payload.turnDuration || payload.duration) || 60;
+    const endsAt = Number(payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
+    const normalized: RoundStartPayload = {
+      category: payload.category || '',
+      wordLength: Number(payload.wordLength) || (payload.word ? String(payload.word).trim().length : 4),
+      roundEndsAt: endsAt,
+      roundEndTime: endsAt,
+      duration: duration,
+      holderId: String(payload.holderId || 'p-host'),
+      holderName: payload.holderName,
+      holderAvatar: payload.holderAvatar,
+      cardIndex: payload.cardIndex,
+      cardId: payload.cardId,
+      word: payload.word,
+      wordHash: payload.wordHash,
+      hint: payload.hint,
+      turnDuration: duration,
+    };
+    roundStartListeners.forEach((fn) => {
+      try {
+        fn(normalized);
+      } catch (err) {
+        console.error('Error in roundStart listener:', err);
+      }
+    });
+  };
+
+  channel.on('broadcast', { event: 'START_ROUND' }, handleRoundStartBroadcast);
+  channel.on('broadcast', { event: 'round_start' }, handleRoundStartBroadcast);
 
   channel.on('broadcast', { event: 'correct_guess' }, ({ payload }) => {
     correctGuessListeners.forEach((fn) => fn(payload as CorrectGuessPayload));
@@ -323,7 +353,7 @@ export function addSupabaseListener(event: 'presence', fn: (players: Player[]) =
 export function addSupabaseListener(event: 'game_start', fn: (payload: GameStartPayload) => void): () => void;
 export function addSupabaseListener(event: 'new_turn', fn: (payload: NewTurnPayload) => void): () => void;
 export function addSupabaseListener(event: 'score_update', fn: (payload: ScoreUpdatePayload) => void): () => void;
-export function addSupabaseListener(event: 'round_start', fn: (payload: RoundStartPayload) => void): () => void;
+export function addSupabaseListener(event: 'round_start' | 'START_ROUND', fn: (payload: RoundStartPayload) => void): () => void;
 export function addSupabaseListener(event: 'correct_guess', fn: (payload: CorrectGuessPayload) => void): () => void;
 export function addSupabaseListener(event: 'turn_timeout', fn: (payload: TurnTimeoutPayload) => void): () => void;
 export function addSupabaseListener(event: 'skip_turn', fn: (payload: { holderId: string }) => void): () => void;
@@ -338,7 +368,7 @@ export function addSupabaseListener(event: string, fn: any): () => void {
   else if (event === 'game_start') gameStartListeners.add(fn);
   else if (event === 'new_turn') newTurnListeners.add(fn);
   else if (event === 'score_update') scoreUpdateListeners.add(fn);
-  else if (event === 'round_start') roundStartListeners.add(fn);
+  else if (event === 'round_start' || event === 'START_ROUND') roundStartListeners.add(fn);
   else if (event === 'correct_guess') correctGuessListeners.add(fn);
   else if (event === 'turn_timeout') turnTimeoutListeners.add(fn);
   else if (event === 'skip_turn') skipTurnListeners.add(fn);
@@ -354,7 +384,7 @@ export function addSupabaseListener(event: string, fn: any): () => void {
     else if (event === 'game_start') gameStartListeners.delete(fn);
     else if (event === 'new_turn') newTurnListeners.delete(fn);
     else if (event === 'score_update') scoreUpdateListeners.delete(fn);
-    else if (event === 'round_start') roundStartListeners.delete(fn);
+    else if (event === 'round_start' || event === 'START_ROUND') roundStartListeners.delete(fn);
     else if (event === 'correct_guess') correctGuessListeners.delete(fn);
     else if (event === 'turn_timeout') turnTimeoutListeners.delete(fn);
     else if (event === 'skip_turn') skipTurnListeners.delete(fn);
@@ -458,18 +488,46 @@ export function broadcastGameStart(payload: GameStartPayload): void {
 }
 
 export function broadcastRoundStart(payload: RoundStartPayload): void {
+  const duration = Number(payload.turnDuration || payload.duration) || 60;
+  const endsAt = Number(payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
+  const normalized: RoundStartPayload = {
+    ...payload,
+    roundEndsAt: endsAt,
+    roundEndTime: endsAt,
+    duration,
+    turnDuration: duration,
+  };
+
+  // 1. Notify local listeners first with try/catch
   roundStartListeners.forEach((fn) => {
     try {
-      fn(payload);
-    } catch (e) {}
+      fn(normalized);
+    } catch (e) {
+      console.warn('Local listener error in broadcastRoundStart:', e);
+    }
   });
 
-  if (activeChannel) {
-    activeChannel.send({
-      type: 'broadcast',
-      event: 'round_start',
-      payload,
-    });
+  // 2. Safe Broadcast across Supabase channel
+  if (activeChannel && typeof activeChannel.send === 'function') {
+    try {
+      activeChannel.send({
+        type: 'broadcast',
+        event: 'START_ROUND',
+        payload: normalized,
+      }).catch((err: any) => console.error('Broadcast catch error (START_ROUND):', err));
+    } catch (networkError) {
+      console.error('Network broadcast failed (START_ROUND):', networkError);
+    }
+
+    try {
+      activeChannel.send({
+        type: 'broadcast',
+        event: 'round_start',
+        payload: normalized,
+      }).catch((err: any) => console.error('Broadcast catch error (round_start):', err));
+    } catch (networkError) {
+      console.error('Network broadcast failed (round_start):', networkError);
+    }
   }
 }
 
