@@ -3,13 +3,28 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Register Service Worker for PWA
+// Register Service Worker for PWA with Auto-Update
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
-      .then((reg) => {
-        console.log('PWA ServiceWorker registered with scope:', reg.scope);
+      .then((registration) => {
+        console.log('PWA ServiceWorker registered with scope:', registration.scope);
+
+        registration.onupdatefound = () => {
+          const installingWorker = registration.installing;
+          if (installingWorker) {
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // נמצאה גרסה חדשה – רענן את העמוד אוטומטית
+                window.location.reload();
+              }
+            };
+          }
+        };
+
+        // Proactively check for Service Worker updates on launch
+        registration.update().catch(() => {});
       })
       .catch((err) => {
         console.warn('PWA ServiceWorker registration failed:', err);

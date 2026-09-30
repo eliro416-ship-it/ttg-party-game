@@ -1,35 +1,23 @@
 // Service Worker for Time to Guess (TTG) PWA
-const CACHE_NAME = 'ttg-pwa-cache-v2';
-const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/favicon.png',
-  '/icon.svg',
-  '/apple-touch-icon.png'
-];
-
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS);
-    }).then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+        cacheNames.map((cache) => {
+          // מחיקת כל ה-cache הישן בעת הפעלת Service Worker מעודכן
+          return caches.delete(cache);
+        })
       );
     }).then(() => self.clients.claim())
   );
 });
+
+const CACHE_NAME = 'ttg-pwa-cache-v4';
+
 
 self.addEventListener('fetch', (event) => {
   // Ignore non-GET requests and external real-time channels

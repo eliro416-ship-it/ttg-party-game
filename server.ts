@@ -29,7 +29,9 @@ async function startServer() {
   app.use(express.static(path.resolve(__dirname, 'public'), {
     maxAge: '1d',
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.png')) {
+      if (filePath.endsWith('sw.js')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (filePath.endsWith('.png')) {
         res.setHeader('Content-Type', 'image/png');
       } else if (filePath.endsWith('.svg')) {
         res.setHeader('Content-Type', 'image/svg+xml');

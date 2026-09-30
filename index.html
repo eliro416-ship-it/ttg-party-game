@@ -106,6 +106,30 @@
   </head>
   <body class="bg-[#0F172A] text-slate-100 antialiased selection:bg-pink-500 selection:text-white">
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').then(function(registration) {
+            registration.onupdatefound = function() {
+              var installingWorker = registration.installing;
+              if (installingWorker) {
+                installingWorker.onstatechange = function() {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // נמצאה גרסה חדשה – רענן את העמוד אוטומטית
+                    window.location.reload();
+                  }
+                };
+              }
+            };
+            if (registration.update) {
+              registration.update().catch(function() {});
+            }
+          }).catch(function(err) {
+            console.warn('SW registration error:', err);
+          });
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
