@@ -411,7 +411,7 @@ export default function App() {
       }
       const isHolder = String(myPlayerId) === String(payload.holderId);
       const duration = Number(payload.turnDuration || payload.duration) || settings.turnDuration || 60;
-      const endsAt = Number(payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
+      const endsAt = Number(payload.endTime || payload.roundEndTime || payload.roundEndsAt) || (Date.now() + duration * 1000);
 
       setServerTurnData((prev) => ({
         isHolder,
@@ -419,26 +419,27 @@ export default function App() {
         roundEndsAt: endsAt,
         turnEndTime: endsAt,
         turnDuration: duration,
-        cardIndex: payload.cardIndex ?? 0,
+        cardIndex: payload.cardIndex ?? prev?.cardIndex ?? 0,
         totalCards: 50,
-        holderId: payload.holderId,
-        holderName: payload.holderName || '',
-        holderAvatar: payload.holderAvatar || '👑',
-        cardId: payload.cardId,
+        holderId: payload.holderId || prev?.holderId || currentHolderId,
+        holderName: payload.holderName || prev?.holderName || '',
+        holderAvatar: payload.holderAvatar || prev?.holderAvatar || '👑',
+        cardId: payload.cardId || prev?.cardId,
         image: isHolder ? prev?.image || null : null,
         imageUrl: isHolder ? prev?.imageUrl || null : null,
         fallback: null,
         word: isHolder ? prev?.word || null : null,
-        wordHash: payload.wordHash,
-        category: payload.category,
-        hint: payload.hint || null,
-        wordLength: payload.wordLength > 0 ? payload.wordLength : 4,
-        players: [],
+        wordHash: payload.wordHash || prev?.wordHash,
+        category: payload.category || prev?.category || '',
+        hint: payload.hint || prev?.hint || null,
+        wordLength: (payload.wordLength && payload.wordLength > 0) ? payload.wordLength : (prev?.wordLength || 4),
+        players: prev?.players || [],
       }));
     };
 
     const unsubRoundStart = addSupabaseListener('round_start', handleRoundStart);
     const unsubRoundStarted = addSupabaseListener('ROUND_STARTED', handleRoundStart);
+    const unsubStartRound = addSupabaseListener('START_ROUND', handleRoundStart);
 
     // 5. Correct guess broadcast: Host authoritatively updates scores and schedules next turn
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload) => {
@@ -612,6 +613,7 @@ export default function App() {
       unsubGameStart();
       unsubRoundStart();
       unsubRoundStarted();
+      unsubStartRound();
       unsubCorrectGuess();
       unsubTurnTimeout();
       unsubSkipTurn();
@@ -622,6 +624,19 @@ export default function App() {
       unsubRequestSync();
     };
   }, [pin, joinedRoom, hostStep, screen, myPlayerId, activeDeck, language, settings.turnDuration]);
+
+  const handleRoundStartFromTable = useCallback((endTime: number, duration: number) => {
+    setServerTurnData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        roundStatus: 'active',
+        roundEndsAt: endTime,
+        turnEndTime: endTime,
+        turnDuration: duration,
+      };
+    });
+  }, []);
 
   const handleToggleMute = () => {
     const updated = sounds.toggleMute();
@@ -1060,6 +1075,7 @@ export default function App() {
             onToggleLanguage={handleToggleLanguage}
             voiceGender={voiceGender}
             onChangeVoiceGender={handleChangeVoiceGender}
+            onRoundStart={handleRoundStartFromTable}
           />
         )}
       </div>

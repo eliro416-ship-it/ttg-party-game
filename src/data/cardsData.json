@@ -1,0 +1,345 @@
+[
+  {
+    "id": 1,
+    "word": "צב",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 2,
+    "word": "זאב",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1564865878688-9a244444042a?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 3,
+    "word": "כלב",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 4,
+    "word": "נמר",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1561731216-c3a4d99437d5?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 5,
+    "word": "אריה",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1614027164847-1b28caa1401f?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 6,
+    "word": "חתול",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 7,
+    "word": "דוב",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1589656966895-2f33e7653819?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 8,
+    "word": "פיל",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 9,
+    "word": "סוס",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 10,
+    "word": "גמל",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1509205477838-a534e43a849f?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 11,
+    "word": "גירפה",
+    "category": "חיות",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1534567153574-2b12153a87f0?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 12,
+    "word": "קוף",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 13,
+    "word": "זברה",
+    "category": "חיות",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1501705388883-4ed8a543392c?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 14,
+    "word": "דולפין",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1570481662006-a3a1374699e8?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 15,
+    "word": "שועל",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1516934024742-b461fba47600?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 16,
+    "word": "פינגווין",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1598439210625-5067c578f3f6?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 17,
+    "word": "ארנב",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 18,
+    "word": "ינשוף",
+    "category": "חיות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1579202673506-ca3ce28943ef?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 19,
+    "word": "פנדה",
+    "category": "חיות",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 20,
+    "word": "פיצה",
+    "category": "אוכל",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 21,
+    "word": "המבורגר",
+    "category": "אוכל",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 22,
+    "word": "תפוח",
+    "category": "אוכל",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 23,
+    "word": "בננה",
+    "category": "אוכל",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 24,
+    "word": "אבטיח",
+    "category": "אוכל",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 25,
+    "word": "גלידה",
+    "category": "אוכל",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 26,
+    "word": "שוקולד",
+    "category": "אוכל",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1511381939415-e44015466834?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 27,
+    "word": "עוגה",
+    "category": "אוכל",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 28,
+    "word": "סושי",
+    "category": "אוכל",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 29,
+    "word": "פסטה",
+    "category": "אוכל",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 30,
+    "word": "תות",
+    "category": "אוכל",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 31,
+    "word": "קפה",
+    "category": "אוכל",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 32,
+    "word": "גיטרה",
+    "category": "חפצים",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 33,
+    "word": "שעון",
+    "category": "חפצים",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 34,
+    "word": "טלפון",
+    "category": "חפצים",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 35,
+    "word": "ספר",
+    "category": "חפצים",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 36,
+    "word": "מפתח",
+    "category": "חפצים",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 37,
+    "word": "מצלמה",
+    "category": "חפצים",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 38,
+    "word": "מנורה",
+    "category": "חפצים",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 39,
+    "word": "כיסא",
+    "category": "חפצים",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1580481077195-c3a8a042d131?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 40,
+    "word": "משקפיים",
+    "category": "חפצים",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 41,
+    "word": "כדור",
+    "category": "חפצים",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1614632537423-1e6c2e7e0aab?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 42,
+    "word": "רופא",
+    "category": "מקצועות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 43,
+    "word": "טייס",
+    "category": "מקצועות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 44,
+    "word": "כבאי",
+    "category": "מקצועות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 45,
+    "word": "שוטר",
+    "category": "מקצועות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1508847154043-be5407fcaa5a?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 46,
+    "word": "שף",
+    "category": "מקצועות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 47,
+    "word": "מורה",
+    "category": "מקצועות",
+    "gender": "נקבה",
+    "imageUrl": "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 48,
+    "word": "צייר",
+    "category": "מקצועות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    "id": 49,
+    "word": "אסטרונאוט",
+    "category": "מקצועות",
+    "gender": "זכר",
+    "imageUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80"
+  }
+]

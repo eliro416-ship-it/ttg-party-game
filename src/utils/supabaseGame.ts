@@ -42,6 +42,7 @@ export interface RoundStartPayload {
   wordLength: number;
   roundEndsAt: number;
   roundEndTime?: number;
+  endTime?: number;
   duration?: number;
   holderId: string;
   holderName?: string;
@@ -253,10 +254,11 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
   const handleRoundStartBroadcast = ({ payload }: { payload: any }) => {
     if (!payload) return;
     const duration = Number(payload.turnDuration || payload.duration) || 60;
-    const endsAt = Number(payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
+    const endsAt = Number(payload.endTime || payload.roundEndTime || payload.roundEndsAt) || (Date.now() + duration * 1000);
     const normalized: RoundStartPayload = {
       category: payload.category || '',
       wordLength: Number(payload.wordLength) || (payload.word ? String(payload.word).trim().length : 4),
+      endTime: endsAt,
       roundEndsAt: endsAt,
       roundEndTime: endsAt,
       duration: duration,
@@ -491,9 +493,10 @@ export function broadcastGameStart(payload: GameStartPayload): void {
 
 export function broadcastRoundStart(payload: RoundStartPayload): void {
   const duration = Number(payload.turnDuration || payload.duration) || 60;
-  const endsAt = Number(payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
+  const endsAt = Number(payload.endTime || payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
   const normalized: RoundStartPayload = {
     ...payload,
+    endTime: endsAt,
     roundEndsAt: endsAt,
     roundEndTime: endsAt,
     duration,
@@ -514,21 +517,31 @@ export function broadcastRoundStart(payload: RoundStartPayload): void {
     try {
       activeChannel.send({
         type: 'broadcast',
-        event: 'ROUND_STARTED',
-        payload: normalized,
-      }).catch((err: any) => console.error('Broadcast catch error (ROUND_STARTED):', err));
+        event: 'START_ROUND',
+        payload: {
+          endTime: endsAt,
+          duration: duration,
+          roundEndTime: endsAt,
+          roundEndsAt: endsAt,
+          holderId: payload.holderId,
+          category: payload.category,
+          wordLength: payload.wordLength,
+          cardId: payload.cardId,
+          cardIndex: payload.cardIndex,
+        },
+      }).catch((err: any) => console.error('Broadcast catch error (START_ROUND):', err));
     } catch (networkError) {
-      console.error('Network broadcast failed (ROUND_STARTED):', networkError);
+      console.error('Network broadcast failed (START_ROUND):', networkError);
     }
 
     try {
       activeChannel.send({
         type: 'broadcast',
-        event: 'START_ROUND',
+        event: 'ROUND_STARTED',
         payload: normalized,
-      }).catch((err: any) => console.error('Broadcast catch error (START_ROUND):', err));
+      }).catch((err: any) => console.error('Broadcast catch error (ROUND_STARTED):', err));
     } catch (networkError) {
-      console.error('Network broadcast failed (START_ROUND):', networkError);
+      console.error('Network broadcast failed (ROUND_STARTED):', networkError);
     }
 
     try {

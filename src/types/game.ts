@@ -10,6 +10,7 @@ export interface CardItem {
   category: string;
   category_en?: string;
   categoryEn?: string;
+  gender?: string;
   image: string;
   imageUrl?: string;
   fallback?: string;

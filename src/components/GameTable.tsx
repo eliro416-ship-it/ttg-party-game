@@ -85,6 +85,7 @@ interface GameTableProps {
   onToggleLanguage?: () => void;
   voiceGender?: VoiceGender;
   onChangeVoiceGender?: (gender: VoiceGender) => void;
+  onRoundStart?: (endTime: number, duration: number) => void;
 }
 
 export const GameTable: React.FC<GameTableProps> = ({
@@ -109,6 +110,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   onToggleLanguage,
   voiceGender,
   onChangeVoiceGender,
+  onRoundStart,
 }) => {
   const t = translations[language];
   const isEn = language === 'en';
@@ -235,6 +237,14 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [floatingReaction, setFloatingReaction] = useState<{ reactionType?: 'yes' | 'no' | 'hot' | 'cold'; emoji: string; text: string; sender: string } | null>(null);
   const [winnerCelebration, setWinnerCelebration] = useState<RoundWonPayload | null>(null);
 
+  // User Requirement: isRoundActive & roundEndTime
+  const [isRoundActive, setIsRoundActive] = useState<boolean>(() => {
+    return serverTurnData?.roundStatus === 'active';
+  });
+  const [roundEndTime, setRoundEndTime] = useState<number>(() => {
+    return serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
+  });
+
   // Round status ('waiting' = paused waiting for host/holder to start; 'active' = timer counting down; 'ended' = round concluded)
   const [roundStatus, setRoundStatus] = useState<'waiting' | 'active' | 'ended'>(() => {
     return serverTurnData?.roundStatus || 'waiting';
@@ -243,39 +253,42 @@ export const GameTable: React.FC<GameTableProps> = ({
     return serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
   });
 
-  const currentRoundStatus: 'waiting' | 'active' | 'ended' = roundStatus;
-  const currentRoundEndsAt: number = roundEndsAt;
+  const currentRoundStatus: 'waiting' | 'active' | 'ended' = isRoundActive ? 'active' : roundStatus;
+  const currentRoundEndsAt: number = (roundEndTime > 0 && roundEndTime > Date.now()) ? roundEndTime : (roundEndsAt > 0 ? roundEndsAt : roundEndTime);
 
   // Sync from incoming serverTurnData updates (preserves currentGuess!)
   useEffect(() => {
     if (serverTurnData) {
       if (serverTurnData.roundStatus) {
         // If local state is already active and the round hasn't expired, prevent stale waiting state from reverting it
-        if (serverTurnData.roundStatus === 'waiting' && roundStatus === 'active' && roundEndsAt > Date.now()) {
+        if (serverTurnData.roundStatus === 'waiting' && isRoundActive && roundEndTime > Date.now()) {
           // Keep active
         } else {
           setRoundStatus(serverTurnData.roundStatus);
+          setIsRoundActive(serverTurnData.roundStatus === 'active');
         }
       }
       const end = serverTurnData.roundEndsAt || serverTurnData.turnEndTime || 0;
       if (end > 0) {
         setRoundEndsAt(end);
+        setRoundEndTime(end);
       }
 
       if (serverTurnData.roundStatus === 'active') {
         isHandledRef.current = false;
+        setIsRoundActive(true);
       }
 
       if (serverTurnData.wordLength || serverTurnData.category) {
         setSyncedRoundCard({
-          cardId: serverTurnData.cardId,
+          cardId: serverTurnData.cardId ? String(serverTurnData.cardId) : undefined,
           category: serverTurnData.category,
           wordLength: serverTurnData.wordLength,
           wordHash: serverTurnData.wordHash,
         });
       }
     }
-  }, [serverTurnData, roundStatus, roundEndsAt]);
+  }, [serverTurnData, isRoundActive, roundEndTime]);
 
   const isHost = players.find(p => p.id === myPlayerId)?.isHost || myPlayerId === 'p-host';
 
@@ -392,7 +405,9 @@ export const GameTable: React.FC<GameTableProps> = ({
       } catch (e) {}
 
       const duration = Number(payload.turnDuration || payload.duration) || 60;
-      const end = Number(payload.roundEndsAt || payload.roundEndTime) || (Date.now() + duration * 1000);
+      const end = Number(payload.endTime || payload.roundEndTime || payload.roundEndsAt) || (Date.now() + duration * 1000);
+      setIsRoundActive(true);
+      setRoundEndTime(end);
       setRoundEndsAt(end);
       setRoundStatus('active');
       if (payload.holderId) {
@@ -404,7 +419,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       if (payload.wordLength || payload.category || payload.cardId) {
         setSyncedRoundCard({
-          cardId: payload.cardId,
+          cardId: payload.cardId ? String(payload.cardId) : undefined,
           category: payload.category,
           wordLength: payload.wordLength,
           wordHash: payload.wordHash,
@@ -414,6 +429,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     const unsubRoundStart = addSupabaseListener('round_start', onRoundStartPayload);
     const unsubRoundStarted = addSupabaseListener('ROUND_STARTED', onRoundStartPayload);
+    const unsubStartRound = addSupabaseListener('START_ROUND', onRoundStartPayload);
 
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload: CorrectGuessPayload) => {
       sounds.soundSuccess();
@@ -427,6 +443,8 @@ export const GameTable: React.FC<GameTableProps> = ({
         points: payload.points,
         scores: [],
       });
+      setIsRoundActive(false);
+      setRoundEndTime(0);
       setRoundStatus('waiting');
       setRoundEndsAt(0);
       isHandledRef.current = true;
@@ -439,6 +457,8 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload: TurnTimeoutPayload) => {
       sounds.soundError();
+      setIsRoundActive(false);
+      setRoundEndTime(0);
       setRoundStatus('waiting');
       setRoundEndsAt(0);
       setWinnerCelebration({
@@ -521,6 +541,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       unsubHint();
       unsubRoundStart();
       unsubRoundStarted();
+      unsubStartRound();
       unsubCorrectGuess();
       unsubTurnTimeout();
       unsubNewTurn();
@@ -548,6 +569,8 @@ export const GameTable: React.FC<GameTableProps> = ({
   const handleTimeUp = useCallback(() => {
     if (isHandledRef.current) return;
     isHandledRef.current = true;
+    setIsRoundActive(false);
+    setRoundEndTime(0);
     setRoundStatus('waiting');
     setRoundEndsAt(0);
 
@@ -643,23 +666,27 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     // 2. Mandatory Local State Update FIRST (Local State First - independent of network)
     const duration = Number(serverTurnData?.turnDuration || turnDuration) || 60;
-    const endsAt = Date.now() + duration * 1000;
+    const endTime = Date.now() + duration * 1000;
 
+    setIsRoundActive(true);
+    setRoundEndTime(endTime);
     setRoundStatus('active');
-    setRoundEndsAt(endsAt);
+    setRoundEndsAt(endTime);
     isHandledRef.current = false;
     setCurrentGuess('');
 
+    onRoundStart?.(endTime, duration);
+
     // 3. Resolve active card, word length and categories safely without throwing
-    const activeCard = activeTurnCard || (cards && cards[currentCardIndex]) || (cards && cards[0]) || null;
+    const currentActiveCard = activeTurnCard || (cards && cards[currentCardIndex]) || (cards && cards[0]) || null;
     let cleanWord = '';
     let categoryName = '';
-    if (activeCard) {
-      const rawWord = isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word);
+    if (currentActiveCard) {
+      const rawWord = isEn ? (currentActiveCard.word_en || currentActiveCard.word) : (currentActiveCard.word_he || currentActiveCard.word);
       if (typeof rawWord === 'string') {
         cleanWord = rawWord.trim();
       }
-      categoryName = isEn ? (activeCard.category_en || activeCard.category) : activeCard.category;
+      categoryName = isEn ? (currentActiveCard.category_en || currentActiveCard.category) : currentActiveCard.category;
     }
     const cleanWordLength = cleanWord.length > 0 ? cleanWord.length : 4;
     const resolvedHolderId = activeMyPlayerId || myPlayerId || effectiveHolderId || 'p-host';
@@ -678,16 +705,17 @@ export const GameTable: React.FC<GameTableProps> = ({
       const payload: RoundStartPayload = {
         category: categoryName || activeCategory || '',
         wordLength: cleanWordLength,
-        roundEndsAt: endsAt,
-        roundEndTime: endsAt,
+        endTime: endTime,
+        roundEndsAt: endTime,
+        roundEndTime: endTime,
         duration: duration,
+        turnDuration: duration,
         holderId: resolvedHolderId,
         holderName: activeHolderName || '',
         holderAvatar: activeHolderAvatar || '👑',
         cardIndex: currentCardIndex,
-        cardId: activeCard?.id,
+        cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
         wordHash: hashedWord,
-        turnDuration: duration,
       };
 
       broadcastRoundStart(payload);
@@ -696,14 +724,32 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (channel && typeof channel.send === 'function') {
         channel.send({
           type: 'broadcast',
+          event: 'START_ROUND',
+          payload: {
+            endTime,
+            duration,
+            roundEndTime: endTime,
+            roundEndsAt: endTime,
+            holderId: resolvedHolderId,
+            category: categoryName || activeCategory || '',
+            wordLength: cleanWordLength,
+            cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
+            cardIndex: currentCardIndex,
+          },
+        }).catch((err: any) => console.error('Broadcast catch error (START_ROUND direct):', err));
+
+        channel.send({
+          type: 'broadcast',
           event: 'ROUND_STARTED',
           payload: {
-            roundEndTime: endsAt,
+            endTime,
+            roundEndTime: endTime,
+            roundEndsAt: endTime,
             duration: duration,
             holderId: resolvedHolderId,
             category: categoryName || activeCategory || '',
             wordLength: cleanWordLength,
-            cardId: activeCard?.id,
+            cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
             cardIndex: currentCardIndex,
           },
         }).catch((err: any) => console.error('Broadcast catch error (ROUND_STARTED direct):', err));
@@ -1095,7 +1141,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             </div>
 
             {/* Waiting status overlay badge directly inside the picture frame */}
-            {currentRoundStatus === 'waiting' ? (
+            {!isRoundActive && currentRoundStatus === 'waiting' ? (
               <div className="mt-1.5 bg-black/75 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-amber-400/50 shadow-xl flex items-center justify-center gap-2 text-amber-200 text-xs sm:text-sm font-black animate-pulse max-w-[92%]">
                 <TimerIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2.4} />
                 <span className="truncate">
@@ -1204,7 +1250,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       {/* Waiting Status / Start Round Actions: for holder (shows Start Round button when waiting, and active notice when round is active) */}
       {isCurrentClientHolder && (
-        currentRoundStatus === 'waiting' ? (
+        !isRoundActive && currentRoundStatus === 'waiting' ? (
           <div className="w-full my-2 p-3 sm:p-4 rounded-3xl bg-gradient-to-r from-purple-900/60 via-pink-900/50 to-indigo-900/60 border-2 border-pink-500/50 shadow-2xl text-center animate-fadeIn">
             <div className="text-xs sm:text-sm font-extrabold text-pink-200 mb-3 flex items-center justify-center gap-2">
               <span className="text-xl">👑</span>
@@ -1221,11 +1267,11 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span className="tracking-wide">{isEn ? 'Start Round! 🚀' : 'התחל סיבוב! 🚀'}</span>
             </button>
           </div>
-        ) : currentRoundStatus === 'active' ? (
+        ) : (isRoundActive || currentRoundStatus === 'active') ? (
           <div className="w-full my-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-900/80 via-teal-900/70 to-emerald-950/80 border-2 border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.3)] text-center animate-fadeIn flex items-center justify-center gap-2.5">
-            <span className="text-base sm:text-lg animate-bounce">🔥</span>
+            <span className="text-base sm:text-lg animate-bounce">⏱️</span>
             <span className="text-xs sm:text-sm font-black text-emerald-200 tracking-wide">
-              {isEn ? '🔥 Round active! Answer the guessers (Yes / No / Hot / Cold)' : '🔥 הסיבוב פעיל! ענה למנחשים (כן / לא / חם / קר)'}
+              {isEn ? '⏱️ Round is underway! Answer the questions' : '⏱️ הסיבוב בעיצומו! ענה על השאלות'}
             </span>
           </div>
         ) : null
@@ -1239,10 +1285,10 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div className="w-full grid grid-cols-4 gap-1.5 sm:gap-2 my-2">
             <button
               type="button"
-              disabled={currentRoundStatus !== 'active'}
+              disabled={!isRoundActive && currentRoundStatus !== 'active'}
               onClick={() => sendHolderReaction('yes', t.btnYes)}
               className={`btn-3d btn-3d-clue-yes h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
-                currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+                isRoundActive || currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
               }`}
               title={isEn ? 'Yes (Spoken Voice)' : 'כן (השמעת קול)'}
             >
@@ -1252,10 +1298,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
-              disabled={currentRoundStatus !== 'active'}
+              disabled={!isRoundActive && currentRoundStatus !== 'active'}
               onClick={() => sendHolderReaction('no', t.btnNo)}
               className={`btn-3d btn-3d-clue-no h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
-                currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+                isRoundActive || currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
               }`}
               title={isEn ? 'No (Spoken Voice)' : 'לא (השמעת קול)'}
             >
@@ -1265,10 +1311,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
-              disabled={currentRoundStatus !== 'active'}
+              disabled={!isRoundActive && currentRoundStatus !== 'active'}
               onClick={() => sendHolderReaction('hot', t.btnHot)}
               className={`btn-3d btn-3d-clue-hot h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
-                currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+                isRoundActive || currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
               }`}
               title={isEn ? 'Hot (Spoken Voice)' : 'חם (השמעת קול)'}
             >
@@ -1278,10 +1324,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
-              disabled={currentRoundStatus !== 'active'}
+              disabled={!isRoundActive && currentRoundStatus !== 'active'}
               onClick={() => sendHolderReaction('cold', t.btnCold)}
               className={`btn-3d btn-3d-clue-cold h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
-                currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+                isRoundActive || currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
               }`}
               title={isEn ? 'Cold (Spoken Voice)' : 'קר (השמעת קול)'}
             >
@@ -1338,7 +1384,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         /* GUESSER INTERACTION AREA */
         <div className="w-full flex flex-col items-center animate-fadeIn">
           <p className="text-xs sm:text-sm font-bold mb-1.5 text-center flex items-center justify-center gap-1.5">
-            {currentRoundStatus === 'waiting' ? (
+            {!isRoundActive && currentRoundStatus === 'waiting' ? (
               <span className="text-amber-300 animate-pulse">
                 {isEn ? '⏳ Waiting for round to start...' : '⏳ ממתינים לתחילת הסיבוב...'}
               </span>
@@ -1391,7 +1437,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             onBackspace={handleBackspace}
             onHintClick={handleGiveHint}
             canHint={!isSuccess}
-            disabled={isSuccess || isShaking || currentRoundStatus !== 'active'}
+            disabled={isSuccess || isShaking || (!isRoundActive && currentRoundStatus !== 'active')}
             language={language}
           />
         </div>
