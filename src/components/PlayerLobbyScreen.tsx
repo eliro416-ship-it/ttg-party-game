@@ -1,3 +1,4 @@
+import { WhatsAppShareButton } from './WhatsAppShareButton';
 import React, { useState } from 'react';
 import { Player, Language } from '../types/game';
 import { translations } from '../utils/translations';
@@ -86,6 +87,14 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
             </button>
           )}
 
+          {pin && pin.trim() && (
+            <WhatsAppShareButton
+              pin={pin}
+              language={language}
+              variant="icon"
+              className="!h-7 !w-7 !min-w-[28px] !rounded-lg"
+            />
+          )}
           <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/30">
             <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
             <span>PIN: {pin}</span>
@@ -119,25 +128,34 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
             : 'ברגע שהמארח/ת ילחץ/תלחץ על התחלת המשחק, המכשיר שלך יכנס אוטומטית לסיבוב הראשון!'}
         </p>
 
-        {/* PIN Copy & Share quick buttons */}
-        <div className="flex justify-center gap-2.5 mt-4">
+        {/* PIN Copy & Share quick buttons in equal 3 columns */}
+        <div className="grid grid-cols-3 gap-2 items-center w-full max-w-sm mx-auto mt-4">
           <button
+            type="button"
             onClick={handleCopyPin}
-            className="btn-3d btn-3d-dark flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white cursor-pointer"
+            className="btn-3d btn-3d-dark h-[42px] px-2 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
+            title={t.copyPin}
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copied ? t.pinCopied : t.copyPin}</span>
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <Copy className="w-3.5 h-3.5 text-slate-200 shrink-0" />}
+            <span className="whitespace-nowrap">{copied ? t.pinCopied : (isEn ? 'Copy Code' : 'העתק קוד')}</span>
           </button>
-
+          <WhatsAppShareButton
+            pin={pin}
+            language={language}
+            variant="compact"
+            className="h-[42px] !py-0 px-2 text-xs font-bold shadow-md"
+          />
           <button
+            type="button"
             onClick={() => {
               sounds.soundKeypress();
               onOpenShareModal();
             }}
-            className="btn-3d btn-3d-pink flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-white cursor-pointer"
+            className="btn-3d btn-3d-pink h-[42px] px-2 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
+            title={isEn ? 'QR & Link' : 'QR וקישור'}
           >
-            <Share2 className="w-3.5 h-3.5 text-pink-100" />
-            <span>{t.share}</span>
+            <Share2 className="w-3.5 h-3.5 text-pink-100 shrink-0" />
+            <span className="whitespace-nowrap">{isEn ? 'QR & Link' : 'QR וקישור'}</span>
           </button>
         </div>
       </div>

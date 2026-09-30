@@ -8,7 +8,7 @@
 
     <!-- Web App Manifest & PWA Configuration -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#1a102f" />
+    <meta name="theme-color" content="#120c1f" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -34,11 +34,75 @@
     <!-- Favicon & Touch Icons -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+      <!-- Completely suppress and remove any Netlify badge or third-party platform overlay -->
+    <style>
+      [data-netlify],
+      [data-netlify-badge],
+      .netlify-badge,
+      #netlify-badge,
+      a[href*="netlify" i],
+      img[src*="netlify" i],
+      img[alt*="netlify" i],
+      [aria-label*="netlify" i],
+      div[class*="netlify" i],
+      div[id*="netlify" i],
+      iframe[src*="netlify" i],
+      span[class*="netlify" i],
+      aside[class*="netlify" i],
+      footer a[href*="netlify" i] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        position: absolute !important;
+        top: -99999px !important;
+        left: -99999px !important;
+        z-index: -99999 !important;
+      }
+    </style>
+    <script>
+      (function() {
+        function purgeNetlifyBadge() {
+          try {
+            var targets = document.querySelectorAll(
+              'a[href*="netlify" i], img[src*="netlify" i], img[alt*="netlify" i], [class*="netlify" i], [id*="netlify" i], [data-netlify]'
+            );
+            for (var i = 0; i < targets.length; i++) {
+              targets[i].remove();
+            }
+            var allElements = document.querySelectorAll('a, div, span, p, footer, button, aside');
+            for (var j = 0; j < allElements.length; j++) {
+              var el = allElements[j];
+              var txt = (el.textContent || '').trim();
+              if (/powered\s*by\s*netlify/i.test(txt) || (/netlify/i.test(txt) && txt.length < 50)) {
+                if (el.id !== 'root' && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+                  el.remove();
+                }
+              }
+            }
+          } catch (e) {}
+        }
+        if (typeof document !== 'undefined') {
+          purgeNetlifyBadge();
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', purgeNetlifyBadge);
+          }
+          window.addEventListener('load', purgeNetlifyBadge);
+          try {
+            var observer = new MutationObserver(purgeNetlifyBadge);
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+          } catch (e) {}
+        }
+      })();
+    </script>
   </head>
   <body class="bg-[#0F172A] text-slate-100 antialiased selection:bg-pink-500 selection:text-white">
     <div id="root"></div>

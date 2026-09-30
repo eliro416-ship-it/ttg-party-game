@@ -1,12 +1,11 @@
 import React from 'react';
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
-import { getShareUrl } from '../utils/url';
 
 interface WhatsAppShareButtonProps {
   pin: string;
   language?: Language;
-  variant?: 'large' | 'compact';
+  variant?: 'large' | 'compact' | 'icon';
   className?: string;
   onShared?: () => void;
 }
@@ -25,61 +24,95 @@ export const WhatsAppShareButton: React.FC<WhatsAppShareButtonProps> = ({
   onShared,
 }) => {
   const isEn = language === 'en';
-  const currentLang = language;
 
-  // Use the dynamic room invitation URL
-  const shareUrl = getShareUrl(pin, currentLang);
+  const getDirectMessage = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const shareUrl = `${origin}/?pin=${pin}`;
+    return encodeURIComponent(
+      `בואו לשחק איתי ב-Time To Guess! 🎮\nקוד החדר (PIN): ${pin}\nלהצטרפות ישירה: ${shareUrl}`
+    );
+  };
 
-  const shareText = isEn
-    ? `🎮 Invitation to "Time to Guess" (Time to Guess)! ⏱️\n\nHey! I'm holding the secret picture in a cool live network room.\n🔑 Room PIN code: ${pin}\n\n👇 Click here to join instantly:\n${shareUrl}`
-    : `🎮 הזמנה למשחק "הזמן לנחש" (Time to Guess)! ⏱️\n\nהיי! אני מחזיק/ה בתמונה הסודית בחדר רשת חי ומגניב.\n🔑 קוד ה-PIN של החדר: ${pin}\n\n👇 להצטרפות מהירה בלחיצה אחת:\n${shareUrl}`;
+  const directWhatsappUrl = `https://api.whatsapp.com/send?text=${getDirectMessage()}`;
 
-  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
-
-  const handleShareClick = () => {
+  const handleShareClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     sounds.soundSuccess();
+
+    try {
+      if (typeof window !== 'undefined') {
+        const shareUrl = `${window.location.origin}/?pin=${pin}`;
+        const text = encodeURIComponent(
+          `בואו לשחק איתי ב-Time To Guess! 🎮\nקוד החדר (PIN): ${pin}\nלהצטרפות ישירה: ${shareUrl}`
+        );
+        window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+      }
+    } catch (err) {
+      // Fallback
+      window.location.href = directWhatsappUrl;
+    }
+
     onShared?.();
   };
 
-  if (variant === 'compact') {
+  // 1. Icon-only variant for top bars
+  if (variant === 'icon') {
     return (
       <a
-        href={whatsappUrl}
+        href={directWhatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
         onClick={handleShareClick}
-        className={`btn-3d btn-3d-whatsapp relative group w-full h-[42px] flex items-center justify-center gap-1.5 px-2.5 sm:px-3 text-white font-bold text-xs sm:text-sm rounded-xl cursor-pointer animate-whatsapp-pulse whitespace-nowrap shadow-md ${className}`}
-        title={isEn ? 'Share with top card to WhatsApp' : 'שתף/י בוואטסאפ עם כרטיס עליון'}
+        className={`btn-3d btn-3d-whatsapp h-9 w-9 min-w-[36px] rounded-xl flex items-center justify-center cursor-pointer shadow-md shrink-0 border border-emerald-300/40 hover:scale-105 active:scale-95 transition-all ${className}`}
+        title={isEn ? 'Share via WhatsApp' : 'ווטסאפ'}
       >
-        <span className="shimmer-sweep" />
-        <WhatsAppIcon className="w-4 h-4 fill-white shrink-0 drop-shadow" />
-        <span className="font-medium text-xs tracking-wide whitespace-nowrap">{isEn ? 'WhatsApp' : 'ווטסאפ'}</span>
+        <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[#25D366] shadow-sm">
+          <WhatsAppIcon className="w-3.5 h-3.5 fill-[#25D366]" />
+        </div>
       </a>
     );
   }
 
+  // 2. Compact variant for the 3-button room management row (alongside "העתק קוד" and "QR וקישור")
+  if (variant === 'compact') {
+    return (
+      <a
+        href={directWhatsappUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleShareClick}
+        className={`btn-3d btn-3d-whatsapp relative group w-full h-[42px] flex items-center justify-center gap-1.5 px-2 text-white font-bold text-xs rounded-xl cursor-pointer animate-whatsapp-pulse whitespace-nowrap shadow-md ${className}`}
+        title={isEn ? 'Share room via WhatsApp' : 'שתף קוד חדר בווטסאפ'}
+      >
+        <span className="shimmer-sweep" />
+        <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center text-[#25D366] shrink-0 shadow-sm">
+          <WhatsAppIcon className="w-3 h-3 fill-[#25D366]" />
+        </div>
+        <span className="font-bold text-xs tracking-wide whitespace-nowrap">
+          {isEn ? 'WhatsApp' : 'ווטסאפ'}
+        </span>
+      </a>
+    );
+  }
+
+  // 3. Large variant for modals
   return (
     <a
-      href={whatsappUrl}
+      href={directWhatsappUrl}
       target="_blank"
       rel="noopener noreferrer"
       onClick={handleShareClick}
       className={`btn-3d btn-3d-whatsapp relative group w-full py-3.5 px-5 text-white font-extrabold text-sm sm:text-base rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer animate-whatsapp-pulse ${className}`}
     >
-      {/* 3D Shimmer sweep light */}
       <span className="shimmer-sweep" />
-
-      {/* WhatsApp Official Logo with White Badge */}
-      <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center shadow-inner shrink-0 group-hover:scale-110 transition-transform">
-        <WhatsAppIcon className="w-5 h-5 fill-white drop-shadow-md" />
+      <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-[#25D366] shadow-md shrink-0 group-hover:scale-110 transition-transform">
+        <WhatsAppIcon className="w-5 h-5 fill-[#25D366]" />
       </div>
-
       <span className="tracking-wide drop-shadow-sm font-black">
-        {isEn ? 'Share via WhatsApp (with App Card)' : 'שתף/י בוואטסאפ (עם כרטיס האפליקציה)'}
+        {isEn ? 'Share via WhatsApp' : 'שתף/י קישור בווטסאפ'}
       </span>
-
-      <span className="text-xs px-2 py-0.5 rounded-full bg-white/25 font-black uppercase tracking-wider text-emerald-100 hidden sm:inline-block shadow-sm">
-        {isEn ? 'Card 🃏' : 'כרטיס 🃏'}
+      <span className="text-xs px-2 py-0.5 rounded-full bg-white/25 font-black tracking-wider text-emerald-100 hidden sm:inline-block shadow-sm">
+        {isEn ? 'Direct 🚀' : 'ישיר 🚀'}
       </span>
     </a>
   );

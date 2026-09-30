@@ -1,5 +1,5 @@
 // Service Worker for Time to Guess (TTG) PWA
-const CACHE_NAME = 'ttg-pwa-cache-v1';
+const CACHE_NAME = 'ttg-pwa-cache-v2';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',

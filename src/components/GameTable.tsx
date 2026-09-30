@@ -36,7 +36,7 @@ import {
 } from '../utils/supabaseGame';
 import { getPinFromUrl, getShareUrl } from '../utils/url';
 import { VoiceGenderSelector } from './VoiceGenderSelector';
-import { WhatsAppIcon } from './WhatsAppShareButton';
+import { WhatsAppShareButton, WhatsAppIcon } from './WhatsAppShareButton';
 import {
   Timer as TimerIcon,
   Flame,
@@ -889,17 +889,12 @@ export const GameTable: React.FC<GameTableProps> = ({
           )}
 
           {/* 4. WhatsApp Share Room Button */}
-          <a
-            href={whatsappDirectUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={handleQuickWhatsAppShare}
-            className="btn-3d btn-3d-whatsapp h-9 w-9 min-w-[36px] sm:w-auto sm:px-2.5 rounded-xl text-xs font-black text-white flex items-center justify-center gap-1 cursor-pointer shadow-md shrink-0 border border-emerald-300/40 hover:scale-105 active:scale-95 transition-all"
-            title={isEn ? 'Share room via WhatsApp' : 'שתף חדר בוואטסאפ'}
-          >
-            <WhatsAppIcon className="w-3.5 h-3.5 fill-white shrink-0 drop-shadow" />
-            <span className="hidden sm:inline font-bold text-[11px]">{t.share}</span>
-          </a>
+          <WhatsAppShareButton
+            pin={currentPin}
+            language={language}
+            variant="icon"
+            className="!h-9 !w-9 !min-w-[36px]"
+          />
 
           {/* 5. Sound Toggle - Fixed compact w-9 h-9 size (36px x 36px) prevents any overflow */}
           <button

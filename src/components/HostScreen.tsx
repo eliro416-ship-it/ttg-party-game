@@ -138,6 +138,14 @@ export const HostScreen: React.FC<HostScreenProps> = ({
               </button>
             )}
 
+            {pin && pin.trim() && (
+              <WhatsAppShareButton
+                pin={pin}
+                language={language}
+                variant="icon"
+                className="!h-7 !w-7 !min-w-[28px] !rounded-lg"
+              />
+            )}
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[11px] font-bold border border-purple-500/30">
               <Crown className="w-3 h-3 text-yellow-300" />
               <span>{isEn ? 'Host' : 'מארח/ת'}</span>

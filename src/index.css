@@ -372,14 +372,20 @@
 
 
 /* Suppress Netlify badge, powered-by badge, or any injected platform overlays */
+[data-netlify],
 [data-netlify-badge],
 .netlify-badge,
 #netlify-badge,
-a[href*="netlify"],
-img[src*="netlify"],
-div[class*="netlify"],
-div[id*="netlify"],
-iframe[src*="netlify"] {
+a[href*="netlify" i],
+img[src*="netlify" i],
+img[alt*="netlify" i],
+[aria-label*="netlify" i],
+div[class*="netlify" i],
+div[id*="netlify" i],
+iframe[src*="netlify" i],
+span[class*="netlify" i],
+aside[class*="netlify" i],
+footer a[href*="netlify" i] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -387,9 +393,9 @@ iframe[src*="netlify"] {
   width: 0 !important;
   height: 0 !important;
   position: absolute !important;
-  top: -9999px !important;
-  left: -9999px !important;
-  z-index: -9999 !important;
+  top: -99999px !important;
+  left: -99999px !important;
+  z-index: -99999 !important;
 }
 
 /* 3D Cyan Button for PWA Install */
