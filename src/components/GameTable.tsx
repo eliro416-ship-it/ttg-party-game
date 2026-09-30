@@ -34,7 +34,7 @@ import {
   encodeWordHash,
   matchesWordHash,
 } from '../utils/supabaseGame';
-import { getPinFromUrl } from '../utils/url';
+import { getPinFromUrl, getShareUrl } from '../utils/url';
 import { VoiceGenderSelector } from './VoiceGenderSelector';
 import { WhatsAppIcon } from './WhatsAppShareButton';
 import {
@@ -583,10 +583,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   }, [roomPin]);
   const currentPin = effectivePin;
   const currentLang = language;
-  const baseUrl = (typeof window !== 'undefined' && window.location.origin.includes('time-to-guess.netlify.app'))
-    ? window.location.origin
-    : 'https://time-to-guess.netlify.app';
-  const shareUrl = `${baseUrl}/?pin=${currentPin}&lang=${currentLang}`;
+  const shareUrl = getShareUrl(currentPin, currentLang);
 
   const shareMessage = isEn
     ? `🎮 Invitation to "Time to Guess" (Time to Guess)! ⏱️\n\nHey! I'm holding the secret picture in a cool live network room.\n🔑 Room PIN code: ${currentPin}\n\n👇 Click here to join instantly:\n${shareUrl}`

@@ -3,6 +3,7 @@ import { Crown, Gamepad2, Volume2, VolumeX, Globe, Film, ScrollText, Image, Help
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
 import { translations } from '../utils/translations';
+import { PWAInstallBanner } from './PWAInstallBanner';
 
 interface RoleSelectScreenProps {
   onOpenHost: () => void;
@@ -157,6 +158,9 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
           <Gamepad2 className="w-5 h-5 text-white drop-shadow" strokeWidth={2.2} />
           <span className="tracking-wide">{t.btnPlayer}</span>
         </button>
+
+        {/* PWA Smart Install Prompt */}
+        <PWAInstallBanner language={language} />
       </div>
 
       {/* Bottom feature pill */}

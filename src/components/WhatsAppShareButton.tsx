@@ -1,6 +1,7 @@
 import React from 'react';
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
+import { getShareUrl } from '../utils/url';
 
 interface WhatsAppShareButtonProps {
   pin: string;
@@ -26,11 +27,8 @@ export const WhatsAppShareButton: React.FC<WhatsAppShareButtonProps> = ({
   const isEn = language === 'en';
   const currentLang = language;
 
-  // Use the requested URL format and template
-  const baseUrl = (typeof window !== 'undefined' && window.location.origin.includes('time-to-guess.netlify.app'))
-    ? window.location.origin
-    : 'https://time-to-guess.netlify.app';
-  const shareUrl = `${baseUrl}/?pin=${pin}&lang=${currentLang}`;
+  // Use the dynamic room invitation URL
+  const shareUrl = getShareUrl(pin, currentLang);
 
   const shareText = isEn
     ? `🎮 Invitation to "Time to Guess" (Time to Guess)! ⏱️\n\nHey! I'm holding the secret picture in a cool live network room.\n🔑 Room PIN code: ${pin}\n\n👇 Click here to join instantly:\n${shareUrl}`

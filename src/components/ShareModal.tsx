@@ -4,6 +4,7 @@ import { X, Copy, Check, Share2, Smartphone, Image as ImageIcon, QrCode } from '
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
 import { WhatsAppShareButton } from './WhatsAppShareButton';
+import { getShareUrl } from '../utils/url';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -21,10 +22,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, pin, la
 
   // Build the dynamic invitation link using the real current application URL
   const currentLang = language;
-  const baseUrl = (typeof window !== 'undefined' && window.location.origin.includes('time-to-guess.netlify.app'))
-    ? window.location.origin
-    : 'https://time-to-guess.netlify.app';
-  const shareUrl = `${baseUrl}/?pin=${pin}&lang=${currentLang}`;
+  const shareUrl = getShareUrl(pin, currentLang);
   const inviteUrl = shareUrl;
 
   const shareText = isEn
