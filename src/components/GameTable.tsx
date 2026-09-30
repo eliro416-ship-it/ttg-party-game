@@ -160,8 +160,9 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Active card: received authoritatively from Host via NEW_TURN, or fallback to deck
   const [activeTurnCard, setActiveTurnCard] = useState<CardItem | null>(null);
-  const currentCard = activeTurnCard || cards[currentCardIndex] || cards[0];
-  const localTargetWord = (isEn ? (currentCard.word_en || currentCard.word) : (currentCard.word_he || currentCard.word)).trim();
+  const activeCard = activeTurnCard || cards[currentCardIndex] || cards[0];
+  const currentCard = activeCard;
+  const localTargetWord = (isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word)).trim();
 
   // If guesser: NEVER draw or guess local card!
   // Rely strictly on synced card received from host/server via network event!
@@ -385,7 +386,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       setShowHintText(true);
     });
 
-    const unsubRoundStart = addSupabaseListener('round_start', (payload: RoundStartPayload) => {
+    const onRoundStartPayload = (payload: RoundStartPayload) => {
       try {
         sounds?.soundSuccess?.();
       } catch (e) {}
@@ -409,7 +410,10 @@ export const GameTable: React.FC<GameTableProps> = ({
           wordHash: payload.wordHash,
         });
       }
-    });
+    };
+
+    const unsubRoundStart = addSupabaseListener('round_start', onRoundStartPayload);
+    const unsubRoundStarted = addSupabaseListener('ROUND_STARTED', onRoundStartPayload);
 
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload: CorrectGuessPayload) => {
       sounds.soundSuccess();
@@ -516,6 +520,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       unsubReaction();
       unsubHint();
       unsubRoundStart();
+      unsubRoundStarted();
       unsubCorrectGuess();
       unsubTurnTimeout();
       unsubNewTurn();
@@ -686,6 +691,23 @@ export const GameTable: React.FC<GameTableProps> = ({
       };
 
       broadcastRoundStart(payload);
+
+      const channel = getCurrentSupabaseChannel();
+      if (channel && typeof channel.send === 'function') {
+        channel.send({
+          type: 'broadcast',
+          event: 'ROUND_STARTED',
+          payload: {
+            roundEndTime: endsAt,
+            duration: duration,
+            holderId: resolvedHolderId,
+            category: categoryName || activeCategory || '',
+            wordLength: cleanWordLength,
+            cardId: activeCard?.id,
+            cardIndex: currentCardIndex,
+          },
+        }).catch((err: any) => console.error('Broadcast catch error (ROUND_STARTED direct):', err));
+      }
     } catch (networkError) {
       console.error('Network broadcast failed:', networkError);
     }
@@ -1032,7 +1054,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           /* Card Holder View: Sees the photo and the word! */
           <>
             <img
-              src={serverTurnData?.imageUrl || serverTurnData?.image || currentCard.imageUrl || currentCard.image}
+              src={activeCard.imageUrl || activeCard.image || undefined}
               alt={targetWord}
               className={`w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 ${
                 isSuccess ? 'scale-105 brightness-110' : ''
@@ -1041,7 +1063,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               crossOrigin="anonymous"
               onError={(e) => {
                 const target = e.currentTarget;
-                const fallbackUrl = currentCard.fallback || serverTurnData?.fallback;
+                const fallbackUrl = activeCard.fallback || '';
                 if (fallbackUrl && target.src !== fallbackUrl) {
                   target.src = fallbackUrl;
                 }
@@ -1200,13 +1222,10 @@ export const GameTable: React.FC<GameTableProps> = ({
             </button>
           </div>
         ) : currentRoundStatus === 'active' ? (
-          <div className="w-full my-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-teal-950/60 to-slate-900/70 border border-emerald-500/50 shadow-lg text-center animate-fadeIn flex items-center justify-center gap-2.5">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </span>
-            <span className="text-xs sm:text-sm font-extrabold text-emerald-200">
-              {isEn ? '⏱️ Round in progress! Players are guessing...' : '⏱️ הסיבוב בעיצומו! המנחשים מקלידים...'}
+          <div className="w-full my-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-900/80 via-teal-900/70 to-emerald-950/80 border-2 border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.3)] text-center animate-fadeIn flex items-center justify-center gap-2.5">
+            <span className="text-base sm:text-lg animate-bounce">🔥</span>
+            <span className="text-xs sm:text-sm font-black text-emerald-200 tracking-wide">
+              {isEn ? '🔥 Round active! Answer the guessers (Yes / No / Hot / Cold)' : '🔥 הסיבוב פעיל! ענה למנחשים (כן / לא / חם / קר)'}
             </span>
           </div>
         ) : null
@@ -1220,8 +1239,11 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div className="w-full grid grid-cols-4 gap-1.5 sm:gap-2 my-2">
             <button
               type="button"
+              disabled={currentRoundStatus !== 'active'}
               onClick={() => sendHolderReaction('yes', t.btnYes)}
-              className="btn-3d btn-3d-clue-yes h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-md"
+              className={`btn-3d btn-3d-clue-yes h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
+                currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+              }`}
               title={isEn ? 'Yes (Spoken Voice)' : 'כן (השמעת קול)'}
             >
               <CheckCircle2 className="w-4 h-4 text-emerald-300 drop-shadow shrink-0" strokeWidth={2.4} />
@@ -1230,8 +1252,11 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
+              disabled={currentRoundStatus !== 'active'}
               onClick={() => sendHolderReaction('no', t.btnNo)}
-              className="btn-3d btn-3d-clue-no h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-md"
+              className={`btn-3d btn-3d-clue-no h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
+                currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+              }`}
               title={isEn ? 'No (Spoken Voice)' : 'לא (השמעת קול)'}
             >
               <XCircle className="w-4 h-4 text-rose-300 drop-shadow shrink-0" strokeWidth={2.4} />
@@ -1240,8 +1265,11 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
+              disabled={currentRoundStatus !== 'active'}
               onClick={() => sendHolderReaction('hot', t.btnHot)}
-              className="btn-3d btn-3d-clue-hot h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-md"
+              className={`btn-3d btn-3d-clue-hot h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
+                currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+              }`}
               title={isEn ? 'Hot (Spoken Voice)' : 'חם (השמעת קול)'}
             >
               <Flame className="w-4 h-4 text-amber-300 drop-shadow shrink-0" strokeWidth={2.4} />
@@ -1250,8 +1278,11 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
+              disabled={currentRoundStatus !== 'active'}
               onClick={() => sendHolderReaction('cold', t.btnCold)}
-              className="btn-3d btn-3d-clue-cold h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-md"
+              className={`btn-3d btn-3d-clue-cold h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
+                currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+              }`}
               title={isEn ? 'Cold (Spoken Voice)' : 'קר (השמעת קול)'}
             >
               <Snowflake className="w-4 h-4 text-cyan-300 drop-shadow shrink-0" strokeWidth={2.4} />

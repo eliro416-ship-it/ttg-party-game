@@ -402,7 +402,7 @@ export default function App() {
     });
 
     // 4. Round start broadcast: synchronizes category, wordLength, and exact roundEndsAt timestamp
-    const unsubRoundStart = addSupabaseListener('round_start', (payload) => {
+    const handleRoundStart = (payload: RoundStartPayload) => {
       setJoinedRoom(true);
       setScreen('game');
       if (payload.holderId) {
@@ -435,7 +435,10 @@ export default function App() {
         wordLength: payload.wordLength > 0 ? payload.wordLength : 4,
         players: [],
       }));
-    });
+    };
+
+    const unsubRoundStart = addSupabaseListener('round_start', handleRoundStart);
+    const unsubRoundStarted = addSupabaseListener('ROUND_STARTED', handleRoundStart);
 
     // 5. Correct guess broadcast: Host authoritatively updates scores and schedules next turn
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload) => {
@@ -608,6 +611,7 @@ export default function App() {
       unsubPresence();
       unsubGameStart();
       unsubRoundStart();
+      unsubRoundStarted();
       unsubCorrectGuess();
       unsubTurnTimeout();
       unsubSkipTurn();

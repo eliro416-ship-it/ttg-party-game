@@ -279,6 +279,8 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
     });
   };
 
+  channel.on('broadcast', { event: 'ROUND_STARTED' }, handleRoundStartBroadcast);
+  channel.on('broadcast', { event: 'round_started' }, handleRoundStartBroadcast);
   channel.on('broadcast', { event: 'START_ROUND' }, handleRoundStartBroadcast);
   channel.on('broadcast', { event: 'round_start' }, handleRoundStartBroadcast);
 
@@ -353,7 +355,7 @@ export function addSupabaseListener(event: 'presence', fn: (players: Player[]) =
 export function addSupabaseListener(event: 'game_start', fn: (payload: GameStartPayload) => void): () => void;
 export function addSupabaseListener(event: 'new_turn', fn: (payload: NewTurnPayload) => void): () => void;
 export function addSupabaseListener(event: 'score_update', fn: (payload: ScoreUpdatePayload) => void): () => void;
-export function addSupabaseListener(event: 'round_start' | 'START_ROUND', fn: (payload: RoundStartPayload) => void): () => void;
+export function addSupabaseListener(event: 'round_start' | 'START_ROUND' | 'ROUND_STARTED' | 'round_started', fn: (payload: RoundStartPayload) => void): () => void;
 export function addSupabaseListener(event: 'correct_guess', fn: (payload: CorrectGuessPayload) => void): () => void;
 export function addSupabaseListener(event: 'turn_timeout', fn: (payload: TurnTimeoutPayload) => void): () => void;
 export function addSupabaseListener(event: 'skip_turn', fn: (payload: { holderId: string }) => void): () => void;
@@ -368,7 +370,7 @@ export function addSupabaseListener(event: string, fn: any): () => void {
   else if (event === 'game_start') gameStartListeners.add(fn);
   else if (event === 'new_turn') newTurnListeners.add(fn);
   else if (event === 'score_update') scoreUpdateListeners.add(fn);
-  else if (event === 'round_start' || event === 'START_ROUND') roundStartListeners.add(fn);
+  else if (event === 'round_start' || event === 'START_ROUND' || event === 'ROUND_STARTED' || event === 'round_started') roundStartListeners.add(fn);
   else if (event === 'correct_guess') correctGuessListeners.add(fn);
   else if (event === 'turn_timeout') turnTimeoutListeners.add(fn);
   else if (event === 'skip_turn') skipTurnListeners.add(fn);
@@ -384,7 +386,7 @@ export function addSupabaseListener(event: string, fn: any): () => void {
     else if (event === 'game_start') gameStartListeners.delete(fn);
     else if (event === 'new_turn') newTurnListeners.delete(fn);
     else if (event === 'score_update') scoreUpdateListeners.delete(fn);
-    else if (event === 'round_start' || event === 'START_ROUND') roundStartListeners.delete(fn);
+    else if (event === 'round_start' || event === 'START_ROUND' || event === 'ROUND_STARTED' || event === 'round_started') roundStartListeners.delete(fn);
     else if (event === 'correct_guess') correctGuessListeners.delete(fn);
     else if (event === 'turn_timeout') turnTimeoutListeners.delete(fn);
     else if (event === 'skip_turn') skipTurnListeners.delete(fn);
@@ -509,6 +511,16 @@ export function broadcastRoundStart(payload: RoundStartPayload): void {
 
   // 2. Safe Broadcast across Supabase channel
   if (activeChannel && typeof activeChannel.send === 'function') {
+    try {
+      activeChannel.send({
+        type: 'broadcast',
+        event: 'ROUND_STARTED',
+        payload: normalized,
+      }).catch((err: any) => console.error('Broadcast catch error (ROUND_STARTED):', err));
+    } catch (networkError) {
+      console.error('Network broadcast failed (ROUND_STARTED):', networkError);
+    }
+
     try {
       activeChannel.send({
         type: 'broadcast',
