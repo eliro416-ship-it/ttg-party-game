@@ -27,7 +27,7 @@ if (typeof window !== 'undefined') {
 
       document.querySelectorAll('a, div, span, p, footer, button').forEach((el) => {
         const text = el.textContent || '';
-        if (/powered by netlify/i.test(text) || (/netlify/i.test(text) && text.trim().length < 40)) {
+        if (/powered[\s_-]*by[\s_-]*netlify/i.test(text) || (/netlify/i.test(text) && text.trim().length < 40)) {
           el.remove();
         }
       });

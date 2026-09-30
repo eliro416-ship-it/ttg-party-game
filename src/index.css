@@ -149,7 +149,26 @@
   transform: translateY(3px) !important;
 }
 
-/* 1. Neon WhatsApp Button */
+/* 1. 3D Glossy WhatsApp Button */
+.btn-whatsapp-3d {
+  background: linear-gradient(180deg, #2ae06b 0%, #20ba59 100%) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.35) !important;
+  box-shadow: 0 4px 0 #15803d, 0 8px 15px rgba(37, 211, 102, 0.35) !important;
+  transition: all 150ms ease-out !important;
+}
+
+.btn-whatsapp-3d:hover {
+  transform: scale(1.02);
+  filter: brightness(1.03);
+  box-shadow: 0 4px 0 #15803d, 0 12px 22px rgba(37, 211, 102, 0.5) !important;
+}
+
+.btn-whatsapp-3d:active {
+  transform: translateY(3px) !important;
+  box-shadow: 0 1px 0 #15803d, 0 3px 6px rgba(37, 211, 102, 0.3) !important;
+}
+
+/* 1b. Neon WhatsApp Button */
 .btn-3d-whatsapp {
   background: linear-gradient(135deg, #25D366 0%, #20BD5A 50%, #128C7E 100%) !important;
   border: 1px solid rgba(255, 255, 255, 0.35) !important;

@@ -92,7 +92,7 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
               pin={pin}
               language={language}
               variant="icon"
-              className="!h-7 !w-7 !min-w-[28px] !rounded-lg"
+              className="!h-8 !w-8 sm:!h-9 sm:!w-9 !min-w-[32px] sm:!min-w-[36px]"
             />
           )}
           <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/30">
@@ -139,12 +139,19 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <Copy className="w-3.5 h-3.5 text-slate-200 shrink-0" />}
             <span className="whitespace-nowrap">{copied ? t.pinCopied : (isEn ? 'Copy Code' : 'העתק קוד')}</span>
           </button>
-          <WhatsAppShareButton
-            pin={pin}
-            language={language}
-            variant="compact"
-            className="h-[42px] !py-0 px-2 text-xs font-bold shadow-md"
-          />
+          <button
+            type="button"
+            onClick={() => {
+              const shareUrl = `${window.location.origin}/?pin=${pin}`;
+              const text = encodeURIComponent(`בואו לשחק איתי ב-Time To Guess! 🎮\nקוד החדר: ${pin}\nלהצטרפות: ${shareUrl}`);
+              window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+            }}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-md transition-all flex-1 cursor-pointer h-[42px] whitespace-nowrap"
+            title="ווטסאפ"
+          >
+            <span>📱</span>
+            <span>ווטסאפ</span>
+          </button>
           <button
             type="button"
             onClick={() => {

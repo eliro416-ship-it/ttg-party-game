@@ -21,7 +21,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
-import { WhatsAppShareButton } from './WhatsAppShareButton';
+import { WhatsAppShareButton, WhatsAppIcon } from './WhatsAppShareButton';
 
 interface HostScreenProps {
   hostStep?: HostStep;
@@ -75,6 +75,17 @@ export const HostScreen: React.FC<HostScreenProps> = ({
     setCopied(true);
     sounds.soundSuccess();
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleWhatsAppShare = () => {
+    sounds.soundSuccess();
+    const shareUrl = `${window.location.origin}/?pin=${pin}`;
+    const text = encodeURIComponent(
+      isEn
+        ? `Come play Time To Guess with me! 🎮\nRoom PIN: ${pin}\nJoin directly: ${shareUrl}`
+        : `בואו לשחק איתי ב-Time To Guess! 🎮\nקוד החדר: ${pin}\nלהצטרפות: ${shareUrl}`
+    );
+    window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
   };
 
   const handleToggleCategory = (cat: string) => {
@@ -143,7 +154,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                 pin={pin}
                 language={language}
                 variant="icon"
-                className="!h-7 !w-7 !min-w-[28px] !rounded-lg"
+                className="!h-8 !w-8 sm:!h-9 sm:!w-9 !min-w-[32px] sm:!min-w-[36px]"
               />
             )}
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[11px] font-bold border border-purple-500/30">
@@ -264,13 +275,21 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                 <span className="whitespace-nowrap">{copied ? t.pinCopied : (isEn ? 'Copy Code' : 'העתק קוד')}</span>
               </button>
 
-              {/* Button 2: WhatsApp - clean text and equal width */}
-              <WhatsAppShareButton
-                pin={pin}
-                language={language}
-                variant="compact"
-                className="h-[42px] w-full !py-0 px-2 text-xs font-medium flex items-center justify-center gap-1.5 whitespace-nowrap shadow-md"
-              />
+              {/* Button 2: WhatsApp - Instant Direct Share (3D Glossy WhatsApp Button) */}
+              <button
+                type="button"
+                onClick={handleWhatsAppShare}
+                className="btn-whatsapp-3d flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-white font-bold text-xs flex-1 transition-all duration-150 ease-out hover:scale-[1.02] active:translate-y-[3px] cursor-pointer h-[42px] whitespace-nowrap"
+                style={{
+                  background: 'linear-gradient(180deg, #2ae06b 0%, #20ba59 100%)',
+                  boxShadow: '0 4px 0 #15803d, 0 8px 15px rgba(37, 211, 102, 0.35)',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.3)',
+                }}
+                title={isEn ? 'WhatsApp' : 'ווטסאפ'}
+              >
+                <WhatsAppIcon className="w-4 h-4 fill-white drop-shadow shrink-0" />
+                <span className="drop-shadow whitespace-nowrap">{isEn ? 'WhatsApp' : 'ווטסאפ'}</span>
+              </button>
 
               {/* Button 3: QR & Link */}
               <button
