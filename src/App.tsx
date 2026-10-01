@@ -248,6 +248,9 @@ export default function App() {
 
   const scoresRef = useRef<Record<string, number>>({});
 
+  const serverTurnDataRef = useRef<TurnStartedPayload | null>(serverTurnData);
+  serverTurnDataRef.current = serverTurnData;
+
   // Custom cards
   const [customCards, setCustomCards] = useState<CardItem[]>(() => {
     const saved = localStorage.getItem('game_custom_cards');
@@ -663,16 +666,17 @@ export default function App() {
     // 12. Host responds to request_sync from newly joined guessers
     const unsubRequestSync = addSupabaseListener('request_sync', () => {
       if (myPlayerId === 'p-host') {
-        const currentCard = activeDeck[cardIndexRef.current] || DEFAULT_CARDS[0];
+        const currentTurn = serverTurnDataRef.current;
+        const currentCard = (currentTurn?.cardId ? GAME_CARDS.find((c) => c.id === currentTurn.cardId) : null) || activeDeck[cardIndexRef.current] || DEFAULT_CARDS[0];
         const currentWord = (language === 'en' ? (currentCard.word_en || currentCard.word) : (currentCard.word_he || currentCard.word)).trim();
         broadcastSyncState({
           category: language === 'en' ? (currentCard.category_en || currentCard.category) : currentCard.category,
           wordLength: currentWord.length,
-          roundEndsAt: serverTurnData?.roundEndsAt || 0,
-          holderId: serverTurnData?.holderId || myPlayerId,
-          holderName: serverTurnData?.holderName || (language === 'en' ? 'Host' : 'מארח/ת'),
-          holderAvatar: serverTurnData?.holderAvatar || '👑',
-          roundStatus: serverTurnData?.roundStatus || 'waiting',
+          roundEndsAt: currentTurn?.roundEndsAt || 0,
+          holderId: currentTurn?.holderId || currentHolderId || myPlayerId,
+          holderName: currentTurn?.holderName || (language === 'en' ? 'Host' : 'מארח/ת'),
+          holderAvatar: currentTurn?.holderAvatar || '👑',
+          roundStatus: currentTurn?.roundStatus || 'waiting',
           cardIndex: cardIndexRef.current,
           cardId: currentCard.id,
           wordHash: encodeWordHash(currentWord),
@@ -680,17 +684,6 @@ export default function App() {
         });
 
         broadcastScoreUpdate({ scores: scoresRef.current });
-
-        broadcastNewTurn({
-          holderId: serverTurnData?.holderId || currentHolderId || 'p-host',
-          holderName: serverTurnData?.holderName || (language === 'en' ? 'Host' : 'מארח/ת'),
-          holderAvatar: serverTurnData?.holderAvatar || '👑',
-          category: language === 'en' ? (currentCard.category_en || currentCard.category) : currentCard.category,
-          wordLength: currentWord.length,
-          card: currentCard,
-          cardIndex: cardIndexRef.current,
-          wordHash: encodeWordHash(currentWord),
-        });
       }
     });
 

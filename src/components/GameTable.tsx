@@ -255,9 +255,15 @@ export const GameTable: React.FC<GameTableProps> = ({
     word?: string;
   } | null>(null);
 
-  // User Requirement: isRoundActive & roundEndTime
+  // User Requirement: isRoundActive & roundEndTime & Unified Game State
   const [isRoundActive, setIsRoundActive] = useState<boolean>(() => {
     return serverTurnData?.roundStatus === 'active';
+  });
+  const [gameState, setGameState] = useState<'waiting' | 'active' | 'ended'>(() => {
+    return serverTurnData?.roundStatus || 'waiting';
+  });
+  const [roundState, setRoundState] = useState<'waiting' | 'active' | 'ended'>(() => {
+    return serverTurnData?.roundStatus || 'waiting';
   });
   const [roundEndTime, setRoundEndTime] = useState<number>(() => {
     return serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
@@ -279,18 +285,31 @@ export const GameTable: React.FC<GameTableProps> = ({
     return serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
   });
 
-  const currentRoundStatus: 'waiting' | 'active' | 'ended' = (isRoundActive || roundStatus === 'active') ? 'active' : roundStatus;
-  const currentRoundEndsAt: number = (roundEndTime > 0 && roundEndTime > Date.now()) ? roundEndTime : (roundEndsAt > 0 ? roundEndsAt : roundEndTime);
+  // Master unified active game flag - true if ANY state indicates an active round
+  const isGameActive = Boolean(
+    isRoundActive ||
+    gameState === 'active' ||
+    roundStatus === 'active' ||
+    roundState === 'active'
+  );
+  const currentRoundStatus: 'waiting' | 'active' | 'ended' = isGameActive
+    ? 'active'
+    : (roundStatus === 'ended' || gameState === 'ended' ? 'ended' : 'waiting');
+  const currentRoundEndsAt: number = (roundEndTime > 0 && roundEndTime > Date.now())
+    ? roundEndTime
+    : (roundEndsAt > 0 && roundEndsAt > Date.now() ? roundEndsAt : roundEndTime);
 
   // Sync from incoming serverTurnData updates (preserves currentGuess!)
   useEffect(() => {
     if (serverTurnData) {
       if (serverTurnData.roundStatus) {
         // If local state is already active and the round hasn't expired, prevent stale waiting state from reverting it
-        if (serverTurnData.roundStatus === 'waiting' && isRoundActiveRef.current && roundEndTimeRef.current > Date.now()) {
+        if (serverTurnData.roundStatus === 'waiting' && isGameActive && roundEndTimeRef.current > Date.now()) {
           // Keep active - do not revert
         } else {
           setRoundStatus(serverTurnData.roundStatus);
+          setGameState(serverTurnData.roundStatus);
+          setRoundState(serverTurnData.roundStatus);
           const activeNow = serverTurnData.roundStatus === 'active';
           setIsRoundActive(activeNow);
           isRoundActiveRef.current = activeNow;
@@ -306,6 +325,10 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (serverTurnData.roundStatus === 'active') {
         isHandledRef.current = false;
         setIsRoundActive(true);
+        setGameState('active');
+        setRoundState('active');
+        setRoundStatus('active');
+        isRoundActiveRef.current = true;
       }
 
       if (serverTurnData.wordLength || serverTurnData.category) {
@@ -429,6 +452,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     });
 
     const onRoundStartPayload = (payload: RoundStartPayload) => {
+      console.log('>>> [START_ROUND RECEIVED on client]', payload);
       try {
         sounds?.soundSuccess?.();
       } catch (e) {}
@@ -438,10 +462,12 @@ export const GameTable: React.FC<GameTableProps> = ({
       isRoundActiveRef.current = true;
       roundEndTimeRef.current = end;
       setIsRoundActive(true);
+      setGameState('active');
+      setRoundState('active');
+      setRoundStatus('active');
       setRoundEndTime(end);
       setRoundEndsAt(end);
       setTimeLeft(duration);
-      setRoundStatus('active');
       if (payload.holderId) {
         setLiveHolderId(String(payload.holderId));
       }
@@ -508,11 +534,13 @@ export const GameTable: React.FC<GameTableProps> = ({
     const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload: TurnTimeoutPayload) => {
       sounds.soundError();
       setIsRoundActive(false);
+      setGameState('ended');
+      setRoundState('ended');
+      setRoundStatus('ended');
       setRoundEndTime(0);
+      setRoundEndsAt(0);
       isRoundActiveRef.current = false;
       roundEndTimeRef.current = 0;
-      setRoundStatus('ended');
-      setRoundEndsAt(0);
       setWinnerCelebration({
         winnerId: '',
         winnerName: isEn ? 'Time is up!' : 'הזמן נגמר!',
@@ -534,11 +562,13 @@ export const GameTable: React.FC<GameTableProps> = ({
         setLiveHolderId(String(payload.holderId));
       }
       setIsRoundActive(false);
+      setGameState('waiting');
+      setRoundState('waiting');
+      setRoundStatus('waiting');
       setRoundEndTime(0);
+      setRoundEndsAt(0);
       isRoundActiveRef.current = false;
       roundEndTimeRef.current = 0;
-      setRoundStatus('waiting');
-      setRoundEndsAt(0);
       isHandledRef.current = false;
       setCurrentGuess('');
       setIsSuccess(false);
@@ -574,12 +604,26 @@ export const GameTable: React.FC<GameTableProps> = ({
           };
         });
       }
-      if (payload.roundStatus) {
-        setRoundStatus(payload.roundStatus);
-      }
-      if (payload.roundEndsAt && payload.roundStatus === 'active') {
-        setRoundEndsAt(payload.roundEndsAt);
+      if (payload.roundStatus === 'active') {
+        setIsRoundActive(true);
+        setGameState('active');
+        setRoundState('active');
+        setRoundStatus('active');
+        isRoundActiveRef.current = true;
+        if (payload.roundEndsAt) {
+          setRoundEndsAt(payload.roundEndsAt);
+          setRoundEndTime(payload.roundEndsAt);
+          roundEndTimeRef.current = payload.roundEndsAt;
+        }
         isHandledRef.current = false;
+      } else if (payload.roundStatus === 'waiting') {
+        if (!isGameActive || roundEndTimeRef.current <= Date.now()) {
+          setIsRoundActive(false);
+          setGameState('waiting');
+          setRoundState('waiting');
+          setRoundStatus('waiting');
+          isRoundActiveRef.current = false;
+        }
       }
     });
 
@@ -705,7 +749,9 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Start round handler (Host or current holder clicks "התחל סיבוב! 🚀")
   const handleStartRound = () => {
-    // 1. Sensory feedback (sound and vibration) with full error suppression
+    console.log('>>> [START_ROUND CLICKED]');
+
+    // 1. משוב קולי ורטט
     try {
       if (typeof sounds !== 'undefined' && sounds) {
         if (typeof (sounds as any).soundStartRound === 'function') {
@@ -725,12 +771,14 @@ export const GameTable: React.FC<GameTableProps> = ({
     const duration = Number(turnDuration || serverTurnData?.turnDuration) || 60;
     const endsAt = Date.now() + duration * 1000;
 
-    // 3. עדכון מקומי מיידי (קריטי - מעביר את המסך למצב פעיל)
+    // 3. עדכון כל משתני ה-State האפשריים המגדירים משחק פעיל (סנכרון מלא):
     setIsRoundActive(true);
-    setRoundEndTime(endsAt);
-    setTimeLeft(duration);
+    setGameState('active');
+    setRoundState('active');
     setRoundStatus('active');
+    setRoundEndTime(endsAt);
     setRoundEndsAt(endsAt);
+    setTimeLeft(duration);
     isRoundActiveRef.current = true;
     roundEndTimeRef.current = endsAt;
     isHandledRef.current = false;
@@ -880,7 +928,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const handleKeyPress = useCallback((letter: string) => {
     if (isSuccess || winnerCelebration) return;
     if (isCurrentClientHolder) return;
-    if (!isRoundActive) return;
+    if (!isGameActive) return;
 
     const char = isEn ? letter.toUpperCase() : (normalizeHebrewInput(letter) || letter);
     if (!char) return;
@@ -895,7 +943,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
       return nextGuess;
     });
-  }, [isSuccess, winnerCelebration, isCurrentClientHolder, isRoundActive, isEn, wordLength, submitGuess]);
+  }, [isSuccess, winnerCelebration, isCurrentClientHolder, isGameActive, isEn, wordLength, submitGuess]);
 
   // Handle backspace
   const handleBackspace = useCallback(() => {
@@ -1200,7 +1248,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             </div>
 
             {/* Waiting status overlay badge directly inside the picture frame */}
-            {!isRoundActive && currentRoundStatus === 'waiting' ? (
+            {!isGameActive ? (
               <div className="mt-1.5 bg-black/75 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-amber-400/50 shadow-xl flex items-center justify-center gap-2 text-amber-200 text-xs sm:text-sm font-black animate-pulse max-w-[92%]">
                 <TimerIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2.4} />
                 <span className="truncate">
@@ -1309,7 +1357,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       {/* Waiting Status / Start Round Actions: for holder (shows Start Round button when waiting, and active notice when round is active) */}
       {isCurrentClientHolder && (
-        isRoundActive ? (
+        isGameActive ? (
           <div className="w-full my-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-900/80 via-teal-900/70 to-emerald-950/80 border-2 border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.3)] text-center animate-fadeIn flex items-center justify-center gap-2.5">
             <span className="text-base sm:text-lg animate-bounce">⏱️</span>
             <span className="text-xs sm:text-sm font-black text-emerald-200 tracking-wide">
@@ -1344,10 +1392,10 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div className="w-full grid grid-cols-4 gap-1.5 sm:gap-2 my-2">
             <button
               type="button"
-              disabled={!isRoundActive && currentRoundStatus !== 'active'}
+              disabled={!isGameActive}
               onClick={() => sendHolderReaction('yes', t.btnYes)}
               className={`btn-3d btn-3d-clue-yes h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
-                isRoundActive || currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+                isGameActive ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
               }`}
               title={isEn ? 'Yes (Spoken Voice)' : 'כן (השמעת קול)'}
             >
@@ -1357,10 +1405,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
-              disabled={!isRoundActive && currentRoundStatus !== 'active'}
+              disabled={!isGameActive}
               onClick={() => sendHolderReaction('no', t.btnNo)}
               className={`btn-3d btn-3d-clue-no h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
-                isRoundActive || currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+                isGameActive ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
               }`}
               title={isEn ? 'No (Spoken Voice)' : 'לא (השמעת קול)'}
             >
@@ -1370,10 +1418,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
-              disabled={!isRoundActive && currentRoundStatus !== 'active'}
+              disabled={!isGameActive}
               onClick={() => sendHolderReaction('hot', t.btnHot)}
               className={`btn-3d btn-3d-clue-hot h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
-                isRoundActive || currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+                isGameActive ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
               }`}
               title={isEn ? 'Hot (Spoken Voice)' : 'חם (השמעת קול)'}
             >
@@ -1383,10 +1431,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             <button
               type="button"
-              disabled={!isRoundActive && currentRoundStatus !== 'active'}
+              disabled={!isGameActive}
               onClick={() => sendHolderReaction('cold', t.btnCold)}
               className={`btn-3d btn-3d-clue-cold h-[44px] py-1 px-1 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md ${
-                isRoundActive || currentRoundStatus === 'active' ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
+                isGameActive ? 'cursor-pointer active:scale-95' : 'opacity-50 cursor-not-allowed pointer-events-none'
               }`}
               title={isEn ? 'Cold (Spoken Voice)' : 'קר (השמעת קול)'}
             >
@@ -1443,7 +1491,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         /* GUESSER INTERACTION AREA */
         <div className="w-full flex flex-col items-center animate-fadeIn">
           <p className="text-xs sm:text-sm font-bold mb-1.5 text-center flex items-center justify-center gap-1.5">
-            {!isRoundActive ? (
+            {!isGameActive ? (
               <span className="text-amber-300 animate-pulse">
                 {isEn ? '⏳ Waiting for round to start...' : '⏳ ממתינים לתחילת הסיבוב...'}
               </span>
@@ -1464,7 +1512,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {Array.from({ length: wordLength }).map((_, index) => {
               const letter = currentGuess[index] || '';
               const isRevealedByHint = revealedIndices.includes(index);
-              const isCurrentFocus = currentGuess.length === index && isRoundActive;
+              const isCurrentFocus = currentGuess.length === index && isGameActive;
 
               return (
                 <div
@@ -1496,7 +1544,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             onBackspace={handleBackspace}
             onHintClick={handleGiveHint}
             canHint={!isSuccess}
-            disabled={isSuccess || isShaking || !isRoundActive}
+            disabled={isSuccess || isShaking || !isGameActive}
             language={language}
           />
         </div>
