@@ -767,18 +767,17 @@ export const GameTable: React.FC<GameTableProps> = ({
       console.warn('Audio/Vibration error:', e);
     }
 
-    // 2. חישוב זמנים
     const duration = Number(turnDuration || serverTurnData?.turnDuration) || 60;
     const endsAt = Date.now() + duration * 1000;
 
-    // 3. עדכון כל משתני ה-State האפשריים המגדירים משחק פעיל (סנכרון מלא):
-    setIsRoundActive(true);
-    setGameState('active');
-    setRoundState('active');
-    setRoundStatus('active');
-    setRoundEndTime(endsAt);
-    setRoundEndsAt(endsAt);
-    setTimeLeft(duration);
+    // 2. עדכון כל משתני ה-State האפשריים המגדירים משחק פעיל (סנכרון מלא):
+    if (typeof setIsRoundActive === 'function') setIsRoundActive(true);
+    if (typeof setGameState === 'function') setGameState('active');
+    if (typeof setRoundState === 'function') setRoundState('active');
+    if (typeof setRoundStatus === 'function') setRoundStatus('active');
+    if (typeof setRoundEndTime === 'function') setRoundEndTime(endsAt);
+    if (typeof setRoundEndsAt === 'function') setRoundEndsAt(endsAt);
+    if (typeof setTimeLeft === 'function') setTimeLeft(duration);
     isRoundActiveRef.current = true;
     roundEndTimeRef.current = endsAt;
     isHandledRef.current = false;
@@ -786,7 +785,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     onRoundStart?.(endsAt, duration);
 
-    // 4. Resolve active card, word length and categories safely without throwing
+    // 3. Resolve active card, word length and categories safely without throwing
     const currentActiveCard = activeTurnCard || (cards && cards[currentCardIndex]) || (cards && cards[0]) || null;
     let cleanWord = '';
     let categoryName = '';
@@ -809,7 +808,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
     }
 
-    // 5. שידור בטוח לכל המשתתפים בחדר
+    // 4. שידור בטוח לכל המשתתפים בחדר
     try {
       const payload: RoundStartPayload = {
         category: categoryName || activeCategory || '',
@@ -830,9 +829,9 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       broadcastRoundStart(payload);
 
-      const supabaseChannel = getCurrentSupabaseChannel();
-      if (supabaseChannel && typeof supabaseChannel.send === 'function') {
-        supabaseChannel.send({
+      const channel = getCurrentSupabaseChannel();
+      if (channel && typeof channel.send === 'function') {
+        channel.send({
           type: 'broadcast',
           event: 'START_ROUND',
           payload: {
@@ -846,6 +845,8 @@ export const GameTable: React.FC<GameTableProps> = ({
             wordLength: cleanWordLength,
             cardIndex: currentCardIndex,
           },
+        }).then(() => {
+          console.log('>>> Broadcast START_ROUND sent successfully');
         }).catch((err: any) => console.error('Broadcast error:', err));
       }
     } catch (err) {
