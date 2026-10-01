@@ -149,8 +149,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const effectiveHolderId = String(currentHolderId || liveHolderId || serverTurnData?.holderId || 'p-host').trim();
 
-  // 3. Clean comparison: const isHolder = String(myPlayerId) === String(currentHolderId);
-  const isHolder = activeMyPlayerId === effectiveHolderId;
+  // 3. Clean comparison: prioritize explicit serverTurnData.isHolder, fallback to ID match
+  const isHolder = serverTurnData?.isHolder !== undefined
+    ? Boolean(serverTurnData.isHolder)
+    : (activeMyPlayerId === effectiveHolderId);
   const isCurrentClientHolder = isHolder;
 
   // Active players: Server authoritative list (strictly connected players), ranked by score
@@ -259,6 +261,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   });
   const [roundEndTime, setRoundEndTime] = useState<number>(() => {
     return serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
+  });
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    return Number(serverTurnData?.turnDuration || turnDuration) || 60;
   });
 
   const isRoundActiveRef = useRef<boolean>(isRoundActive);
@@ -435,6 +440,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       setIsRoundActive(true);
       setRoundEndTime(end);
       setRoundEndsAt(end);
+      setTimeLeft(duration);
       setRoundStatus('active');
       if (payload.holderId) {
         setLiveHolderId(String(payload.holderId));
@@ -715,22 +721,24 @@ export const GameTable: React.FC<GameTableProps> = ({
       console.warn('Audio/Vibration error:', e);
     }
 
-    // 2. Mandatory Local State Update FIRST (Local State First - independent of network)
-    const duration = Number(serverTurnData?.turnDuration || turnDuration) || 60;
-    const endTime = Date.now() + duration * 1000;
+    // 2. חישוב זמנים
+    const duration = Number(turnDuration || serverTurnData?.turnDuration) || 60;
+    const endsAt = Date.now() + duration * 1000;
 
-    isRoundActiveRef.current = true;
-    roundEndTimeRef.current = endTime;
+    // 3. עדכון מקומי מיידי (קריטי - מעביר את המסך למצב פעיל)
     setIsRoundActive(true);
-    setRoundEndTime(endTime);
+    setRoundEndTime(endsAt);
+    setTimeLeft(duration);
     setRoundStatus('active');
-    setRoundEndsAt(endTime);
+    setRoundEndsAt(endsAt);
+    isRoundActiveRef.current = true;
+    roundEndTimeRef.current = endsAt;
     isHandledRef.current = false;
     setCurrentGuess('');
 
-    onRoundStart?.(endTime, duration);
+    onRoundStart?.(endsAt, duration);
 
-    // 3. Resolve active card, word length and categories safely without throwing
+    // 4. Resolve active card, word length and categories safely without throwing
     const currentActiveCard = activeTurnCard || (cards && cards[currentCardIndex]) || (cards && cards[0]) || null;
     let cleanWord = '';
     let categoryName = '';
@@ -741,8 +749,8 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
       categoryName = isEn ? (currentActiveCard.category_en || currentActiveCard.category) : currentActiveCard.category;
     }
-    const cleanWordLength = cleanWord.length > 0 ? cleanWord.length : 4;
-    const resolvedHolderId = activeMyPlayerId || myPlayerId || effectiveHolderId || 'p-host';
+    const cleanWordLength = cleanWord.length > 0 ? cleanWord.length : 3;
+    const resolvedHolderId = currentHolderId || myPlayerId || effectiveHolderId || 'p-host';
 
     let hashedWord: string | undefined = undefined;
     if (cleanWord) {
@@ -753,14 +761,14 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
     }
 
-    // 4. Safe Network Broadcast (Safe Execution)
+    // 5. שידור בטוח לכל המשתתפים בחדר
     try {
       const payload: RoundStartPayload = {
         category: categoryName || activeCategory || '',
         wordLength: cleanWordLength,
-        endTime: endTime,
-        roundEndsAt: endTime,
-        roundEndTime: endTime,
+        endTime: endsAt,
+        roundEndsAt: endsAt,
+        roundEndTime: endsAt,
         duration: duration,
         turnDuration: duration,
         holderId: resolvedHolderId,
@@ -768,47 +776,32 @@ export const GameTable: React.FC<GameTableProps> = ({
         holderAvatar: activeHolderAvatar || '👑',
         cardIndex: currentCardIndex,
         cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
+        card: currentActiveCard || undefined,
         wordHash: hashedWord,
       };
 
       broadcastRoundStart(payload);
 
-      const channel = getCurrentSupabaseChannel();
-      if (channel && typeof channel.send === 'function') {
-        channel.send({
+      const supabaseChannel = getCurrentSupabaseChannel();
+      if (supabaseChannel && typeof supabaseChannel.send === 'function') {
+        supabaseChannel.send({
           type: 'broadcast',
           event: 'START_ROUND',
           payload: {
-            endTime,
-            duration,
-            roundEndTime: endTime,
-            roundEndsAt: endTime,
-            holderId: resolvedHolderId,
-            category: categoryName || activeCategory || '',
-            wordLength: cleanWordLength,
-            cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
-            cardIndex: currentCardIndex,
-          },
-        }).catch((err: any) => console.error('Broadcast catch error (START_ROUND direct):', err));
-
-        channel.send({
-          type: 'broadcast',
-          event: 'ROUND_STARTED',
-          payload: {
-            endTime,
-            roundEndTime: endTime,
-            roundEndsAt: endTime,
+            roundEndTime: endsAt,
             duration: duration,
+            endTime: endsAt,
+            roundEndsAt: endsAt,
             holderId: resolvedHolderId,
+            cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
             category: categoryName || activeCategory || '',
             wordLength: cleanWordLength,
-            cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
             cardIndex: currentCardIndex,
           },
-        }).catch((err: any) => console.error('Broadcast catch error (ROUND_STARTED direct):', err));
+        }).catch((err: any) => console.error('Broadcast error:', err));
       }
-    } catch (networkError) {
-      console.error('Network broadcast failed:', networkError);
+    } catch (err) {
+      console.error('Network send error:', err);
     }
   };
 
@@ -887,7 +880,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const handleKeyPress = useCallback((letter: string) => {
     if (isSuccess || winnerCelebration) return;
     if (isCurrentClientHolder) return;
-    if (currentRoundStatus !== 'active') return;
+    if (!isRoundActive) return;
 
     const char = isEn ? letter.toUpperCase() : (normalizeHebrewInput(letter) || letter);
     if (!char) return;
@@ -902,7 +895,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
       return nextGuess;
     });
-  }, [isSuccess, winnerCelebration, isCurrentClientHolder, currentRoundStatus, isEn, wordLength, submitGuess]);
+  }, [isSuccess, winnerCelebration, isCurrentClientHolder, isRoundActive, isEn, wordLength, submitGuess]);
 
   // Handle backspace
   const handleBackspace = useCallback(() => {
@@ -1316,7 +1309,14 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       {/* Waiting Status / Start Round Actions: for holder (shows Start Round button when waiting, and active notice when round is active) */}
       {isCurrentClientHolder && (
-        !isRoundActive && currentRoundStatus === 'waiting' ? (
+        isRoundActive ? (
+          <div className="w-full my-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-900/80 via-teal-900/70 to-emerald-950/80 border-2 border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.3)] text-center animate-fadeIn flex items-center justify-center gap-2.5">
+            <span className="text-base sm:text-lg animate-bounce">⏱️</span>
+            <span className="text-xs sm:text-sm font-black text-emerald-200 tracking-wide">
+              {isEn ? '⏱️ Round is underway! Answer guessers (Yes / No / Warm / Cold)' : '⏱️ הסיבוב בעיצומו! ענה למנחשים (כן / לא / חם / קר)'}
+            </span>
+          </div>
+        ) : (
           <div className="w-full my-2 p-3 sm:p-4 rounded-3xl bg-gradient-to-r from-purple-900/60 via-pink-900/50 to-indigo-900/60 border-2 border-pink-500/50 shadow-2xl text-center animate-fadeIn">
             <div className="text-xs sm:text-sm font-extrabold text-pink-200 mb-3 flex items-center justify-center gap-2">
               <span className="text-xl">👑</span>
@@ -1326,21 +1326,14 @@ export const GameTable: React.FC<GameTableProps> = ({
             <button
               type="button"
               onClick={handleStartRound}
-              className="btn-3d btn-3d-purple w-full py-3.5 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-[0_10px_35px_rgba(168,85,247,0.6)] animate-pulse hover:scale-102 active:scale-98 transition-all"
+              className="btn-3d btn-3d-purple w-full py-3.5 px-6 text-white font-black text-base sm:text-lg rounded-2xl flex items-center justify-center gap-2.5 cursor-pointer shadow-[0_10px_35px_rgba(168,85,247,0.6)] animate-pulse hover:scale-102 active:scale-98 transition-all pointer-events-auto select-none"
             >
               <span className="shimmer-sweep" />
               <Rocket className="w-5 h-5 text-amber-300 animate-bounce" />
               <span className="tracking-wide">{isEn ? 'Start Round! 🚀' : 'התחל סיבוב! 🚀'}</span>
             </button>
           </div>
-        ) : (isRoundActive || currentRoundStatus === 'active') ? (
-          <div className="w-full my-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-900/80 via-teal-900/70 to-emerald-950/80 border-2 border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.3)] text-center animate-fadeIn flex items-center justify-center gap-2.5">
-            <span className="text-base sm:text-lg animate-bounce">⏱️</span>
-            <span className="text-xs sm:text-sm font-black text-emerald-200 tracking-wide">
-              {isEn ? '⏱️ Round is underway! Answer the questions' : '⏱️ הסיבוב בעיצומו! ענה על השאלות'}
-            </span>
-          </div>
-        ) : null
+        )
       )}
 
       {/* Role-Specific Interactive Area */}
@@ -1450,7 +1443,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         /* GUESSER INTERACTION AREA */
         <div className="w-full flex flex-col items-center animate-fadeIn">
           <p className="text-xs sm:text-sm font-bold mb-1.5 text-center flex items-center justify-center gap-1.5">
-            {!isRoundActive && currentRoundStatus === 'waiting' ? (
+            {!isRoundActive ? (
               <span className="text-amber-300 animate-pulse">
                 {isEn ? '⏳ Waiting for round to start...' : '⏳ ממתינים לתחילת הסיבוב...'}
               </span>
@@ -1471,7 +1464,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {Array.from({ length: wordLength }).map((_, index) => {
               const letter = currentGuess[index] || '';
               const isRevealedByHint = revealedIndices.includes(index);
-              const isCurrentFocus = currentGuess.length === index && currentRoundStatus === 'active';
+              const isCurrentFocus = currentGuess.length === index && isRoundActive;
 
               return (
                 <div
@@ -1503,7 +1496,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             onBackspace={handleBackspace}
             onHintClick={handleGiveHint}
             canHint={!isSuccess}
-            disabled={isSuccess || isShaking || (!isRoundActive && currentRoundStatus !== 'active')}
+            disabled={isSuccess || isShaking || !isRoundActive}
             language={language}
           />
         </div>
