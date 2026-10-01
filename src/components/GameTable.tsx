@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { CardItem, Player, Language, VoiceGender } from '../types/game';
+import { GAME_CARDS, getGameCardById } from '../data/cards';
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { GameTimer } from './GameTimer';
 import { normalizeHebrewInput, lettersMatch } from '../utils/hebrewKeyboard';
@@ -160,9 +161,18 @@ export const GameTable: React.FC<GameTableProps> = ({
     return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   }, [serverTurnData?.players, players]);
 
-  // Active card: received authoritatively from Host via NEW_TURN, or fallback to deck
+  // Active card: matched authoritatively from GAME_CARDS by cardId, received via NEW_TURN/START_ROUND, or deck
   const [activeTurnCard, setActiveTurnCard] = useState<CardItem | null>(null);
-  const activeCard = activeTurnCard || cards[currentCardIndex] || cards[0];
+  const activeCard: CardItem = useMemo(() => {
+    if (serverTurnData?.cardId) {
+      const found = GAME_CARDS.find((c) => c.id === serverTurnData.cardId);
+      if (found) return found;
+    }
+    if (activeTurnCard) return activeTurnCard;
+    if (cards && cards[currentCardIndex]) return cards[currentCardIndex];
+    return GAME_CARDS[0];
+  }, [serverTurnData?.cardId, activeTurnCard, cards, currentCardIndex]);
+
   const currentCard = activeCard;
   const localTargetWord = (isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word)).trim();
 
@@ -236,6 +246,12 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [lastReaction, setLastReaction] = useState<string | null>(null);
   const [floatingReaction, setFloatingReaction] = useState<{ reactionType?: 'yes' | 'no' | 'hot' | 'cold'; emoji: string; text: string; sender: string } | null>(null);
   const [winnerCelebration, setWinnerCelebration] = useState<RoundWonPayload | null>(null);
+  const [streakBanner, setStreakBanner] = useState<{
+    winnerName: string;
+    winnerAvatar?: string;
+    points: number;
+    word?: string;
+  } | null>(null);
 
   // User Requirement: isRoundActive & roundEndTime
   const [isRoundActive, setIsRoundActive] = useState<boolean>(() => {
@@ -245,6 +261,11 @@ export const GameTable: React.FC<GameTableProps> = ({
     return serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
   });
 
+  const isRoundActiveRef = useRef<boolean>(isRoundActive);
+  const roundEndTimeRef = useRef<number>(roundEndTime);
+  isRoundActiveRef.current = isRoundActive;
+  roundEndTimeRef.current = roundEndTime;
+
   // Round status ('waiting' = paused waiting for host/holder to start; 'active' = timer counting down; 'ended' = round concluded)
   const [roundStatus, setRoundStatus] = useState<'waiting' | 'active' | 'ended'>(() => {
     return serverTurnData?.roundStatus || 'waiting';
@@ -253,7 +274,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     return serverTurnData?.roundEndsAt || serverTurnData?.turnEndTime || 0;
   });
 
-  const currentRoundStatus: 'waiting' | 'active' | 'ended' = isRoundActive ? 'active' : roundStatus;
+  const currentRoundStatus: 'waiting' | 'active' | 'ended' = (isRoundActive || roundStatus === 'active') ? 'active' : roundStatus;
   const currentRoundEndsAt: number = (roundEndTime > 0 && roundEndTime > Date.now()) ? roundEndTime : (roundEndsAt > 0 ? roundEndsAt : roundEndTime);
 
   // Sync from incoming serverTurnData updates (preserves currentGuess!)
@@ -261,17 +282,20 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (serverTurnData) {
       if (serverTurnData.roundStatus) {
         // If local state is already active and the round hasn't expired, prevent stale waiting state from reverting it
-        if (serverTurnData.roundStatus === 'waiting' && isRoundActive && roundEndTime > Date.now()) {
-          // Keep active
+        if (serverTurnData.roundStatus === 'waiting' && isRoundActiveRef.current && roundEndTimeRef.current > Date.now()) {
+          // Keep active - do not revert
         } else {
           setRoundStatus(serverTurnData.roundStatus);
-          setIsRoundActive(serverTurnData.roundStatus === 'active');
+          const activeNow = serverTurnData.roundStatus === 'active';
+          setIsRoundActive(activeNow);
+          isRoundActiveRef.current = activeNow;
         }
       }
       const end = serverTurnData.roundEndsAt || serverTurnData.turnEndTime || 0;
       if (end > 0) {
         setRoundEndsAt(end);
         setRoundEndTime(end);
+        roundEndTimeRef.current = end;
       }
 
       if (serverTurnData.roundStatus === 'active') {
@@ -406,6 +430,8 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       const duration = Number(payload.turnDuration || payload.duration) || 60;
       const end = Number(payload.endTime || payload.roundEndTime || payload.roundEndsAt) || (Date.now() + duration * 1000);
+      isRoundActiveRef.current = true;
+      roundEndTimeRef.current = end;
       setIsRoundActive(true);
       setRoundEndTime(end);
       setRoundEndsAt(end);
@@ -416,6 +442,29 @@ export const GameTable: React.FC<GameTableProps> = ({
       isHandledRef.current = false;
       setCurrentGuess('');
       setIsSuccess(false);
+      setIsShaking(false);
+      setWinnerCelebration(null);
+
+      // Display celebratory banner for streak winner if present
+      if (payload.streakWinner) {
+        setStreakBanner({
+          winnerName: payload.streakWinner.winnerName,
+          winnerAvatar: payload.streakWinner.winnerAvatar || '🎉',
+          points: payload.streakWinner.points || 10,
+          word: payload.word,
+        });
+        setTimeout(() => {
+          setStreakBanner(null);
+        }, 2400);
+      }
+
+      // Update card for the holder
+      if (payload.card) {
+        setActiveTurnCard(payload.card);
+      } else if (payload.cardId) {
+        const found = getGameCardById(payload.cardId);
+        if (found) setActiveTurnCard(found);
+      }
 
       if (payload.wordLength || payload.category || payload.cardId) {
         setSyncedRoundCard({
@@ -431,35 +480,32 @@ export const GameTable: React.FC<GameTableProps> = ({
     const unsubRoundStarted = addSupabaseListener('ROUND_STARTED', onRoundStartPayload);
     const unsubStartRound = addSupabaseListener('START_ROUND', onRoundStartPayload);
 
+    // Non-blocking correct guess handling in Combo/Streak mode
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload: CorrectGuessPayload) => {
       sounds.soundSuccess();
       setIsSuccess(true);
-      setWinnerCelebration({
-        winnerId: payload.winnerId,
+      setStreakBanner({
         winnerName: payload.winnerName,
-        winnerAvatar: payload.winnerAvatar,
+        winnerAvatar: payload.winnerAvatar || '🎉',
+        points: payload.points || 10,
         word: payload.word,
-        image: payload.imageUrl || '',
-        points: payload.points,
-        scores: [],
       });
-      setIsRoundActive(false);
-      setRoundEndTime(0);
-      setRoundStatus('waiting');
-      setRoundEndsAt(0);
-      isHandledRef.current = true;
       setTimeout(() => {
-        setWinnerCelebration(null);
         setIsSuccess(false);
-        setCurrentGuess('');
-      }, 2500);
+      }, 700);
+      setTimeout(() => {
+        setStreakBanner(null);
+      }, 2400);
     });
 
+    // Timeout handling: Only triggered when clock reaches 0:00 without a guess
     const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload: TurnTimeoutPayload) => {
       sounds.soundError();
       setIsRoundActive(false);
       setRoundEndTime(0);
-      setRoundStatus('waiting');
+      isRoundActiveRef.current = false;
+      roundEndTimeRef.current = 0;
+      setRoundStatus('ended');
       setRoundEndsAt(0);
       setWinnerCelebration({
         winnerId: '',
@@ -473,14 +519,18 @@ export const GameTable: React.FC<GameTableProps> = ({
       setTimeout(() => {
         setWinnerCelebration(null);
         setCurrentGuess('');
-      }, 2400);
+      }, 2600);
     });
 
-    // Authoritative NEW_TURN broadcast from Host
+    // Authoritative NEW_TURN broadcast from Host (when time runs out and turn rotates to next player)
     const unsubNewTurn = addSupabaseListener('new_turn', (payload: NewTurnPayload) => {
       if (payload.holderId) {
         setLiveHolderId(String(payload.holderId));
       }
+      setIsRoundActive(false);
+      setRoundEndTime(0);
+      isRoundActiveRef.current = false;
+      roundEndTimeRef.current = 0;
       setRoundStatus('waiting');
       setRoundEndsAt(0);
       isHandledRef.current = false;
@@ -488,6 +538,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       setIsSuccess(false);
       setIsShaking(false);
       setWinnerCelebration(null);
+      setStreakBanner(null);
 
       if (payload.card) {
         setActiveTurnCard(payload.card);
@@ -668,6 +719,8 @@ export const GameTable: React.FC<GameTableProps> = ({
     const duration = Number(serverTurnData?.turnDuration || turnDuration) || 60;
     const endTime = Date.now() + duration * 1000;
 
+    isRoundActiveRef.current = true;
+    roundEndTimeRef.current = endTime;
     setIsRoundActive(true);
     setRoundEndTime(endTime);
     setRoundStatus('active');
@@ -784,30 +837,20 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     if (isMatch) {
       sounds.soundSuccess();
-      setIsSuccess(true);
-      isHandledRef.current = true;
-      setRoundStatus('waiting');
-      setRoundEndsAt(0);
-
-      const secondsRemaining = currentRoundEndsAt > 0 ? Math.max(0, Math.floor((currentRoundEndsAt - Date.now()) / 1000)) : 0;
-      const bonus = Math.max(1, Math.floor(secondsRemaining / 3));
-      const points = 10 + bonus;
+      const points = 10;
       const winnerId = myPlayerId;
       const winner = activePlayers.find((p) => p.id === winnerId);
 
-      setWinnerCelebration({
-        winnerId,
-        winnerName: winner?.name || (isEn ? 'Winner!' : 'ניצחון!'),
-        winnerAvatar: winner?.avatar || '🎉',
-        word: guessWord,
-        image: currentCard.imageUrl || currentCard.image,
-        points,
-        scores: [],
-      });
+      setIsSuccess(true);
+      isHandledRef.current = true;
+      setTimeout(() => {
+        setIsSuccess(false);
+        setCurrentGuess('');
+      }, 600);
 
       broadcastCorrectGuess({
         winnerId,
-        winnerName: winner?.name || (isEn ? 'Winner!' : 'ניצחון!'),
+        winnerName: winner?.name || (isEn ? 'Winner!' : 'מנחש/ת!'),
         winnerAvatar: winner?.avatar || '🎉',
         word: guessWord,
         imageUrl: currentCard.imageUrl || currentCard.image,
@@ -1081,6 +1124,29 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       </div>
 
+      {/* Streak / Combo Celebratory Notification Banner */}
+      {streakBanner && (
+        <div className="w-full mb-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-[0_8px_25px_rgba(16,185,129,0.5)] border-2 border-emerald-300 flex items-center justify-between gap-2 animate-bounce z-30">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xl sm:text-2xl animate-spin shrink-0">🌟</span>
+            <div className="min-w-0 text-right">
+              <div className="text-xs sm:text-sm font-black flex items-center gap-1.5 truncate">
+                <span>{streakBanner.winnerAvatar || '🎉'}</span>
+                <span className="truncate">{streakBanner.winnerName} {isEn ? 'guessed correctly!' : 'ניחש/ה נכון!'}</span>
+                <span className="bg-amber-400 text-slate-900 px-2 py-0.5 rounded-full text-xs font-black shrink-0">+{streakBanner.points}</span>
+              </div>
+              <div className="text-[10px] sm:text-xs text-emerald-100 font-bold truncate">
+                {streakBanner.word ? <span>{isEn ? `"${streakBanner.word}"` : `המילה: "${streakBanner.word}"`} • </span> : null}
+                <span>{isEn ? '⏱️ Clock reset — Keep the streak going!' : '⏱️ השעון אופס לזמן מלא — ממשיכים ברצף!'} 🔥</span>
+              </div>
+            </div>
+          </div>
+          <span className="text-[11px] font-black bg-white/20 px-2.5 py-1 rounded-xl shrink-0 tracking-wider">
+            COMBO! 🚀
+          </span>
+        </div>
+      )}
+
       {/* Main Game Display Frame */}
       <div className="w-full relative rounded-3xl overflow-hidden border-2 border-white/20 shadow-2xl bg-slate-900 mb-2 group aspect-[4/3] max-h-[220px] sm:max-h-[240px] flex items-center justify-center">
         {/* Floating Overlay Timer Badge inside the image frame (Isolated component - zero screen re-renders) */}
@@ -1175,8 +1241,8 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         )}
 
-        {/* Winner celebration overlay */}
-        {(isSuccess || winnerCelebration) && (
+        {/* Winner celebration / Timeout word reveal overlay */}
+        {Boolean(winnerCelebration) && (
           <div className="absolute inset-0 bg-emerald-950/90 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn text-center p-4 z-20">
             {winnerCelebration?.image && (
               <img

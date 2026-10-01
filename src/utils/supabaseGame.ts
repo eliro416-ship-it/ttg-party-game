@@ -49,10 +49,17 @@ export interface RoundStartPayload {
   holderAvatar?: string;
   cardIndex?: number;
   cardId?: string;
+  card?: CardItem;
   word?: string;
   wordHash?: string;
   hint?: string | null;
   turnDuration?: number;
+  streakWinner?: {
+    winnerId: string;
+    winnerName: string;
+    winnerAvatar?: string;
+    points: number;
+  };
 }
 
 export interface CorrectGuessPayload {
@@ -166,6 +173,14 @@ export interface RoomStatePayload {
 }
 
 // Global active channel and listener sets
+// Local tab-to-tab BroadcastChannel for 0-latency instant sync between tabs on same origin
+let localTabChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    localTabChannel = new BroadcastChannel('ttg_tab_sync');
+  } catch (e) {}
+}
+
 let activeChannel: RealtimeChannel | null = null;
 let activeRoomPin: string | null = null;
 let activePlayerId: string | null = null;
@@ -267,10 +282,12 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
       holderAvatar: payload.holderAvatar,
       cardIndex: payload.cardIndex,
       cardId: payload.cardId,
+      card: payload.card,
       word: payload.word,
       wordHash: payload.wordHash,
       hint: payload.hint,
       turnDuration: duration,
+      streakWinner: payload.streakWinner,
     };
     roundStartListeners.forEach((fn) => {
       try {
@@ -285,6 +302,14 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
   channel.on('broadcast', { event: 'round_started' }, handleRoundStartBroadcast);
   channel.on('broadcast', { event: 'START_ROUND' }, handleRoundStartBroadcast);
   channel.on('broadcast', { event: 'round_start' }, handleRoundStartBroadcast);
+
+  if (localTabChannel) {
+    localTabChannel.onmessage = (event) => {
+      if (event.data?.type === 'START_ROUND' && event.data.payload) {
+        handleRoundStartBroadcast({ payload: event.data.payload });
+      }
+    };
+  }
 
   channel.on('broadcast', { event: 'correct_guess' }, ({ payload }) => {
     correctGuessListeners.forEach((fn) => fn(payload as CorrectGuessPayload));
@@ -511,6 +536,16 @@ export function broadcastRoundStart(payload: RoundStartPayload): void {
       console.warn('Local listener error in broadcastRoundStart:', e);
     }
   });
+
+  // 1b. Post to localTabChannel for immediate cross-tab synchronization
+  if (localTabChannel) {
+    try {
+      localTabChannel.postMessage({
+        type: 'START_ROUND',
+        payload: normalized,
+      });
+    } catch (e) {}
+  }
 
   // 2. Safe Broadcast across Supabase channel
   if (activeChannel && typeof activeChannel.send === 'function') {

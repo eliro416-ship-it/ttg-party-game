@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { GameScreen, Player, RoomSettings, CardItem, Language, VoiceGender, HostStep } from './types/game';
-import { DEFAULT_CARDS, shuffleDeck } from './data/cards';
+import { DEFAULT_CARDS, GAME_CARDS, shuffleDeck } from './data/cards';
 import { RoleSelectScreen } from './components/RoleSelectScreen';
 import { HostScreen } from './components/HostScreen';
 import { PlayerJoinScreen } from './components/PlayerJoinScreen';
@@ -20,6 +20,7 @@ import {
   addSupabaseListener,
   trackPlayer,
   broadcastGameStart,
+  broadcastRoundStart,
   broadcastSettingsUpdate,
   broadcastSyncState,
   broadcastNewTurn,
@@ -292,11 +293,11 @@ export default function App() {
     const nextPlayer = currentPlayers[nextIndex] || currentPlayers[0];
     const newHolderId = nextPlayer.id;
 
-    // 2. Advance card index and pick next card from activeDeck
-    const nextCardIndex = (cardIndexRef.current + 1) % (activeDeck.length || 1);
-    cardIndexRef.current = nextCardIndex;
-    setCurrentCardIndex(nextCardIndex);
-    const newCard = activeDeck[nextCardIndex] || DEFAULT_CARDS[0];
+    // 2. Advance card index and pick next card randomly from GAME_CARDS
+    const newCard = GAME_CARDS[Math.floor(Math.random() * GAME_CARDS.length)];
+    const nextCardIndex = GAME_CARDS.findIndex((c) => c.id === newCard.id);
+    cardIndexRef.current = nextCardIndex >= 0 ? nextCardIndex : 0;
+    setCurrentCardIndex(cardIndexRef.current);
 
     const cardWord = (language === 'en' ? (newCard.word_en || newCard.word) : (newCard.word_he || newCard.word)).trim();
 
@@ -308,7 +309,7 @@ export default function App() {
       category: language === 'en' ? (newCard.category_en || newCard.category) : newCard.category,
       wordLength: cardWord.length,
       card: newCard,
-      cardIndex: nextCardIndex,
+      cardIndex: cardIndexRef.current,
       wordHash: encodeWordHash(cardWord),
     };
 
@@ -409,47 +410,65 @@ export default function App() {
         setCurrentHolderId(String(payload.holderId));
         currentHolderIdRef.current = String(payload.holderId);
       }
-      const isHolder = String(myPlayerId) === String(payload.holderId);
       const duration = Number(payload.turnDuration || payload.duration) || settings.turnDuration || 60;
       const endsAt = Number(payload.endTime || payload.roundEndTime || payload.roundEndsAt) || (Date.now() + duration * 1000);
 
-      setServerTurnData((prev) => ({
-        isHolder,
-        roundStatus: 'active',
-        roundEndsAt: endsAt,
-        turnEndTime: endsAt,
-        turnDuration: duration,
-        cardIndex: payload.cardIndex ?? prev?.cardIndex ?? 0,
-        totalCards: 50,
-        holderId: payload.holderId || prev?.holderId || currentHolderId,
-        holderName: payload.holderName || prev?.holderName || '',
-        holderAvatar: payload.holderAvatar || prev?.holderAvatar || '👑',
-        cardId: payload.cardId || prev?.cardId,
-        image: isHolder ? prev?.image || null : null,
-        imageUrl: isHolder ? prev?.imageUrl || null : null,
-        fallback: null,
-        word: isHolder ? prev?.word || null : null,
-        wordHash: payload.wordHash || prev?.wordHash,
-        category: payload.category || prev?.category || '',
-        hint: payload.hint || prev?.hint || null,
-        wordLength: (payload.wordLength && payload.wordLength > 0) ? payload.wordLength : (prev?.wordLength || 4),
-        players: prev?.players || [],
-      }));
+      setServerTurnData((prev) => {
+        const isHolder = payload.holderId
+          ? (String(myPlayerId) === String(payload.holderId))
+          : (currentHolderId ? String(myPlayerId) === String(currentHolderId) : Boolean(prev?.isHolder));
+        const cardIdx = payload.cardIndex ?? prev?.cardIndex ?? 0;
+        const activeCardItem = activeDeck[cardIdx] || DEFAULT_CARDS[0];
+
+        return {
+          isHolder,
+          roundStatus: 'active',
+          roundEndsAt: endsAt,
+          turnEndTime: endsAt,
+          turnDuration: duration,
+          cardIndex: cardIdx,
+          totalCards: 50,
+          holderId: payload.holderId || prev?.holderId || currentHolderId,
+          holderName: payload.holderName || prev?.holderName || (isHolder ? (language === 'en' ? 'You' : 'אתה/ת') : (language === 'en' ? 'Host' : 'מארח/ת')),
+          holderAvatar: payload.holderAvatar || prev?.holderAvatar || '👑',
+          cardId: payload.cardId || prev?.cardId || String(activeCardItem.id),
+          image: isHolder ? (prev?.image || activeCardItem.imageUrl || activeCardItem.image || null) : null,
+          imageUrl: isHolder ? (prev?.imageUrl || activeCardItem.imageUrl || activeCardItem.image || null) : null,
+          fallback: null,
+          word: isHolder ? (prev?.word || (language === 'en' ? (activeCardItem.word_en || activeCardItem.word) : (activeCardItem.word_he || activeCardItem.word))) : null,
+          wordHash: payload.wordHash || prev?.wordHash,
+          category: payload.category || prev?.category || activeCardItem.category,
+          hint: payload.hint || prev?.hint || null,
+          wordLength: (payload.wordLength && payload.wordLength > 0) ? payload.wordLength : (prev?.wordLength || 4),
+          players: prev?.players || [],
+        };
+      });
     };
 
     const unsubRoundStart = addSupabaseListener('round_start', handleRoundStart);
     const unsubRoundStarted = addSupabaseListener('ROUND_STARTED', handleRoundStart);
     const unsubStartRound = addSupabaseListener('START_ROUND', handleRoundStart);
 
-    // 5. Correct guess broadcast: Host authoritatively updates scores and schedules next turn
-    const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload) => {
+    // 5. Correct guess broadcast: Combo / Streak Game Loop
+    // - Guesser gets +10 points, Card Holder gets +2 bonus points
+    // - Immediate timer reset to full duration (e.g. 60s) and keeps running
+    // - Same card holder stays! Brand new card drawn from GAME_CARDS and broadcast immediately
+    const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload: CorrectGuessPayload) => {
       if (myPlayerId === 'p-host') {
-        const points = payload.points || 10;
-        const currentScore = scoresRef.current[payload.winnerId] || 0;
-        const updatedScores = {
+        const winnerPoints = payload.points || 10;
+        const currentWinnerScore = scoresRef.current[payload.winnerId] || 0;
+        const holderId = currentHolderIdRef.current || 'p-host';
+        const holderBonus = 2;
+        const currentHolderScore = scoresRef.current[holderId] || 0;
+
+        const updatedScores: Record<string, number> = {
           ...scoresRef.current,
-          [payload.winnerId]: currentScore + points,
+          [payload.winnerId]: currentWinnerScore + winnerPoints,
         };
+        // Award bonus to the holder if different from the guesser
+        if (holderId !== payload.winnerId) {
+          updatedScores[holderId] = (updatedScores[holderId] || currentHolderScore) + holderBonus;
+        }
         scoresRef.current = updatedScores;
         broadcastScoreUpdate({ scores: updatedScores });
 
@@ -457,22 +476,90 @@ export default function App() {
           prev.map((p) => ({
             ...p,
             score: updatedScores[p.id] !== undefined ? updatedScores[p.id] : p.score,
-            streak: p.id === payload.winnerId ? (p.streak || 0) + 1 : p.streak,
+            streak: p.id === payload.winnerId ? (p.streak || 0) + 1 : (p.id === holderId ? (p.streak || 0) + 1 : p.streak),
           }))
         );
 
-        setTimeout(() => {
-          advanceHostTurnRef.current();
-        }, 2500);
+        // A. Draw a brand new card from GAME_CARDS (different from current card)
+        const currentCardId = activeDeck[cardIndexRef.current]?.id;
+        const availableCards = GAME_CARDS.filter((c) => c.id !== currentCardId);
+        const nextCard = (availableCards.length > 0
+          ? availableCards[Math.floor(Math.random() * availableCards.length)]
+          : GAME_CARDS[Math.floor(Math.random() * GAME_CARDS.length)]) || GAME_CARDS[0];
+
+        const nextCardIndex = GAME_CARDS.findIndex((c) => c.id === nextCard.id);
+        cardIndexRef.current = nextCardIndex >= 0 ? nextCardIndex : 0;
+        setCurrentCardIndex(cardIndexRef.current);
+
+        // B. Reset timer to full duration & keep running seamlessly
+        const duration = settings.turnDuration || 60;
+        const newEndTime = Date.now() + duration * 1000;
+        const cardWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
+
+        const currentHolderPlayer = playersRef.current.find((p) => p.id === holderId);
+        const holderName = currentHolderPlayer?.name || (holderId === 'p-host' ? (language === 'en' ? 'Host' : 'מארח/ת') : '');
+        const holderAvatar = currentHolderPlayer?.avatar || '👑';
+
+        const streakPayload: RoundStartPayload = {
+          holderId,
+          holderName,
+          holderAvatar,
+          cardIndex: cardIndexRef.current,
+          cardId: nextCard.id,
+          card: nextCard,
+          word: cardWord,
+          wordHash: encodeWordHash(cardWord),
+          category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
+          wordLength: cardWord.length,
+          duration,
+          turnDuration: duration,
+          endTime: newEndTime,
+          roundEndTime: newEndTime,
+          roundEndsAt: newEndTime,
+          streakWinner: {
+            winnerId: payload.winnerId,
+            winnerName: payload.winnerName,
+            winnerAvatar: payload.winnerAvatar,
+            points: winnerPoints,
+          },
+        };
+
+        // C. Update host's local state immediately
+        const isHostTheHolder = myPlayerId === holderId;
+        setServerTurnData({
+          isHolder: isHostTheHolder,
+          roundStatus: 'active',
+          roundEndsAt: newEndTime,
+          turnEndTime: newEndTime,
+          turnDuration: duration,
+          cardIndex: cardIndexRef.current,
+          totalCards: GAME_CARDS.length,
+          holderId,
+          holderName,
+          holderAvatar,
+          cardId: nextCard.id,
+          image: isHostTheHolder ? (nextCard.imageUrl || nextCard.image) : null,
+          imageUrl: isHostTheHolder ? (nextCard.imageUrl || nextCard.image) : null,
+          fallback: nextCard.fallback || null,
+          word: isHostTheHolder ? cardWord : null,
+          category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
+          hint: null,
+          wordLength: cardWord.length,
+          players: playersRef.current,
+        });
+
+        // D. Broadcast to all clients
+        broadcastRoundStart(streakPayload);
       }
     });
 
-    // 6. Turn timeout broadcast: Host authoritatively advances turn
+    // 6. Turn timeout broadcast: Only when clock hits 0:00 without a guess
+    // Word is revealed for 2.6 seconds, then host advances to the next player
     const unsubTurnTimeout = addSupabaseListener('turn_timeout', () => {
       if (myPlayerId === 'p-host') {
         setTimeout(() => {
           advanceHostTurnRef.current();
-        }, 2400);
+        }, 2600);
       }
     });
 
@@ -709,7 +796,10 @@ export default function App() {
       localStorage.setItem('ttg_player_id', hostId);
     } catch (e) {}
 
-    const firstCard = activeDeck[0] || DEFAULT_CARDS[0];
+    const firstCard = GAME_CARDS[Math.floor(Math.random() * GAME_CARDS.length)];
+    const firstCardIndex = GAME_CARDS.findIndex((c) => c.id === firstCard.id);
+    cardIndexRef.current = firstCardIndex >= 0 ? firstCardIndex : 0;
+    setCurrentCardIndex(cardIndexRef.current);
     const firstWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
     const hostPlayer = {
       id: hostId,
@@ -726,8 +816,8 @@ export default function App() {
       roundEndsAt: 0,
       turnEndTime: 0,
       turnDuration: settings.turnDuration,
-      cardIndex: 0,
-      totalCards: Math.min(activeDeck.length, 50),
+      cardIndex: cardIndexRef.current,
+      totalCards: GAME_CARDS.length,
       holderId: hostId,
       holderName: hostPlayer.name,
       holderAvatar: hostPlayer.avatar || '👑',
@@ -772,7 +862,10 @@ export default function App() {
       localStorage.setItem('ttg_player_id', soloId);
     } catch (e) {}
 
-    const firstCard = activeDeck[0] || DEFAULT_CARDS[0];
+    const firstCard = GAME_CARDS[Math.floor(Math.random() * GAME_CARDS.length)];
+    const firstCardIndex = GAME_CARDS.findIndex((c) => c.id === firstCard.id);
+    cardIndexRef.current = firstCardIndex >= 0 ? firstCardIndex : 0;
+    setCurrentCardIndex(cardIndexRef.current);
     const firstWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
 
     setPlayers([
@@ -787,7 +880,6 @@ export default function App() {
       },
     ]);
     setActivePlayerIndex(0);
-    setCurrentCardIndex(0);
     setTotalCardsSolved(0);
     setPlayedCardIds(new Set());
     setShuffledDeck(shuffleDeck([...DEFAULT_CARDS]));
@@ -798,8 +890,8 @@ export default function App() {
       roundEndsAt: 0,
       turnEndTime: 0,
       turnDuration: settings.turnDuration,
-      cardIndex: 0,
-      totalCards: Math.min(activeDeck.length, 50),
+      cardIndex: cardIndexRef.current,
+      totalCards: GAME_CARDS.length,
       holderId: soloId,
       holderName: language === 'en' ? 'Player 1' : 'שחקן 1',
       holderAvatar: '🦁',
