@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { GameScreen, Player, RoomSettings, CardItem, Language, VoiceGender, HostStep } from './types/game';
-import { DEFAULT_CARDS, GAME_CARDS, shuffleDeck } from './data/cards';
+import { DEFAULT_CARDS, GAME_CARDS, STATIC_CARDS, shuffleDeck } from './data/cards';
 import { RoleSelectScreen } from './components/RoleSelectScreen';
 import { HostScreen } from './components/HostScreen';
 import { PlayerJoinScreen } from './components/PlayerJoinScreen';
@@ -25,6 +25,7 @@ import {
   broadcastSyncState,
   broadcastNewTurn,
   broadcastScoreUpdate,
+  broadcastScoreboardSync,
   encodeWordHash,
   TurnStartedPayload,
   RoomStatePayload,
@@ -33,6 +34,7 @@ import {
   TurnTimeoutPayload,
   NewTurnPayload,
   ScoreUpdatePayload,
+  ScoreboardSyncPayload,
   GameStartPayload,
   SettingsUpdatePayload,
   SyncStatePayload,
@@ -453,43 +455,47 @@ export default function App() {
     const unsubStartRound = addSupabaseListener('START_ROUND', handleRoundStart);
 
     // 5. Correct guess broadcast: Combo / Streak Game Loop
-    // - Guesser gets +10 points, Card Holder gets +2 bonus points
+    // - Guesser gets +10 points, Card Holder gets 0 points (strict rule)
     // - Immediate timer reset to full duration (e.g. 60s) and keeps running
-    // - Same card holder stays! Brand new card drawn from GAME_CARDS and broadcast immediately
+    // - Same card holder stays! Brand new card drawn from STATIC_CARDS and broadcast immediately
     const unsubCorrectGuess = addSupabaseListener('correct_guess', (payload: CorrectGuessPayload) => {
       if (myPlayerId === 'p-host') {
-        const winnerPoints = payload.points || 10;
-        const currentWinnerScore = scoresRef.current[payload.winnerId] || 0;
-        const holderId = currentHolderIdRef.current || 'p-host';
-        const holderBonus = 2;
-        const currentHolderScore = scoresRef.current[holderId] || 0;
+        const guessingPlayerId = payload.winnerId;
 
-        const updatedScores: Record<string, number> = {
-          ...scoresRef.current,
-          [payload.winnerId]: currentWinnerScore + winnerPoints,
-        };
-        // Award bonus to the holder if different from the guesser
-        if (holderId !== payload.winnerId) {
-          updatedScores[holderId] = (updatedScores[holderId] || currentHolderScore) + holderBonus;
+        // עדכון ניקוד אך ורק לשחקן שניחש
+        const updatedPlayers = (playersRef.current && playersRef.current.length > 0 ? playersRef.current : players).map((p) =>
+          p.id === guessingPlayerId ? { ...p, score: (p.score || 0) + 10, streak: (p.streak || 0) + 1 } : p
+        );
+        playersRef.current = updatedPlayers;
+        setPlayers(updatedPlayers);
+
+        // שידור מיידי לכל החדר של הטבלה המעודכנת
+        const channel = getCurrentSupabaseChannel();
+        if (channel && typeof channel.send === 'function') {
+          channel.send({
+            type: 'broadcast',
+            event: 'SCOREBOARD_SYNC',
+            payload: { players: updatedPlayers }
+          }).catch((err) => console.error('Error broadcasting SCOREBOARD_SYNC:', err));
         }
-        scoresRef.current = updatedScores;
+
+        broadcastScoreboardSync({ players: updatedPlayers });
+
+        const updatedScores: Record<string, number> = {};
+        updatedPlayers.forEach((p) => {
+          scoresRef.current[p.id] = p.score || 0;
+          updatedScores[p.id] = p.score || 0;
+        });
         broadcastScoreUpdate({ scores: updatedScores });
 
-        setPlayers((prev) =>
-          prev.map((p) => ({
-            ...p,
-            score: updatedScores[p.id] !== undefined ? updatedScores[p.id] : p.score,
-            streak: p.id === payload.winnerId ? (p.streak || 0) + 1 : (p.id === holderId ? (p.streak || 0) + 1 : p.streak),
-          }))
-        );
-
-        // A. Draw a brand new card from GAME_CARDS (different from current card)
+        // A. Draw a brand new card from STATIC_CARDS (different from current card)
         const currentCardId = activeDeck[cardIndexRef.current]?.id;
-        const availableCards = GAME_CARDS.filter((c) => c.id !== currentCardId);
-        const nextCard = (availableCards.length > 0
+        const availableCards = STATIC_CARDS.filter((c) => c.id !== currentCardId);
+        const nextCardItem = (availableCards.length > 0
           ? availableCards[Math.floor(Math.random() * availableCards.length)]
-          : GAME_CARDS[Math.floor(Math.random() * GAME_CARDS.length)]) || GAME_CARDS[0];
+          : STATIC_CARDS[Math.floor(Math.random() * STATIC_CARDS.length)]) || STATIC_CARDS[0];
 
+        const nextCard = GAME_CARDS.find((c) => c.id === nextCardItem.id) || GAME_CARDS[0];
         const nextCardIndex = GAME_CARDS.findIndex((c) => c.id === nextCard.id);
         cardIndexRef.current = nextCardIndex >= 0 ? nextCardIndex : 0;
         setCurrentCardIndex(cardIndexRef.current);
@@ -499,6 +505,7 @@ export default function App() {
         const newEndTime = Date.now() + duration * 1000;
         const cardWord = (language === 'en' ? (nextCard.word_en || nextCard.word) : (nextCard.word_he || nextCard.word)).trim();
 
+        const holderId = currentHolderIdRef.current || 'p-host';
         const currentHolderPlayer = playersRef.current.find((p) => p.id === holderId);
         const holderName = currentHolderPlayer?.name || (holderId === 'p-host' ? (language === 'en' ? 'Host' : 'מארח/ת') : '');
         const holderAvatar = currentHolderPlayer?.avatar || '👑';
@@ -523,7 +530,7 @@ export default function App() {
             winnerId: payload.winnerId,
             winnerName: payload.winnerName,
             winnerAvatar: payload.winnerAvatar,
-            points: winnerPoints,
+            points: 10,
           },
         };
 
@@ -536,7 +543,7 @@ export default function App() {
           turnEndTime: newEndTime,
           turnDuration: duration,
           cardIndex: cardIndexRef.current,
-          totalCards: GAME_CARDS.length,
+          totalCards: STATIC_CARDS.length,
           holderId,
           holderName,
           holderAvatar,
@@ -548,11 +555,24 @@ export default function App() {
           category: language === 'en' ? (nextCard.category_en || nextCard.category) : nextCard.category,
           hint: null,
           wordLength: cardWord.length,
-          players: playersRef.current,
+          players: updatedPlayers,
         });
 
         // D. Broadcast to all clients
         broadcastRoundStart(streakPayload);
+      }
+    });
+
+    // Scoreboard sync broadcast listener (all devices update immediately)
+    const unsubScoreboardSync = addSupabaseListener('SCOREBOARD_SYNC', (payload: ScoreboardSyncPayload) => {
+      if (payload?.players && Array.isArray(payload.players)) {
+        playersRef.current = payload.players;
+        setPlayers(payload.players);
+        const scoresObj: Record<string, number> = {};
+        payload.players.forEach((p: Player) => {
+          scoresObj[p.id] = p.score || 0;
+        });
+        scoresRef.current = scoresObj;
       }
     });
 
@@ -695,6 +715,7 @@ export default function App() {
       unsubRoundStarted();
       unsubStartRound();
       unsubCorrectGuess();
+      unsubScoreboardSync();
       unsubTurnTimeout();
       unsubSkipTurn();
       unsubNewTurn();
@@ -984,22 +1005,37 @@ export default function App() {
     } catch (e) {}
   };
 
-  const handleCardSolved = useCallback((winnerPlayerId: string, bonusPoints: number) => {
+  const handleCardSolved = useCallback((winnerPlayerId: string) => {
     // Host authoritatively updates scores and schedules next turn
     if (myPlayerId === 'p-host') {
-      const currentScore = scoresRef.current[winnerPlayerId] || 0;
-      const updatedScores = {
-        ...scoresRef.current,
-        [winnerPlayerId]: currentScore + 10 + bonusPoints,
-      };
-      scoresRef.current = updatedScores;
+      const updatedPlayers = (playersRef.current && playersRef.current.length > 0 ? playersRef.current : players).map((p) =>
+        p.id === winnerPlayerId ? { ...p, score: (p.score || 0) + 10 } : p
+      );
+      playersRef.current = updatedPlayers;
+      setPlayers(updatedPlayers);
+
+      const channel = getCurrentSupabaseChannel();
+      if (channel && typeof channel.send === 'function') {
+        channel.send({
+          type: 'broadcast',
+          event: 'SCOREBOARD_SYNC',
+          payload: { players: updatedPlayers }
+        }).catch((err) => console.error('Error broadcasting SCOREBOARD_SYNC:', err));
+      }
+      broadcastScoreboardSync({ players: updatedPlayers });
+
+      const updatedScores: Record<string, number> = {};
+      updatedPlayers.forEach((p) => {
+        scoresRef.current[p.id] = p.score || 0;
+        updatedScores[p.id] = p.score || 0;
+      });
       broadcastScoreUpdate({ scores: updatedScores });
 
       setTimeout(() => {
         advanceHostTurnRef.current();
       }, 2500);
     }
-  }, [myPlayerId]);
+  }, [myPlayerId, players]);
 
   const handleCardTimeout = useCallback(() => {
     if (myPlayerId === 'p-host') {

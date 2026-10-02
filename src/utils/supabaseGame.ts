@@ -119,6 +119,10 @@ export interface SettingsUpdatePayload {
   turnDuration: number;
 }
 
+export interface ScoreboardSyncPayload {
+  players: Player[];
+}
+
 export interface GameStartPayload {
   holderId: string;
   holderName: string;
@@ -206,6 +210,11 @@ const settingsListeners = new Set<(payload: SettingsUpdatePayload) => void>();
 const syncStateListeners = new Set<(payload: SyncStatePayload) => void>();
 const requestSyncListeners = new Set<(payload: RequestSyncPayload) => void>();
 const statusListeners = new Set<(status: string) => void>();
+const scoreboardSyncListeners = new Set<(payload: ScoreboardSyncPayload) => void>();
+
+export function getLocalTabChannel(): BroadcastChannel | null {
+  return localTabChannel;
+}
 
 /**
  * Initializes and joins a dedicated Supabase Realtime room channel.
@@ -270,6 +279,20 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
   channel.on('broadcast', { event: 'score_update' }, ({ payload }) => {
     scoreUpdateListeners.forEach((fn) => fn(payload as ScoreUpdatePayload));
   });
+
+  const handleScoreboardSyncBroadcast = ({ payload }: { payload: any }) => {
+    if (!payload?.players || !Array.isArray(payload.players)) return;
+    scoreboardSyncListeners.forEach((fn) => {
+      try {
+        fn(payload as ScoreboardSyncPayload);
+      } catch (err) {
+        console.error('Error in scoreboardSync listener:', err);
+      }
+    });
+  };
+
+  channel.on('broadcast', { event: 'SCOREBOARD_SYNC' }, handleScoreboardSyncBroadcast);
+  channel.on('broadcast', { event: 'scoreboard_sync' }, handleScoreboardSyncBroadcast);
 
   const handleRoundStartBroadcast = ({ payload }: { payload: any }) => {
     if (!payload) return;
@@ -351,6 +374,9 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
       if ((event.data?.type === 'TURN_TIMEOUT' || event.data?.type === 'turn_timeout') && event.data.payload) {
         handleTurnTimeoutBroadcast({ payload: event.data.payload });
       }
+      if ((event.data?.type === 'SCOREBOARD_SYNC' || event.data?.type === 'scoreboard_sync') && event.data.payload) {
+        handleScoreboardSyncBroadcast({ payload: event.data.payload });
+      }
     };
   }
 
@@ -425,6 +451,7 @@ export function addSupabaseListener(event: 'reaction', fn: (payload: ReactionPay
 export function addSupabaseListener(event: 'hint', fn: (payload: HintPayload) => void): () => void;
 export function addSupabaseListener(event: 'update_settings', fn: (payload: SettingsUpdatePayload) => void): () => void;
 export function addSupabaseListener(event: 'sync_state', fn: (payload: SyncStatePayload) => void): () => void;
+export function addSupabaseListener(event: 'SCOREBOARD_SYNC' | 'scoreboard_sync', fn: (payload: ScoreboardSyncPayload) => void): () => void;
 export function addSupabaseListener(event: 'request_sync', fn: (payload: RequestSyncPayload) => void): () => void;
 export function addSupabaseListener(event: 'status', fn: (status: string) => void): () => void;
 export function addSupabaseListener(event: string, fn: any): () => void {
@@ -440,6 +467,7 @@ export function addSupabaseListener(event: string, fn: any): () => void {
   else if (event === 'hint') hintListeners.add(fn);
   else if (event === 'update_settings') settingsListeners.add(fn);
   else if (event === 'sync_state') syncStateListeners.add(fn);
+  else if (event === 'SCOREBOARD_SYNC' || event === 'scoreboard_sync') scoreboardSyncListeners.add(fn);
   else if (event === 'request_sync') requestSyncListeners.add(fn);
   else if (event === 'status') statusListeners.add(fn);
 
@@ -456,6 +484,7 @@ export function addSupabaseListener(event: string, fn: any): () => void {
     else if (event === 'hint') hintListeners.delete(fn);
     else if (event === 'update_settings') settingsListeners.delete(fn);
     else if (event === 'sync_state') syncStateListeners.delete(fn);
+    else if (event === 'SCOREBOARD_SYNC' || event === 'scoreboard_sync') scoreboardSyncListeners.delete(fn);
     else if (event === 'request_sync') requestSyncListeners.delete(fn);
     else if (event === 'status') statusListeners.delete(fn);
   };
@@ -655,6 +684,37 @@ export function broadcastTurnTimeout(payload: TurnTimeoutPayload): void {
       event: 'turn_timeout',
       payload,
     });
+  }
+}
+
+export function broadcastScoreboardSync(payload: ScoreboardSyncPayload): void {
+  scoreboardSyncListeners.forEach((fn) => {
+    try {
+      fn(payload);
+    } catch (e) {
+      console.warn('Local listener error in broadcastScoreboardSync:', e);
+    }
+  });
+
+  if (localTabChannel) {
+    try {
+      localTabChannel.postMessage({
+        type: 'SCOREBOARD_SYNC',
+        payload,
+      });
+    } catch (e) {}
+  }
+
+  if (activeChannel && typeof activeChannel.send === 'function') {
+    try {
+      activeChannel.send({
+        type: 'broadcast',
+        event: 'SCOREBOARD_SYNC',
+        payload,
+      }).catch((err: any) => console.error('Error broadcasting SCOREBOARD_SYNC:', err));
+    } catch (e) {
+      console.error('Exception in broadcastScoreboardSync send:', e);
+    }
   }
 }
 

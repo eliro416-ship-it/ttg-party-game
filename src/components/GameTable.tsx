@@ -2,17 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { CardItem, Player, Language, VoiceGender } from '../types/game';
 import { GAME_CARDS, STATIC_CARDS, getGameCardById } from '../data/cards';
 
-// 8 Verified Static Cards as requested (Single Source of Truth)
-export const CARDS_POOL = [
-  { id: '1', word: 'כלב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80' },
-  { id: '2', word: 'חתול', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80' },
-  { id: '3', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80' },
-  { id: '4', word: 'צב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&w=600&q=80' },
-  { id: '5', word: 'זאב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1564865878688-9a244444042a?auto=format&fit=crop&w=600&q=80' },
-  { id: '6', word: 'רופא', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=600&q=80' },
-  { id: '7', word: 'טייס', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80' },
-  { id: '8', word: 'פיצה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80' }
-];
+// 15 Verified Static Cards as requested (Single Source of Truth)
+export const CARDS_POOL = STATIC_CARDS;
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { GameTimer } from './GameTimer';
 import { normalizeHebrewInput, lettersMatch } from '../utils/hebrewKeyboard';
@@ -40,6 +31,7 @@ import {
   CorrectGuessPayload,
   TurnTimeoutPayload,
   NewTurnPayload,
+  ScoreboardSyncPayload,
   HintPayload,
   SettingsUpdatePayload,
   SyncStatePayload,
@@ -167,13 +159,25 @@ export const GameTable: React.FC<GameTableProps> = ({
     : (activeMyPlayerId === effectiveHolderId);
   const isCurrentClientHolder = isHolder;
 
+  // Host-Authoritative Scoreboard synchronization
+  const [syncedScoreboardPlayers, setSyncedScoreboardPlayers] = useState<Player[] | null>(null);
+
+  useEffect(() => {
+    const unsub = addSupabaseListener('SCOREBOARD_SYNC', (payload: ScoreboardSyncPayload) => {
+      if (payload?.players && Array.isArray(payload.players)) {
+        setSyncedScoreboardPlayers(payload.players);
+      }
+    });
+    return () => unsub();
+  }, []);
+
   // Active players: Server authoritative list (strictly connected players), ranked by score
   const activePlayers = useMemo(() => {
-    const list = (serverTurnData?.players && serverTurnData.players.length > 0)
-      ? serverTurnData.players
-      : players;
+    const list = (syncedScoreboardPlayers && syncedScoreboardPlayers.length > 0)
+      ? syncedScoreboardPlayers
+      : (players && players.length > 0 ? players : (serverTurnData?.players || []));
     return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  }, [serverTurnData?.players, players]);
+  }, [syncedScoreboardPlayers, players, serverTurnData?.players]);
 
   // Active card: matched authoritatively from CARDS_POOL by cardId or activeTurnCard
   const [activeTurnCard, setActiveTurnCard] = useState<any | null>(null);
