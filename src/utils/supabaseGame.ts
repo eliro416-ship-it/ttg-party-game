@@ -83,6 +83,8 @@ export interface TurnTimeoutPayload {
   nextCard?: any;
   nextIndex?: number;
   nextCardIndex?: number;
+  wordLength?: number;
+  category?: string;
 }
 
 export interface ReactionPayload {
@@ -130,6 +132,7 @@ export interface TurnStartedPayload {
   roundStatus?: 'waiting' | 'active' | 'ended';
   roundEndsAt?: number;
   serverTime?: number;
+  card?: any;
   cardId?: string;
   cardIndex: number;
   totalCards: number;

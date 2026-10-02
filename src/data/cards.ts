@@ -13,28 +13,28 @@ export interface StaticCardItem {
 export const STATIC_CARDS = [
   { id: '1', word: 'כלב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80' },
   { id: '2', word: 'חתול', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80' },
-  { id: '3', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1614027164847-1b28caa1401f?auto=format&fit=crop&w=600&q=80' },
-  { id: '4', word: 'פיל', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=600&q=80' },
-  { id: '5', word: 'צב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&w=600&q=80' },
-  { id: '6', word: 'זאב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1564865878688-9a244444042a?auto=format&fit=crop&w=600&q=80' },
+  { id: '3', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80' },
+  { id: '4', word: 'צב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&w=600&q=80' },
+  { id: '5', word: 'זאב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1564865878688-9a244444042a?auto=format&fit=crop&w=600&q=80' },
+  { id: '6', word: 'רופא', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=600&q=80' },
   { id: '7', word: 'טייס', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80' },
-  { id: '8', word: 'כבאי', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&w=600&q=80' },
-  { id: '9', word: 'רופא', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=600&q=80' },
-  { id: '10', word: 'פיצה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80' },
+  { id: '8', word: 'פיצה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80' },
 ];
+
+export const CARDS_POOL = STATIC_CARDS;
 
 export const GAME_CARDS: CardItem[] = STATIC_CARDS.map((c) => ({
   id: c.id,
   word: c.word,
   word_he: c.word,
-  word_en: c.word === 'כלב' ? 'DOG' : c.word === 'חתול' ? 'CAT' : c.word === 'אריה' ? 'LION' : c.word === 'פיל' ? 'ELEPHANT' : c.word === 'צב' ? 'TURTLE' : c.word === 'זאב' ? 'WOLF' : c.word === 'טייס' ? 'PILOT' : c.word === 'כבאי' ? 'FIREFIGHTER' : c.word === 'רופא' ? 'DOCTOR' : 'PIZZA',
-  wordEn: c.word === 'כלב' ? 'DOG' : c.word === 'חתול' ? 'CAT' : c.word === 'אריה' ? 'LION' : c.word === 'פיל' ? 'ELEPHANT' : c.word === 'צב' ? 'TURTLE' : c.word === 'זאב' ? 'WOLF' : c.word === 'טייס' ? 'PILOT' : c.word === 'כבאי' ? 'FIREFIGHTER' : c.word === 'רופא' ? 'DOCTOR' : 'PIZZA',
+  word_en: c.word === 'כלב' ? 'DOG' : c.word === 'חתול' ? 'CAT' : c.word === 'אריה' ? 'LION' : c.word === 'צב' ? 'TURTLE' : c.word === 'זאב' ? 'WOLF' : c.word === 'רופא' ? 'DOCTOR' : c.word === 'טייס' ? 'PILOT' : 'PIZZA',
+  wordEn: c.word === 'כלב' ? 'DOG' : c.word === 'חתול' ? 'CAT' : c.word === 'אריה' ? 'LION' : c.word === 'צב' ? 'TURTLE' : c.word === 'זאב' ? 'WOLF' : c.word === 'רופא' ? 'DOCTOR' : c.word === 'טייס' ? 'PILOT' : 'PIZZA',
   category: c.category,
   category_en: c.category === 'חיות' ? 'Animals' : c.category === 'מקצועות' ? 'Professions' : 'Food',
   categoryEn: c.category === 'חיות' ? 'Animals' : c.category === 'מקצועות' ? 'Professions' : 'Food',
   image: c.imageUrl,
   imageUrl: c.imageUrl,
-  fallback: generateCardFallback(c.word, c.category, c.word === 'כלב' ? '🐶' : c.word === 'חתול' ? '🐱' : c.word === 'אריה' ? '🦁' : c.word === 'פיל' ? '🐘' : c.word === 'צב' ? '🐢' : c.word === 'זאב' ? '🐺' : c.word === 'טייס' ? '👨‍✈️' : c.word === 'כבאי' ? '👨‍🚒' : c.word === 'רופא' ? '👨‍⚕️' : '🍕'),
+  fallback: generateCardFallback(c.word, c.category, c.word === 'כלב' ? '🐶' : c.word === 'חתול' ? '🐱' : c.word === 'אריה' ? '🦁' : c.word === 'צב' ? '🐢' : c.word === 'זאב' ? '🐺' : c.word === 'רופא' ? '👨‍⚕️' : c.word === 'טייס' ? '👨‍✈️' : '🍕'),
 }));
 
 // Helper to pick a random card directly from GAME_CARDS

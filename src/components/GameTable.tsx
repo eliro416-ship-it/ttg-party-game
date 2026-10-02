@@ -6,7 +6,7 @@ import { GAME_CARDS, STATIC_CARDS, getGameCardById } from '../data/cards';
 export const CARDS_POOL = [
   { id: '1', word: 'כלב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80' },
   { id: '2', word: 'חתול', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80' },
-  { id: '3', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1614027164847-1b28caa1401f?auto=format&fit=crop&w=600&q=80' },
+  { id: '3', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80' },
   { id: '4', word: 'צב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&w=600&q=80' },
   { id: '5', word: 'זאב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1564865878688-9a244444042a?auto=format&fit=crop&w=600&q=80' },
   { id: '6', word: 'רופא', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=600&q=80' },
@@ -178,20 +178,22 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Active card: matched authoritatively from CARDS_POOL by cardId or activeTurnCard
   const [activeTurnCard, setActiveTurnCard] = useState<any | null>(null);
   const activeCard = useMemo(() => {
-    if (serverTurnData?.cardId) {
-      const found = CARDS_POOL.find((c) => String(c.id) === String(serverTurnData.cardId));
-      if (found) return found;
+    let card: any = null;
+    if (serverTurnData?.card && serverTurnData.card.word) {
+      card = serverTurnData.card;
+    } else if (serverTurnData?.cardId) {
+      card = CARDS_POOL.find((c) => String(c.id) === String(serverTurnData.cardId));
+    } else if (activeTurnCard && activeTurnCard.word) {
+      card = CARDS_POOL.find((c) => String(c.id) === String(activeTurnCard.id)) || activeTurnCard;
+    } else if (cards && cards[currentCardIndex] && cards[currentCardIndex].word) {
+      card = CARDS_POOL.find((c) => String(c.id) === String(cards[currentCardIndex]?.id)) || cards[currentCardIndex];
     }
-    if (activeTurnCard) {
-      const found = CARDS_POOL.find((c) => String(c.id) === String(activeTurnCard.id)) || activeTurnCard;
-      return found;
+    // Safe Turn Transition requirement: fallback to STATIC_CARDS[0] if missing or corrupted
+    if (!card || !card.word || !card.imageUrl) {
+      return STATIC_CARDS[0];
     }
-    if (cards && cards[currentCardIndex]) {
-      const found = CARDS_POOL.find((c) => String(c.id) === String(cards[currentCardIndex]?.id));
-      if (found) return found;
-    }
-    return CARDS_POOL[0];
-  }, [serverTurnData?.cardId, activeTurnCard, cards, currentCardIndex]);
+    return card;
+  }, [serverTurnData?.card, serverTurnData?.cardId, activeTurnCard, cards, currentCardIndex]);
 
   const currentCard = activeCard;
   const selectedCard = activeCard;
@@ -230,13 +232,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Holder sees the secret word and photo; guesser sees NO secret word and relies strictly on synced network card!
   const targetWord = isCurrentClientHolder ? (selectedCard?.word || serverTurnData?.word || localTargetWord) : '';
-  const rawWordLength = isCurrentClientHolder
-    ? (selectedCard?.word?.length || serverTurnData?.wordLength || localTargetWord.length)
-    : (syncedRoundCard?.wordLength || serverTurnData?.wordLength || 0);
 
-  // Requirement 2: ALWAYS render boxes! If wordLength has not arrived from host yet, default to at least 4 boxes
-  const wordLength = rawWordLength > 0 ? rawWordLength : 4;
-  const isWaitingForWordLength = !isCurrentClientHolder && rawWordLength === 0;
+  // מספר הקוביות אצל המנחש חייב להיקבע אך ורק לפי אורך המילה הפעילה:
+  const wordLength = activeCard?.word ? activeCard.word.trim().length : 4;
+  const isWaitingForWordLength = false;
 
   const activeCategory = isCurrentClientHolder
     ? (selectedCard?.category || serverTurnData?.category || currentCard.category)
@@ -588,12 +587,13 @@ export const GameTable: React.FC<GameTableProps> = ({
         setLiveHolderId(String(payload.nextHolderId));
       }
       if (payload.nextCard) {
-        setActiveTurnCard(payload.nextCard);
+        const validatedCard = (payload.nextCard.word && payload.nextCard.imageUrl) ? payload.nextCard : STATIC_CARDS[0];
+        setActiveTurnCard(validatedCard);
         setSyncedRoundCard({
-          cardId: payload.nextCard.id,
-          category: payload.nextCard.category,
-          wordLength: payload.nextCard.word ? payload.nextCard.word.trim().length : 4,
-          wordHash: payload.nextCard.word ? encodeWordHash(payload.nextCard.word.trim()) : undefined,
+          cardId: validatedCard.id,
+          category: validatedCard.category,
+          wordLength: validatedCard.word ? validatedCard.word.trim().length : 4,
+          wordHash: validatedCard.word ? encodeWordHash(validatedCard.word.trim()) : undefined,
         });
       }
 
@@ -746,7 +746,14 @@ export const GameTable: React.FC<GameTableProps> = ({
     const nextHolderId = playerIds[nextIndex] || playerIds[0] || 'p-host';
 
     // 3. בחירת קלף חדש לתור הבא מתוך STATIC_CARDS
-    const nextCard = STATIC_CARDS[Math.floor(Math.random() * STATIC_CARDS.length)];
+    const nextCardItem = STATIC_CARDS[Math.floor(Math.random() * STATIC_CARDS.length)];
+    const nextCard = {
+      id: String(nextCardItem.id),
+      word: nextCardItem.word,
+      category: nextCardItem.category,
+      imageUrl: nextCardItem.imageUrl,
+    };
+    const cleanWordLength = nextCard.word.trim().length;
     const missed = targetWord || localTargetWord || (activeCard ? (isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word)) : '');
 
     // 4. שידור לכל החדר
@@ -758,6 +765,8 @@ export const GameTable: React.FC<GameTableProps> = ({
       nextHolderId: nextHolderId,
       nextCard: nextCard,
       nextIndex: nextIndex,
+      wordLength: cleanWordLength,
+      category: nextCard.category,
     };
 
     broadcastTurnTimeout(timeoutPayload);
@@ -772,6 +781,8 @@ export const GameTable: React.FC<GameTableProps> = ({
           word: missed,
           nextHolderId: nextHolderId,
           nextCard: nextCard,
+          wordLength: cleanWordLength,
+          category: nextCard.category,
         },
       }).catch((err: any) => console.error('Error broadcasting TURN_TIMEOUT:', err));
     }
@@ -868,8 +879,8 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     onRoundStart?.(endsAt, duration);
 
-    // 3. Resolve active card: pick or use current selectedCard from CARDS_POOL
-    const roundCard = activeTurnCard || selectedCard || CARDS_POOL[Math.floor(Math.random() * CARDS_POOL.length)];
+    // 3. Resolve active card: pick or use current activeCard from CARDS_POOL
+    const roundCard = activeCard || CARDS_POOL[0];
     const cleanWord = roundCard.word.trim();
     const categoryName = roundCard.category;
     const cleanWordLength = cleanWord.length;
@@ -918,7 +929,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             holderId: resolvedHolderId,
             cardId: String(roundCard.id),
             category: roundCard.category,
-            wordLength: roundCard.word.length,
+            wordLength: cleanWordLength,
             cardIndex: currentCardIndex,
           },
         }).then(() => {
@@ -1284,12 +1295,16 @@ export const GameTable: React.FC<GameTableProps> = ({
           /* Card Holder View: Sees the photo and the word! */
           <>
             <img
-              src={selectedCard.imageUrl}
-              alt={selectedCard.word}
-              className={`w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 ${
+              src={activeCard?.imageUrl}
+              alt={activeCard?.word || ''}
+              className={`w-full h-full object-cover rounded-2xl transition-transform duration-700 ease-out group-hover:scale-105 ${
                 isSuccess ? 'scale-105 brightness-110' : ''
               }`}
               loading="eager"
+              onError={(e) => {
+                // אם התמונה נכשלת, אל תקרוס – טען תמונה חלופית מאומתת
+                e.currentTarget.src = "https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80";
+              }}
             />
 
             {/* Category badge */}
@@ -1360,6 +1375,9 @@ export const GameTable: React.FC<GameTableProps> = ({
                 alt={winnerCelebration.word || targetWord}
                 className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl border-2 border-emerald-400/50 shadow-lg mb-1.5"
                 loading="eager"
+                onError={(e) => {
+                  e.currentTarget.src = "https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80";
+                }}
               />
             )}
             {winnerCelebration?.winnerName?.includes('⏰') || winnerCelebration?.winnerName?.includes('נגמר') ? (
