@@ -557,12 +557,12 @@ export default function App() {
     });
 
     // 6. Turn timeout broadcast: Only when clock hits 0:00 without a guess
-    // Word is revealed for 2.6 seconds, then host advances to the next player
-    const unsubTurnTimeout = addSupabaseListener('turn_timeout', () => {
+    // Word is revealed for 3.0 seconds, then host advances to the next player
+    const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload) => {
       if (myPlayerId === 'p-host') {
         setTimeout(() => {
           advanceHostTurnRef.current();
-        }, 2600);
+        }, 3000);
       }
     });
 

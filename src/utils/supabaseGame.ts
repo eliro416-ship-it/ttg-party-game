@@ -75,12 +75,14 @@ export interface CorrectGuessPayload {
 }
 
 export interface TurnTimeoutPayload {
-  word: string;
+  missedWord?: string;
+  word?: string;
   imageUrl?: string | null;
-  reason: 'time_up' | 'skipped';
+  reason?: 'time_up' | 'skipped';
   nextHolderId: string;
-  nextIndex: number;
-  nextCardIndex: number;
+  nextCard?: any;
+  nextIndex?: number;
+  nextCardIndex?: number;
 }
 
 export interface ReactionPayload {
@@ -315,9 +317,39 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
     correctGuessListeners.forEach((fn) => fn(payload as CorrectGuessPayload));
   });
 
-  channel.on('broadcast', { event: 'turn_timeout' }, ({ payload }) => {
-    turnTimeoutListeners.forEach((fn) => fn(payload as TurnTimeoutPayload));
-  });
+  const handleTurnTimeoutBroadcast = ({ payload }: { payload: any }) => {
+    if (!payload) return;
+    const normalized: TurnTimeoutPayload = {
+      missedWord: payload.missedWord || payload.word || '',
+      word: payload.word || payload.missedWord || '',
+      imageUrl: payload.imageUrl || payload.nextCard?.imageUrl,
+      reason: payload.reason || 'time_up',
+      nextHolderId: String(payload.nextHolderId || ''),
+      nextCard: payload.nextCard,
+      nextIndex: payload.nextIndex,
+      nextCardIndex: payload.nextCardIndex,
+    };
+    turnTimeoutListeners.forEach((fn) => {
+      try {
+        fn(normalized);
+      } catch (err) {
+        console.error('Error in turnTimeout listener:', err);
+      }
+    });
+  };
+
+  channel.on('broadcast', { event: 'turn_timeout' }, handleTurnTimeoutBroadcast);
+  channel.on('broadcast', { event: 'TURN_TIMEOUT' }, handleTurnTimeoutBroadcast);
+
+  if (localTabChannel) {
+    const existingOnMessage = localTabChannel.onmessage;
+    localTabChannel.onmessage = (event) => {
+      if (existingOnMessage) existingOnMessage.call(localTabChannel, event);
+      if ((event.data?.type === 'TURN_TIMEOUT' || event.data?.type === 'turn_timeout') && event.data.payload) {
+        handleTurnTimeoutBroadcast({ payload: event.data.payload });
+      }
+    };
+  }
 
   channel.on('broadcast', { event: 'skip_turn' }, ({ payload }) => {
     skipTurnListeners.forEach((fn) => fn(payload as { holderId: string }));

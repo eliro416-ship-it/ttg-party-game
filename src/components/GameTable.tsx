@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { CardItem, Player, Language, VoiceGender } from '../types/game';
-import { GAME_CARDS, getGameCardById } from '../data/cards';
+import { GAME_CARDS, STATIC_CARDS, getGameCardById } from '../data/cards';
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { GameTimer } from './GameTimer';
 import { normalizeHebrewInput, lettersMatch } from '../utils/hebrewKeyboard';
@@ -530,30 +530,57 @@ export const GameTable: React.FC<GameTableProps> = ({
       }, 2400);
     });
 
-    // Timeout handling: Only triggered when clock reaches 0:00 without a guess
+    // Timeout handling: When clock reaches 0:00 without a guess
     const unsubTurnTimeout = addSupabaseListener('turn_timeout', (payload: TurnTimeoutPayload) => {
-      sounds.soundError();
+      try {
+        sounds.soundError();
+      } catch (e) {}
+
+      const missed = payload.missedWord || payload.word || '';
+
+      // 1. עצירת הסיבוב
       setIsRoundActive(false);
-      setGameState('ended');
-      setRoundState('ended');
-      setRoundStatus('ended');
+      setGameState('waiting');
+      setRoundState('waiting');
+      setRoundStatus('waiting');
       setRoundEndTime(0);
       setRoundEndsAt(0);
+      setTimeLeft(Number(turnDuration || serverTurnData?.turnDuration) || 60);
       isRoundActiveRef.current = false;
       roundEndTimeRef.current = 0;
+      isHandledRef.current = false;
+      setCurrentGuess('');
+      setIsSuccess(false);
+      setIsShaking(false);
+
+      // 2. הצגת באנר הודעה למשך 3 שניות: "⏰ הזמן נגמר! המילה הייתה: {missedWord}"
       setWinnerCelebration({
         winnerId: '',
-        winnerName: isEn ? 'Time is up!' : 'הזמן נגמר!',
+        winnerName: isEn ? '⏰ Time is up!' : '⏰ הזמן נגמר!',
         winnerAvatar: '⏱️',
-        word: payload.word,
-        image: payload.imageUrl || '',
+        word: missed,
+        image: payload.imageUrl || payload.nextCard?.imageUrl || '',
         points: 0,
         scores: [],
       });
+
+      // 3. עדכון מחזיק התמונה הבא וקלף הבא (במידה והתקבל בשידור)
+      if (payload.nextHolderId) {
+        setLiveHolderId(String(payload.nextHolderId));
+      }
+      if (payload.nextCard) {
+        setActiveTurnCard(payload.nextCard);
+        setSyncedRoundCard({
+          cardId: payload.nextCard.id,
+          category: payload.nextCard.category,
+          wordLength: payload.nextCard.word ? payload.nextCard.word.trim().length : 4,
+          wordHash: payload.nextCard.word ? encodeWordHash(payload.nextCard.word.trim()) : undefined,
+        });
+      }
+
       setTimeout(() => {
         setWinnerCelebration(null);
-        setCurrentGuess('');
-      }, 2600);
+      }, 3000);
     });
 
     // Authoritative NEW_TURN broadcast from Host (when time runs out and turn rotates to next player)
@@ -666,41 +693,78 @@ export const GameTable: React.FC<GameTableProps> = ({
     }
   }, [serverTurnData?.cardId, currentCard.id, currentCardIndex, serverTurnData?.hint]);
 
-  // Isolated time-up handler invoked when GameTimer reaches 0s
+  // Isolated time-up handler invoked when GameTimer reaches 0s (timeLeft <= 0)
   const handleTimeUp = useCallback(() => {
     if (isHandledRef.current) return;
     isHandledRef.current = true;
+
+    // 1. עצירת הסיבוב הנוכחי
     setIsRoundActive(false);
+    setGameState('ended');
+    setRoundState('ended');
+    setRoundStatus('ended');
     setRoundEndTime(0);
-    setRoundStatus('waiting');
     setRoundEndsAt(0);
+    isRoundActiveRef.current = false;
+    roundEndTimeRef.current = 0;
 
-    sounds.soundError();
+    try {
+      sounds.soundError();
+    } catch (e) {}
 
-    setWinnerCelebration({
-      winnerId: '',
-      winnerName: isEn ? 'Time is up!' : 'הזמן נגמר!',
-      winnerAvatar: '⏱️',
-      word: targetWord || localTargetWord,
-      image: currentCard.imageUrl || currentCard.image,
-      points: 0,
-      scores: [],
-    });
+    // Only host or current card holder triggers the turn timeout broadcast to avoid duplication
+    if (!isHost && !isCurrentClientHolder) {
+      return;
+    }
 
-    // Broadcast turn_timeout so Host authoritatively advances turn
-    broadcastTurnTimeout({
-      word: targetWord || localTargetWord,
-      imageUrl: currentCard.imageUrl || currentCard.image,
+    // 2. איתור האינדקס הנוכחי והעברה לשחקן הבא ברשימה (מעגלית)
+    const playerList = (serverTurnData?.players && serverTurnData.players.length > 0)
+      ? serverTurnData.players
+      : players;
+    const playerIds = playerList.map((p) => p.id);
+    const currentIndex = playerIds.indexOf(effectiveHolderId);
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % playerIds.length : 0;
+    const nextHolderId = playerIds[nextIndex] || playerIds[0] || 'p-host';
+
+    // 3. בחירת קלף חדש לתור הבא מתוך STATIC_CARDS
+    const nextCard = STATIC_CARDS[Math.floor(Math.random() * STATIC_CARDS.length)];
+    const missed = targetWord || localTargetWord || (activeCard ? (isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word)) : '');
+
+    // 4. שידור לכל החדר
+    const timeoutPayload: TurnTimeoutPayload = {
+      missedWord: missed,
+      word: missed,
+      imageUrl: activeCard?.imageUrl || activeCard?.image,
       reason: 'time_up',
-      nextHolderId: '',
-      nextIndex: 0,
-      nextCardIndex: 0,
-    });
+      nextHolderId: nextHolderId,
+      nextCard: nextCard,
+      nextIndex: nextIndex,
+    };
+
+    broadcastTurnTimeout(timeoutPayload);
+
+    const channel = getCurrentSupabaseChannel();
+    if (channel && typeof channel.send === 'function') {
+      channel.send({
+        type: 'broadcast',
+        event: 'TURN_TIMEOUT',
+        payload: {
+          missedWord: missed,
+          word: missed,
+          nextHolderId: nextHolderId,
+          nextCard: nextCard,
+        },
+      }).catch((err: any) => console.error('Error broadcasting TURN_TIMEOUT:', err));
+    }
   }, [
+    isHost,
+    isCurrentClientHolder,
+    serverTurnData?.players,
+    players,
+    effectiveHolderId,
     targetWord,
     localTargetWord,
-    currentCard.imageUrl,
-    currentCard.image,
+    activeCard,
     isEn,
   ]);
 
@@ -1285,7 +1349,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         {/* Winner celebration / Timeout word reveal overlay */}
         {Boolean(winnerCelebration) && (
-          <div className="absolute inset-0 bg-emerald-950/90 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn text-center p-4 z-20">
+          <div className="absolute inset-0 bg-emerald-950/95 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn text-center p-4 z-20">
             {winnerCelebration?.image && (
               <img
                 src={winnerCelebration.image}
@@ -1302,11 +1366,17 @@ export const GameTable: React.FC<GameTableProps> = ({
                 }}
               />
             )}
-            <CheckCircle2 className="w-8 h-8 text-emerald-400 mb-1 animate-bounce" strokeWidth={2.4} />
+            {winnerCelebration?.winnerName?.includes('⏰') || winnerCelebration?.winnerName?.includes('נגמר') ? (
+              <TimerIcon className="w-8 h-8 text-amber-400 mb-1 animate-pulse" strokeWidth={2.4} />
+            ) : (
+              <CheckCircle2 className="w-8 h-8 text-emerald-400 mb-1 animate-bounce" strokeWidth={2.4} />
+            )}
             <span className="text-xl sm:text-2xl font-black text-white drop-shadow-md flex items-center gap-2">
               {winnerCelebration?.winnerName ? (
                 <>
-                  <Trophy className="w-6 h-6 text-amber-300 inline drop-shadow" strokeWidth={2.2} />
+                  {winnerCelebration.winnerName.includes('⏰') ? null : (
+                    <Trophy className="w-6 h-6 text-amber-300 inline drop-shadow" strokeWidth={2.2} />
+                  )}
                   <span>{winnerCelebration.winnerName}</span>
                 </>
               ) : (
@@ -1314,7 +1384,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               )}
             </span>
             <span className="text-emerald-300 font-bold text-sm sm:text-base mt-0.5">
-              {isEn ? 'Word:' : 'המילה הייתה:'} <b className="text-white uppercase">{winnerCelebration?.word || targetWord}</b>
+              {isEn ? 'The word was:' : 'המילה הייתה:'} <b className="text-white uppercase tracking-wider">{winnerCelebration?.word || targetWord}</b>
             </span>
             {winnerCelebration?.points ? (
               <span className="text-xs text-amber-300 font-extrabold mt-1">
