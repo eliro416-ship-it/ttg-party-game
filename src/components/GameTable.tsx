@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { CardItem, Player, Language, VoiceGender } from '../types/game';
 import { GAME_CARDS, STATIC_CARDS, getGameCardById } from '../data/cards';
+
+// 8 Verified Static Cards as requested (Single Source of Truth)
+export const CARDS_POOL = [
+  { id: '1', word: 'כלב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80' },
+  { id: '2', word: 'חתול', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80' },
+  { id: '3', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1614027164847-1b28caa1401f?auto=format&fit=crop&w=600&q=80' },
+  { id: '4', word: 'צב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&w=600&q=80' },
+  { id: '5', word: 'זאב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1564865878688-9a244444042a?auto=format&fit=crop&w=600&q=80' },
+  { id: '6', word: 'רופא', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=600&q=80' },
+  { id: '7', word: 'טייס', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80' },
+  { id: '8', word: 'פיצה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80' }
+];
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { GameTimer } from './GameTimer';
 import { normalizeHebrewInput, lettersMatch } from '../utils/hebrewKeyboard';
@@ -163,20 +175,27 @@ export const GameTable: React.FC<GameTableProps> = ({
     return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   }, [serverTurnData?.players, players]);
 
-  // Active card: matched authoritatively from GAME_CARDS by cardId, received via NEW_TURN/START_ROUND, or deck
-  const [activeTurnCard, setActiveTurnCard] = useState<CardItem | null>(null);
-  const activeCard: CardItem = useMemo(() => {
+  // Active card: matched authoritatively from CARDS_POOL by cardId or activeTurnCard
+  const [activeTurnCard, setActiveTurnCard] = useState<any | null>(null);
+  const activeCard = useMemo(() => {
     if (serverTurnData?.cardId) {
-      const found = GAME_CARDS.find((c) => c.id === serverTurnData.cardId);
+      const found = CARDS_POOL.find((c) => String(c.id) === String(serverTurnData.cardId));
       if (found) return found;
     }
-    if (activeTurnCard) return activeTurnCard;
-    if (cards && cards[currentCardIndex]) return cards[currentCardIndex];
-    return GAME_CARDS[0];
+    if (activeTurnCard) {
+      const found = CARDS_POOL.find((c) => String(c.id) === String(activeTurnCard.id)) || activeTurnCard;
+      return found;
+    }
+    if (cards && cards[currentCardIndex]) {
+      const found = CARDS_POOL.find((c) => String(c.id) === String(cards[currentCardIndex]?.id));
+      if (found) return found;
+    }
+    return CARDS_POOL[0];
   }, [serverTurnData?.cardId, activeTurnCard, cards, currentCardIndex]);
 
   const currentCard = activeCard;
-  const localTargetWord = (isEn ? (activeCard.word_en || activeCard.word) : (activeCard.word_he || activeCard.word)).trim();
+  const selectedCard = activeCard;
+  const localTargetWord = activeCard.word;
 
   // If guesser: NEVER draw or guess local card!
   // Rely strictly on synced card received from host/server via network event!
@@ -210,9 +229,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   }, [serverTurnData?.wordLength, serverTurnData?.category, serverTurnData?.cardId, serverTurnData?.wordHash]);
 
   // Holder sees the secret word and photo; guesser sees NO secret word and relies strictly on synced network card!
-  const targetWord = isCurrentClientHolder ? (serverTurnData?.word || localTargetWord) : '';
+  const targetWord = isCurrentClientHolder ? (selectedCard?.word || serverTurnData?.word || localTargetWord) : '';
   const rawWordLength = isCurrentClientHolder
-    ? (serverTurnData?.wordLength || localTargetWord.length)
+    ? (selectedCard?.word?.length || serverTurnData?.wordLength || localTargetWord.length)
     : (syncedRoundCard?.wordLength || serverTurnData?.wordLength || 0);
 
   // Requirement 2: ALWAYS render boxes! If wordLength has not arrived from host yet, default to at least 4 boxes
@@ -220,7 +239,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const isWaitingForWordLength = !isCurrentClientHolder && rawWordLength === 0;
 
   const activeCategory = isCurrentClientHolder
-    ? (serverTurnData?.category || (isEn ? (currentCard.category_en || currentCard.category) : currentCard.category))
+    ? (selectedCard?.category || serverTurnData?.category || currentCard.category)
     : (syncedRoundCard?.category || serverTurnData?.category || (isEn ? 'Category' : 'קטגוריה'));
 
   const activeHint = serverTurnData?.hint || (isCurrentClientHolder ? (isEn ? (currentCard.hint_en || currentCard.hint) : currentCard.hint) : null);
@@ -849,18 +868,11 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     onRoundStart?.(endsAt, duration);
 
-    // 3. Resolve active card, word length and categories safely without throwing
-    const currentActiveCard = activeTurnCard || (cards && cards[currentCardIndex]) || (cards && cards[0]) || null;
-    let cleanWord = '';
-    let categoryName = '';
-    if (currentActiveCard) {
-      const rawWord = isEn ? (currentActiveCard.word_en || currentActiveCard.word) : (currentActiveCard.word_he || currentActiveCard.word);
-      if (typeof rawWord === 'string') {
-        cleanWord = rawWord.trim();
-      }
-      categoryName = isEn ? (currentActiveCard.category_en || currentActiveCard.category) : currentActiveCard.category;
-    }
-    const cleanWordLength = cleanWord.length > 0 ? cleanWord.length : 3;
+    // 3. Resolve active card: pick or use current selectedCard from CARDS_POOL
+    const roundCard = activeTurnCard || selectedCard || CARDS_POOL[Math.floor(Math.random() * CARDS_POOL.length)];
+    const cleanWord = roundCard.word.trim();
+    const categoryName = roundCard.category;
+    const cleanWordLength = cleanWord.length;
     const resolvedHolderId = currentHolderId || myPlayerId || effectiveHolderId || 'p-host';
 
     let hashedWord: string | undefined = undefined;
@@ -875,7 +887,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     // 4. שידור בטוח לכל המשתתפים בחדר
     try {
       const payload: RoundStartPayload = {
-        category: categoryName || activeCategory || '',
+        category: categoryName,
         wordLength: cleanWordLength,
         endTime: endsAt,
         roundEndsAt: endsAt,
@@ -886,8 +898,8 @@ export const GameTable: React.FC<GameTableProps> = ({
         holderName: activeHolderName || '',
         holderAvatar: activeHolderAvatar || '👑',
         cardIndex: currentCardIndex,
-        cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
-        card: currentActiveCard || undefined,
+        cardId: String(roundCard.id),
+        card: roundCard as any,
         wordHash: hashedWord,
       };
 
@@ -904,9 +916,9 @@ export const GameTable: React.FC<GameTableProps> = ({
             endTime: endsAt,
             roundEndsAt: endsAt,
             holderId: resolvedHolderId,
-            cardId: currentActiveCard ? String(currentActiveCard.id) : undefined,
-            category: categoryName || activeCategory || '',
-            wordLength: cleanWordLength,
+            cardId: String(roundCard.id),
+            category: roundCard.category,
+            wordLength: roundCard.word.length,
             cardIndex: currentCardIndex,
           },
         }).then(() => {
@@ -1272,32 +1284,24 @@ export const GameTable: React.FC<GameTableProps> = ({
           /* Card Holder View: Sees the photo and the word! */
           <>
             <img
-              src={activeCard.imageUrl || activeCard.image || undefined}
-              alt={targetWord}
+              src={selectedCard.imageUrl}
+              alt={selectedCard.word}
               className={`w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 ${
                 isSuccess ? 'scale-105 brightness-110' : ''
               }`}
               loading="eager"
-              crossOrigin="anonymous"
-              onError={(e) => {
-                const target = e.currentTarget;
-                const fallbackUrl = activeCard.fallback || '';
-                if (fallbackUrl && target.src !== fallbackUrl) {
-                  target.src = fallbackUrl;
-                }
-              }}
             />
 
             {/* Category badge */}
             <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20 shadow flex items-center gap-1.5`}>
               <span>{t.categoryLabel}</span>
-              <span className="text-pink-300 font-extrabold">{activeCategory}</span>
+              <span className="text-pink-300 font-extrabold">{selectedCard.category}</span>
             </div>
 
             {/* Secret word badge */}
             <div className="absolute bottom-3 inset-x-4 mx-auto max-w-fit bg-black/85 backdrop-blur-md px-4 py-1.5 rounded-full text-center text-sm font-black text-white border border-pink-500/40 shadow-xl flex items-center gap-2">
               <span className="text-amber-300">{t.wordLabel}</span>
-              <span className="text-pink-300 text-base uppercase font-extrabold">{targetWord}</span>
+              <span className="text-pink-300 text-base uppercase font-extrabold">{selectedCard.word}</span>
             </div>
           </>
         ) : (
@@ -1356,14 +1360,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                 alt={winnerCelebration.word || targetWord}
                 className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl border-2 border-emerald-400/50 shadow-lg mb-1.5"
                 loading="eager"
-                crossOrigin="anonymous"
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  const fallbackUrl = currentCard.fallback || '';
-                  if (fallbackUrl && target.src !== fallbackUrl) {
-                    target.src = fallbackUrl;
-                  }
-                }}
               />
             )}
             {winnerCelebration?.winnerName?.includes('⏰') || winnerCelebration?.winnerName?.includes('נגמר') ? (
