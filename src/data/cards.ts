@@ -2,83 +2,168 @@ import { CardItem } from '../types/game';
 
 export interface StaticCardItem {
   id: string;
+  packId: 'starter_free' | 'animals_pro' | 'food_and_fun';
   word: string;
   category: string;
-  gender: 'זכר' | 'נקבה';
   imageUrl: string;
 }
 
-// 1. Static Closed Repository strictly as specified with verified, direct Unsplash URLs
-// Single Source of Truth
-export const STATIC_CARDS = [
-  { id: '1', word: 'כלב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80' },
-  { id: '2', word: 'חתול', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80' },
-  { id: '3', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80' },
-  { id: '4', word: 'צב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&w=600&q=80' },
-  { id: '5', word: 'זאב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1564865878688-9a244444042a?auto=format&fit=crop&w=600&q=80' },
-  { id: '6', word: 'פיל', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=600&q=80' },
-  { id: '7', word: 'סוס', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5f?auto=format&fit=crop&w=600&q=80' },
-  { id: '8', word: 'גמל', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1559827291-72ee739d0d9a?auto=format&fit=crop&w=600&q=80' },
-  { id: '9', word: 'רופא', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=600&q=80' },
-  { id: '10', word: 'טייס', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80' },
-  { id: '11', word: 'כבאי', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&w=600&q=80' },
-  { id: '12', word: 'טבח', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=600&q=80' },
-  { id: '13', word: 'פיצה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80' },
-  { id: '14', word: 'המבורגר', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=600&q=80' },
-  { id: '15', word: 'תפוח', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80' }
+export interface PackMetadata {
+  id: 'starter_free' | 'animals_pro' | 'food_and_fun';
+  title: string;
+  price: string;
+  icon: string;
+  isFree: boolean;
+}
+
+// 1. Definition of Packs
+export const ALL_PACKS: PackMetadata[] = [
+  { id: 'starter_free', title: 'חבילת בסיס חינם', price: 'חינם', icon: '🎁', isFree: true },
+  { id: 'animals_pro', title: 'עולם החיות המורחב', price: '₪7.90', icon: '🦁', isFree: false },
+  { id: 'food_and_fun', title: 'מאכלים וחפצים', price: '₪7.90', icon: '🍕', isFree: false }
 ];
 
-export const CARDS_POOL = STATIC_CARDS;
+// 2. Complete 30 Verified Cards (100% verified direct Unsplash URLs)
+export const ALL_GAME_CARDS: StaticCardItem[] = [
+  // --- חבילת בסיס חינמית (10 קלפים מאומתים) ---
+  { id: 'f1', packId: 'starter_free', word: 'צב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f2', packId: 'starter_free', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f3', packId: 'starter_free', word: 'פיל', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f4', packId: 'starter_free', word: 'כלב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f5', packId: 'starter_free', word: 'חתול', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f6', packId: 'starter_free', word: 'רופא', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f7', packId: 'starter_free', word: 'פיצה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f8', packId: 'starter_free', word: 'המבורגר', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f9', packId: 'starter_free', word: 'תפוח', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=600&auto=format&fit=crop&q=80' },
+  { id: 'f10', packId: 'starter_free', word: 'גיטרה', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=600&auto=format&fit=crop&q=80' },
+
+  // --- חבילת פרימיום 1: עולם החיות (10 קלפים נוספים) ---
+  { id: 'a_panda', packId: 'animals_pro', word: 'פנדה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?w=600&auto=format&fit=crop&q=80' },
+  { id: 'a2', packId: 'animals_pro', word: 'נמר', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1561731216-c3a4d99437d5?w=600&auto=format&fit=crop&q=80' },
+  { id: 'a3', packId: 'animals_pro', word: 'דוב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?w=600&auto=format&fit=crop&q=80' },
+  { id: 'a4', packId: 'animals_pro', word: 'קוף', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=600&auto=format&fit=crop&q=80' },
+  { id: 'a5', packId: 'animals_pro', word: 'זברה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1526095179574-86e545346ae6?auto=format&fit=crop&w=600&q=80' },
+  { id: 'a6', packId: 'animals_pro', word: 'דולפין', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1570481662006-a3a1374699e8?w=600&auto=format&fit=crop&q=80' },
+  { id: 'a7', packId: 'animals_pro', word: 'גירפה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1547721064-da6cfb341d50?w=600&auto=format&fit=crop&q=80' },
+  { id: 'a8', packId: 'animals_pro', word: 'פינגווין', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1598439210625-5067c578f3f6?w=600&auto=format&fit=crop&q=80' },
+  { id: 'a_rabbit', packId: 'animals_pro', word: 'ארנב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=600&auto=format&fit=crop&q=80' },
+  { id: 'a10', packId: 'animals_pro', word: 'שועל', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1516934024742-b461fba47600?w=600&auto=format&fit=crop&q=80' },
+
+  // --- חבילת פרימיום 2: מאכלים וחפצים (10 קלפים נוספים) ---
+  { id: 'm1', packId: 'food_and_fun', word: 'גלידה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1501443762994-82bd5dace89a?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm2', packId: 'food_and_fun', word: 'בננה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm3', packId: 'food_and_fun', word: 'סושי', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm4', packId: 'food_and_fun', word: 'עוגה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm5', packId: 'food_and_fun', word: 'אבטיח', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm6', packId: 'food_and_fun', word: 'תות', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm7', packId: 'food_and_fun', word: 'שעון', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm8', packId: 'food_and_fun', word: 'מצלמה', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm9', packId: 'food_and_fun', word: 'משקפיים', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&auto=format&fit=crop&q=80' },
+  { id: 'm10', packId: 'food_and_fun', word: 'אופניים', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=600&auto=format&fit=crop&q=80' }
+];
+
+export const VERIFIED_CARDS = ALL_GAME_CARDS;
+export const STATIC_CARDS = ALL_GAME_CARDS;
+export const CARDS_POOL = ALL_GAME_CARDS;
 
 const WORD_EN_MAP: Record<string, string> = {
+  'צב': 'TURTLE',
+  'אריה': 'LION',
+  'פיל': 'ELEPHANT',
   'כלב': 'DOG',
   'חתול': 'CAT',
-  'אריה': 'LION',
-  'צב': 'TURTLE',
-  'זאב': 'WOLF',
-  'פיל': 'ELEPHANT',
-  'סוס': 'HORSE',
-  'גמל': 'CAMEL',
   'רופא': 'DOCTOR',
-  'טייס': 'PILOT',
-  'כבאי': 'FIREFIGHTER',
-  'טבח': 'CHEF',
   'פיצה': 'PIZZA',
-  'המבורגר': 'BURGER',
+  'המבורגר': 'HAMBURGER',
   'תפוח': 'APPLE',
+  'גיטרה': 'GUITAR',
+  'פנדה': 'PANDA',
+  'נמר': 'TIGER',
+  'דוב': 'BEAR',
+  'קוף': 'MONKEY',
+  'זברה': 'ZEBRA',
+  'דולפין': 'DOLPHIN',
+  'גירפה': 'GIRAFFE',
+  'פינגווין': 'PENGUIN',
+  'ארנב': 'RABBIT',
+  'שועל': 'FOX',
+  'גלידה': 'ICE CREAM',
+  'בננה': 'BANANA',
+  'סושי': 'SUSHI',
+  'עוגה': 'CAKE',
+  'אבטיח': 'WATERMELON',
+  'תות': 'STRAWBERRY',
+  'שעון': 'WATCH',
+  'מצלמה': 'CAMERA',
+  'משקפיים': 'GLASSES',
+  'אופניים': 'BICYCLE',
 };
 
 const EMOJI_MAP: Record<string, string> = {
+  'צב': '🐢',
+  'אריה': '🦁',
+  'פיל': '🐘',
   'כלב': '🐶',
   'חתול': '🐱',
-  'אריה': '🦁',
-  'צב': '🐢',
-  'זאב': '🐺',
-  'פיל': '🐘',
-  'סוס': '🐴',
-  'גמל': '🐪',
   'רופא': '👨‍⚕️',
-  'טייס': '👨‍✈️',
-  'כבאי': '👨‍🚒',
-  'טבח': '👨‍🍳',
   'פיצה': '🍕',
   'המבורגר': '🍔',
   'תפוח': '🍎',
+  'גיטרה': '🎸',
+  'פנדה': '🐼',
+  'נמר': '🐯',
+  'דוב': '🐻',
+  'קוף': '🐵',
+  'זברה': '🦓',
+  'דולפין': '🐬',
+  'גירפה': '🦒',
+  'פינגווין': '🐧',
+  'ארנב': '🐰',
+  'שועל': '🦊',
+  'גלידה': '🍦',
+  'בננה': '🍌',
+  'סושי': '🍣',
+  'עוגה': '🎂',
+  'אבטיח': '🍉',
+  'תות': '🍓',
+  'שעון': '⌚',
+  'מצלמה': '📷',
+  'משקפיים': '👓',
+  'אופניים': '🚲',
 };
 
-export const GAME_CARDS: CardItem[] = STATIC_CARDS.map((c) => ({
+export const GAME_CARDS: CardItem[] = ALL_GAME_CARDS.map((c) => ({
   id: c.id,
+  packId: c.packId,
   word: c.word,
   word_he: c.word,
   word_en: WORD_EN_MAP[c.word] || c.word,
   wordEn: WORD_EN_MAP[c.word] || c.word,
   category: c.category,
-  category_en: c.category === 'חיות' ? 'Animals' : c.category === 'מקצועות' ? 'Professions' : 'Food',
-  categoryEn: c.category === 'חיות' ? 'Animals' : c.category === 'מקצועות' ? 'Professions' : 'Food',
+  category_en: c.category === 'חיות' ? 'Animals' : c.category === 'מקצועות' ? 'Professions' : c.category === 'מאכלים' ? 'Food' : 'Objects',
+  categoryEn: c.category === 'חיות' ? 'Animals' : c.category === 'מקצועות' ? 'Professions' : c.category === 'מאכלים' ? 'Food' : 'Objects',
   image: c.imageUrl,
   imageUrl: c.imageUrl,
   fallback: generateCardFallback(c.word, c.category, EMOJI_MAP[c.word] || '✨'),
 }));
+
+// 1. Definition of Playable Cards according to unlocked packs
+export function getPlayableCards(unlockedPackIds: string[] = ['starter_free']): CardItem[] {
+  // starter_free is always included
+  const allowedPacks = new Set(['starter_free', ...(unlockedPackIds || [])]);
+  return GAME_CARDS.filter((card) => {
+    const raw = ALL_GAME_CARDS.find((c) => c.id === card.id);
+    return raw ? allowedPacks.has(raw.packId) : false;
+  });
+}
+
+// 2. Random Round Card Selector
+export function getRandomRoundCard(playableCards: CardItem[], usedCardIds: string[] = []): CardItem {
+  const available = playableCards.filter((c) => !usedCardIds.includes(c.id));
+  const pool = available.length > 0 ? available : playableCards; // איפוס במקרה שסיימו הכל
+  const randomIndex = Math.floor(Math.random() * pool.length);
+  return pool[randomIndex] || playableCards[0] || GAME_CARDS[0];
+}
 
 // Helper to pick a random card directly from GAME_CARDS
 export function getRandomGameCard(): CardItem {

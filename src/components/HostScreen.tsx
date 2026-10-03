@@ -36,6 +36,7 @@ interface HostScreenProps {
   players: Player[];
   onOpenCustomCardModal: () => void;
   onOpenShareModal: () => void;
+  onOpenStore?: () => void;
   customCardsCount: number;
   settings: RoomSettings;
   onUpdateSettings: (newSettings: RoomSettings) => void;
@@ -56,6 +57,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
   players,
   onOpenCustomCardModal,
   onOpenShareModal,
+  onOpenStore,
   customCardsCount,
   settings,
   onUpdateSettings,
@@ -435,6 +437,33 @@ export const HostScreen: React.FC<HostScreenProps> = ({
               )}
             </div>
           </div>
+
+          {/* Store / Upgrade Packs Button */}
+          {onOpenStore && (
+            <div className="w-full pt-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.soundKeypress();
+                  onOpenStore();
+                }}
+                className="w-full py-2 px-3 rounded-xl font-black text-xs sm:text-sm text-amber-200 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md border border-amber-400/40 animate-pulse relative overflow-hidden group"
+                style={{
+                  background: 'linear-gradient(135deg, #4c1d95 0%, #7e22ce 40%, #b45309 100%)',
+                  boxShadow: '0 4px 15px rgba(217, 119, 6, 0.3)',
+                }}
+                title={isEn ? 'Upgrade Card Packs' : 'שדרג חבילות קלפים'}
+              >
+                <span className="shimmer-sweep" />
+                <span className="text-base drop-shadow">💎</span>
+                <span className="truncate tracking-wide font-extrabold text-amber-100">
+                  {isEn
+                    ? '💎 Upgrade Card Packs | Unlock 100+ New Photos'
+                    : '💎 שדרג חבילות קלפים | פתח 100+ תמונות חדשות'}
+                </span>
+              </button>
+            </div>
+          )}
 
           {/* 3. Bottom Button: 3D Purple-Neon, always accessible and visible without scrolling */}
           <div className="w-full pt-1.5 shrink-0">

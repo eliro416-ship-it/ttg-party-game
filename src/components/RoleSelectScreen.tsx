@@ -10,6 +10,8 @@ interface RoleSelectScreenProps {
   onOpenPlayer: () => void;
   onQuickStart?: () => void;
   onOpenVideo?: () => void;
+  onOpenCardsGallery?: () => void;
+  onOpenStore?: () => void;
   turnDuration?: number;
   isMuted: boolean;
   onToggleMute: () => void;
@@ -22,6 +24,8 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
   onOpenPlayer,
   onQuickStart,
   onOpenVideo,
+  onOpenCardsGallery,
+  onOpenStore,
   turnDuration = 15,
   isMuted,
   onToggleMute,
@@ -34,14 +38,14 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
   return (
     <div className="w-full flex flex-col items-center text-center animate-fadeIn select-none" dir={isEn ? 'ltr' : 'rtl'}>
-      {/* Top bar with Language Switcher, Single Intro Video Button, and Sound Toggle - padding and compact size */}
-      <div className="w-full px-2 box-border overflow-hidden flex justify-between items-center gap-2 mb-4">
+      {/* Top bar with Language Switcher, Store, Photo Gallery, Intro Video, and Speaker Button */}
+      <div className="w-full flex items-center justify-between gap-1.5 px-3 pt-3 pb-2 z-20">
         <button
           onClick={() => {
             sounds.soundKeypress();
             onToggleLanguage();
           }}
-          className="btn-3d btn-3d-dark text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
+          className="btn-3d btn-3d-dark text-white px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0"
           title={isEn ? 'Switch to Hebrew' : 'עבור לאנגלית'}
         >
           <Globe className="w-3.5 h-3.5 text-pink-400" />
@@ -49,6 +53,49 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
         </button>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* כפתור תמונה / גלריה - ללא מסגרת */}
+          {onOpenCardsGallery && (
+            <button
+              type="button"
+              onClick={() => {
+                sounds.soundKeypress();
+                onOpenCardsGallery();
+              }}
+              className="w-10 h-10 flex-shrink-0 rounded-2xl bg-purple-900/40 hover:bg-purple-800/50 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+              title={isEn ? 'Photo Cards' : 'מאגר תמונות'}
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="#fbbf24" 
+                strokeWidth="2.2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className="w-5 h-5 drop-shadow-[0_2px_4px_rgba(251,191,36,0.4)]"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="4" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
+            </button>
+          )}
+
+          {/* כפתור יהלום / חנות - ללא מסגרת */}
+          {onOpenStore && (
+            <button
+              type="button"
+              onClick={() => {
+                sounds.soundKeypress();
+                onOpenStore();
+              }}
+              className="w-10 h-10 flex-shrink-0 rounded-2xl bg-purple-900/40 hover:bg-purple-800/50 flex items-center justify-center active:scale-95 transition-all text-xl cursor-pointer"
+              title={isEn ? 'Card Packs Store' : 'חנות חבילות'}
+            >
+              <span className="drop-shadow-[0_2px_6px_rgba(56,189,248,0.5)]">💎</span>
+            </button>
+          )}
+
           {/* Single clean Header Video Button */}
           {onOpenVideo && (
             <button
@@ -57,7 +104,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 sounds.soundKeypress();
                 onOpenVideo();
               }}
-              className="btn-3d btn-3d-dark text-pink-300 hover:text-white px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-sm shrink-0"
+              className="btn-3d btn-3d-dark text-pink-300 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-sm shrink-0"
               title={isEn ? 'Watch Intro Video' : 'צפייה בסרטון הפתיחה'}
             >
               <div className="w-4 h-4 rounded-full bg-pink-500/20 flex items-center justify-center border border-pink-400/40">
@@ -67,12 +114,14 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
             </button>
           )}
 
+          {/* Speaker Button - Fixed size without shrinking */}
           <button
+            type="button"
             onClick={onToggleMute}
-            className="btn-3d btn-3d-dark h-9 w-9 min-w-[36px] rounded-xl flex items-center justify-center text-slate-300 cursor-pointer shrink-0 shadow-sm"
-            title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
+            className="w-10 h-10 flex-shrink-0 rounded-2xl bg-purple-950/60 border border-purple-500/30 flex items-center justify-center text-purple-300 shadow-[0_3px_0_#2e1065] active:translate-y-[2px] transition-all cursor-pointer"
+            title={isMuted ? (isEn ? 'Unmute' : 'הפעל סאונד') : (isEn ? 'Mute' : 'השתק סאונד')}
           >
-            {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
+            <span className="text-base">{isMuted ? '🔇' : '🔊'}</span>
           </button>
         </div>
       </div>
@@ -135,6 +184,30 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
       {/* Action Buttons */}
       <div className="w-full space-y-3 sm:space-y-3.5 max-w-sm">
+        {/* Store / Upgrade Packs Banner Button */}
+        {onOpenStore && (
+          <button
+            type="button"
+            onClick={() => {
+              sounds.soundKeypress();
+              onOpenStore();
+            }}
+            className="w-full py-2.5 px-3 rounded-2xl font-black text-xs sm:text-sm text-amber-200 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg border border-amber-400/50 animate-pulse relative overflow-hidden group"
+            style={{
+              background: 'linear-gradient(135deg, #4c1d95 0%, #7e22ce 40%, #b45309 100%)',
+              boxShadow: '0 4px 18px rgba(217, 119, 6, 0.35)',
+            }}
+          >
+            <span className="shimmer-sweep" />
+            <span className="text-base drop-shadow">💎</span>
+            <span className="truncate tracking-wide font-extrabold text-amber-100">
+              {isEn
+                ? '💎 Upgrade Card Packs | Unlock 100+ New Photos'
+                : '💎 שדרג חבילות קלפים | פתח 100+ תמונות חדשות'}
+            </span>
+          </button>
+        )}
+
         <button
           onClick={() => {
             sounds.soundKeypress();

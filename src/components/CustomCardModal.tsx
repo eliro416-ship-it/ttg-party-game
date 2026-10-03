@@ -58,16 +58,16 @@ export const CustomCardModal: React.FC<CustomCardModalProps> = ({
 
   const sampleImages = isEn
     ? [
-        { name: 'Apple', url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=800&q=80', cat: 'Food' },
-        { name: 'Horse', url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80', cat: 'Animals' },
-        { name: 'Book', url: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80', cat: 'Objects' },
-        { name: 'Star', url: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=800&q=80', cat: 'Space' },
+        { name: 'Lion', url: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80', cat: 'Animals' },
+        { name: 'Elephant', url: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=600&q=80', cat: 'Animals' },
+        { name: 'Dog', url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80', cat: 'Animals' },
+        { name: 'Pizza', url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80', cat: 'Food' },
       ]
     : [
-        { name: 'תפוח', url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=800&q=80', cat: 'אוכל' },
-        { name: 'סוס', url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80', cat: 'חיות' },
-        { name: 'ספר', url: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80', cat: 'חפצים' },
-        { name: 'כוכב', url: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=800&q=80', cat: 'חלל' },
+        { name: 'אריה', url: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80', cat: 'חיות' },
+        { name: 'פיל', url: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=600&q=80', cat: 'חיות' },
+        { name: 'כלב', url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80', cat: 'חיות' },
+        { name: 'פיצה', url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80', cat: 'מאכלים' },
       ];
 
   return (
@@ -105,7 +105,7 @@ export const CustomCardModal: React.FC<CustomCardModalProps> = ({
                 setWord(e.target.value);
                 setError('');
               }}
-              placeholder={isEn ? 'e.g. Horse' : 'למשל: סוס'}
+              placeholder={isEn ? 'e.g. Dog' : 'למשל: כלב'}
               className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:border-pink-500"
             />
           </div>

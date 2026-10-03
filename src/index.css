@@ -432,3 +432,57 @@ footer a[href*="netlify" i] {
   transform: translateY(3px) !important;
   box-shadow: 0 1px 0 #155e75 !important;
 }
+
+/* Hide scrollbar while preserving touch & mouse scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 3D Animated Floating Cards Background */
+@keyframes marqueeLeft {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes marqueeRight {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes scrollLeft {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes scrollRight {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+.animate-marquee-left,
+.animate-scroll-left-45 {
+  display: flex;
+  width: max-content;
+  animation: scrollLeft 45s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee-right,
+.animate-scroll-right-50 {
+  display: flex;
+  width: max-content;
+  animation: scrollRight 50s linear infinite;
+  will-change: transform;
+}
+
+.animate-scroll-left-48 {
+  display: flex;
+  width: max-content;
+  animation: scrollLeft 48s linear infinite;
+  will-change: transform;
+}
+

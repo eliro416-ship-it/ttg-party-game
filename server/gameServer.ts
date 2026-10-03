@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { DEFAULT_CARDS, shuffleDeck } from '../src/data/cards';
+import { ALL_GAME_CARDS, DEFAULT_CARDS, getPlayableCards, getRandomRoundCard, shuffleDeck } from '../src/data/cards';
 import { CardItem } from '../src/types/game';
 
 interface ServerPlayer {
@@ -22,6 +22,7 @@ interface RoomState {
   hostId: string;
   players: ServerPlayer[];
   deck: CardItem[];
+  unlockedPackIds: string[];
   playedCardIds: Set<string>;
   currentCardIndex: number;
   currentHolderIndex: number;
@@ -38,7 +39,7 @@ const rooms = new Map<string, RoomState>();
 export function setupGameSocketServer(io: Server) {
   io.on('connection', (socket: Socket) => {
     // 1. CREATE_ROOM
-    socket.on('CREATE_ROOM', (data: { hostName?: string; avatar?: string; sessionToken: string; turnDuration?: number; language?: 'he' | 'en' }, callback) => {
+    socket.on('CREATE_ROOM', (data: { hostName?: string; avatar?: string; sessionToken: string; turnDuration?: number; language?: 'he' | 'en'; unlockedPackIds?: string[] }, callback) => {
       const pin = Math.floor(1000 + Math.random() * 9000).toString();
       const playerId = 'p-' + Math.random().toString(36).substring(2, 9);
       const hostPlayer: ServerPlayer = {
@@ -54,8 +55,11 @@ export function setupGameSocketServer(io: Server) {
         lastActive: Date.now(),
       };
 
-      // Fisher-Yates shuffle cards for this room
-      const shuffledDeck = shuffleDeck(DEFAULT_CARDS);
+      const unlockedPacks = Array.isArray(data.unlockedPackIds) && data.unlockedPackIds.length > 0
+        ? data.unlockedPackIds
+        : ['starter_free'];
+      const playableCards = getPlayableCards(unlockedPacks);
+      const shuffledDeck = shuffleDeck(playableCards);
 
       const newRoom: RoomState = {
         pin,
@@ -64,6 +68,7 @@ export function setupGameSocketServer(io: Server) {
         hostId: playerId,
         players: [hostPlayer],
         deck: shuffledDeck,
+        unlockedPackIds: unlockedPacks,
         playedCardIds: new Set<string>(),
         currentCardIndex: 0,
         currentHolderIndex: 0,
@@ -768,14 +773,15 @@ function advanceToNextTurn(io: Server, room: RoomState) {
 
   // Duplicate prevention check:
   // If all cards in current deck were played or deck index reaches end:
-  if (room.currentCardIndex >= room.deck.length || room.playedCardIds.size >= DEFAULT_CARDS.length) {
-    const unplayed = DEFAULT_CARDS.filter((c) => !room.playedCardIds.has(c.id));
+  const playablePool = getPlayableCards(room.unlockedPackIds || ['starter_free']);
+  if (room.currentCardIndex >= room.deck.length || room.playedCardIds.size >= playablePool.length) {
+    const unplayed = playablePool.filter((c) => !room.playedCardIds.has(c.id));
     if (unplayed.length > 0) {
       room.deck = [...room.deck.slice(0, room.currentCardIndex), ...shuffleDeck(unplayed)];
     } else {
       // All cards exhausted, start a fresh cycle with full Fisher-Yates shuffle
       room.playedCardIds.clear();
-      room.deck = shuffleDeck(DEFAULT_CARDS);
+      room.deck = shuffleDeck(playablePool);
       room.currentCardIndex = 0;
     }
   }

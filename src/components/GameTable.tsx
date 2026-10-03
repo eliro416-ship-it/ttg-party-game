@@ -1122,6 +1122,29 @@ export const GameTable: React.FC<GameTableProps> = ({
     setShowTimerPicker(false);
   };
 
+  // Manual confirmation of a correct guess by Holder
+  const handleConfirmCorrectGuessManually = () => {
+    sounds.soundSuccess();
+    const otherPlayers = activePlayers.filter((p) => p.id !== activeMyPlayerId);
+    const targetGuesser = otherPlayers[0] || activePlayers[0];
+    if (targetGuesser) {
+      onCardSolved(targetGuesser.id, 100);
+      broadcastCorrectGuess({
+        winnerId: targetGuesser.id,
+        winnerName: targetGuesser.name,
+        winnerAvatar: targetGuesser.avatar,
+        word: activeCard.word,
+        imageUrl: activeCard.imageUrl || activeCard.image,
+        points: 100,
+        nextHolderId: '',
+        nextIndex: 0,
+        nextCardIndex: 0,
+      });
+    } else {
+      onCardSolved(activeMyPlayerId, 100);
+    }
+  };
+
   return (
     <div className="w-full flex flex-col items-center animate-fadeIn select-none relative" dir={isEn ? 'ltr' : 'rtl'}>
       {/* Real-time Floating Reaction Toast */}
@@ -1299,28 +1322,29 @@ export const GameTable: React.FC<GameTableProps> = ({
           /* Card Holder View: Sees the photo and the word! */
           <>
             <img
-              src={activeCard?.imageUrl}
+              src={activeCard?.imageUrl || activeCard?.image}
               alt={activeCard?.word || ''}
-              className={`w-full h-full object-cover rounded-2xl transition-transform duration-700 ease-out group-hover:scale-105 ${
+              crossOrigin="anonymous"
+              loading="eager"
+              className={`w-full h-full object-cover object-center rounded-2xl transition-transform duration-700 ease-out group-hover:scale-105 ${
                 isSuccess ? 'scale-105 brightness-110' : ''
               }`}
-              loading="eager"
               onError={(e) => {
-                // אם התמונה נכשלת, אל תקרוס – טען תמונה חלופית מאומתת
-                e.currentTarget.src = "https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80";
+                // מניעת נפילה לתמונת טלפון:
+                e.currentTarget.style.display = 'none';
               }}
             />
 
             {/* Category badge */}
             <div className={`absolute top-3 ${isEn ? 'left-3' : 'right-3'} bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20 shadow flex items-center gap-1.5`}>
               <span>{t.categoryLabel}</span>
-              <span className="text-pink-300 font-extrabold">{selectedCard.category}</span>
+              <span className="text-pink-300 font-extrabold">{activeCard?.category}</span>
             </div>
 
             {/* Secret word badge */}
             <div className="absolute bottom-3 inset-x-4 mx-auto max-w-fit bg-black/85 backdrop-blur-md px-4 py-1.5 rounded-full text-center text-sm font-black text-white border border-pink-500/40 shadow-xl flex items-center gap-2">
               <span className="text-amber-300">{t.wordLabel}</span>
-              <span className="text-pink-300 text-base uppercase font-extrabold">{selectedCard.word}</span>
+              <span className="text-pink-300 text-base uppercase font-extrabold">{activeCard?.word}</span>
             </div>
           </>
         ) : (
@@ -1377,10 +1401,11 @@ export const GameTable: React.FC<GameTableProps> = ({
               <img
                 src={winnerCelebration.image}
                 alt={winnerCelebration.word || targetWord}
-                className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl border-2 border-emerald-400/50 shadow-lg mb-1.5"
+                crossOrigin="anonymous"
                 loading="eager"
+                className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl border-2 border-emerald-400/50 shadow-lg mb-1.5"
                 onError={(e) => {
-                  e.currentTarget.src = "https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=600&q=80";
+                  e.currentTarget.style.display = 'none';
                 }}
               />
             )}

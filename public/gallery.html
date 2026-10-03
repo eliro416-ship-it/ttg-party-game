@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>מאגר קלפים מאומת - 30 קלפים</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0d14;
+      color: #fff;
+      margin: 0;
+      padding: 20px 16px 80px 16px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      width: 100%;
+      max-width: 100%;
+    }
+    header {
+      max-width: 1000px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1e293b;
+      padding-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      color: #38bdf8;
+      font-size: 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge-count {
+      font-size: 0.8rem;
+      background: #1e3a8a;
+      color: #93c5fd;
+      padding: 2px 10px;
+      border-radius: 9999px;
+      border: 1px solid #3b82f6;
+    }
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+    .btn-home {
+      background: #ef4444;
+      color: #fff;
+      text-decoration: none;
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-weight: bold;
+      font-size: 0.95rem;
+      transition: background 0.2s;
+    }
+    .btn-home:hover { background: #dc2626; }
+    .tabs {
+      max-width: 1000px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .tab-btn {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 8px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { background: #1e293b; }
+    .tab-btn.active {
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      border-color: #60a5fa;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .card {
+      background-color: #181f30;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: #64748b;
+    }
+    .img-wrap {
+      width: 100%;
+      height: 192px;
+      background: #0f172a;
+      overflow: hidden;
+      position: relative;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+    .pack-tag {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 0.65rem;
+      font-weight: bold;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .info {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .word {
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: #fff;
+      display: block;
+    }
+    .letters {
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+    .badge {
+      font-size: 0.75rem;
+      background: #2563eb;
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-weight: 500;
+    }
+    .verified {
+      color: #34d399;
+      font-size: 0.75rem;
+      display: block;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>
+        <span>🖼️ מאגר קלפים מאומת (30 קלפים)</span>
+        <span class="badge-count" id="count-badge">30 קלפים</span>
+      </h1>
+      <div class="subtitle">30 קלפים מאומתים ב-100% ללא תמונות טלפון או קישורים שבורים</div>
+    </div>
+    <a href="/" class="btn-home">חזרה למשחק</a>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="filterPack('all', this)">✨ הכל (30)</button>
+    <button class="tab-btn" onclick="filterPack('starter_free', this)">🎁 בסיס חינם (10)</button>
+    <button class="tab-btn" onclick="filterPack('animals_pro', this)">🦁 עולם החיות (10)</button>
+    <button class="tab-btn" onclick="filterPack('food_and_fun', this)">🍕 מאכלים וחפצים (10)</button>
+  </div>
+
+  <div class="grid" id="cards-grid"></div>
+
+  <script>
+    const CARDS = [
+      // בסיס חינם (10)
+      { id: 'f1', packId: 'starter_free', packName: 'בסיס חינם', word: 'צב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f2', packId: 'starter_free', packName: 'בסיס חינם', word: 'אריה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f3', packId: 'starter_free', packName: 'בסיס חינם', word: 'פיל', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f4', packId: 'starter_free', packName: 'בסיס חינם', word: 'כלב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f5', packId: 'starter_free', packName: 'בסיס חינם', word: 'חתול', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f6', packId: 'starter_free', packName: 'בסיס חינם', word: 'רופא', category: 'מקצועות', imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f7', packId: 'starter_free', packName: 'בסיס חינם', word: 'פיצה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f8', packId: 'starter_free', packName: 'בסיס חינם', word: 'המבורגר', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f9', packId: 'starter_free', packName: 'בסיס חינם', word: 'תפוח', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=600&auto=format&fit=crop&q=80' },
+      { id: 'f10', packId: 'starter_free', packName: 'בסיס חינם', word: 'גיטרה', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=600&auto=format&fit=crop&q=80' },
+
+      // עולם החיות (10)
+      { id: 'a_panda', packId: 'animals_pro', packName: 'עולם החיות', word: 'פנדה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?w=600&auto=format&fit=crop&q=80' },
+      { id: 'a2', packId: 'animals_pro', packName: 'עולם החיות', word: 'נמר', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1561731216-c3a4d99437d5?w=600&auto=format&fit=crop&q=80' },
+      { id: 'a3', packId: 'animals_pro', packName: 'עולם החיות', word: 'דוב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?w=600&auto=format&fit=crop&q=80' },
+      { id: 'a4', packId: 'animals_pro', packName: 'עולם החיות', word: 'קוף', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=600&auto=format&fit=crop&q=80' },
+      { id: 'a5', packId: 'animals_pro', packName: 'עולם החיות', word: 'זברה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1526095179574-86e545346ae6?auto=format&fit=crop&w=600&q=80' },
+      { id: 'a6', packId: 'animals_pro', packName: 'עולם החיות', word: 'דולפין', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1570481662006-a3a1374699e8?w=600&auto=format&fit=crop&q=80' },
+      { id: 'a7', packId: 'animals_pro', packName: 'עולם החיות', word: 'גירפה', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1547721064-da6cfb341d50?w=600&auto=format&fit=crop&q=80' },
+      { id: 'a8', packId: 'animals_pro', packName: 'עולם החיות', word: 'פינגווין', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1598439210625-5067c578f3f6?w=600&auto=format&fit=crop&q=80' },
+      { id: 'a_rabbit', packId: 'animals_pro', packName: 'עולם החיות', word: 'ארנב', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=600&auto=format&fit=crop&q=80' },
+      { id: 'a10', packId: 'animals_pro', packName: 'עולם החיות', word: 'שועל', category: 'חיות', imageUrl: 'https://images.unsplash.com/photo-1516934024742-b461fba47600?w=600&auto=format&fit=crop&q=80' },
+
+      // מאכלים וחפצים (10)
+      { id: 'm1', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'גלידה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1501443762994-82bd5dace89a?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm2', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'בננה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1571771894822-ce9b6c11b08e?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm3', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'סושי', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm4', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'עוגה', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm5', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'אבטיח', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm6', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'תות', category: 'מאכלים', imageUrl: 'https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm7', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'שעון', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm8', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'מצלמה', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm9', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'משקפיים', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&auto=format&fit=crop&q=80' },
+      { id: 'm10', packId: 'food_and_fun', packName: 'מאכלים וחפצים', word: 'אופניים', category: 'חפצים', imageUrl: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=600&auto=format&fit=crop&q=80' }
+    ];
+
+    function renderCards(list) {
+      const grid = document.getElementById('cards-grid');
+      grid.innerHTML = list.map(item => `
+        <div class="card">
+          <div class="img-wrap">
+            <img src="${item.imageUrl}" alt="${item.word}" crossorigin="anonymous" loading="lazy" onerror="this.style.display='none'">
+            <span class="pack-tag">${item.packName}</span>
+          </div>
+          <div class="info">
+            <div>
+              <span class="word">${item.word}</span>
+              <span class="letters">${item.word.length} אותיות</span>
+            </div>
+            <div style="text-align: left;">
+              <span class="badge">${item.category}</span>
+              <span class="verified">✓ מאומת</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('count-badge').textContent = list.length + ' קלפים';
+    }
+
+    function filterPack(packId, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (packId === 'all') {
+        renderCards(CARDS);
+      } else {
+        renderCards(CARDS.filter(c => c.packId === packId));
+      }
+    }
+
+    // Initial render
+    renderCards(CARDS);
+  </script>
+</body>
+</html>

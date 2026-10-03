@@ -3,6 +3,7 @@ export type VoiceGender = 'female' | 'male';
 
 export interface CardItem {
   id: string;
+  packId?: string;
   word: string;
   word_he?: string;
   word_en?: string;

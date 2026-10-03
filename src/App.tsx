@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { GameScreen, Player, RoomSettings, CardItem, Language, VoiceGender, HostStep } from './types/game';
-import { DEFAULT_CARDS, GAME_CARDS, STATIC_CARDS, shuffleDeck } from './data/cards';
+import { DEFAULT_CARDS, GAME_CARDS, STATIC_CARDS, shuffleDeck, getPlayableCards, getRandomRoundCard } from './data/cards';
+import { getUnlockedPackIds } from './data/packs';
 import { RoleSelectScreen } from './components/RoleSelectScreen';
 import { HostScreen } from './components/HostScreen';
 import { PlayerJoinScreen } from './components/PlayerJoinScreen';
@@ -10,6 +11,8 @@ import { GameOverModal } from './components/GameOverModal';
 import { CustomCardModal } from './components/CustomCardModal';
 import { ShareModal } from './components/ShareModal';
 import { IntroVideoModal } from './components/IntroVideoModal';
+import { CardsGalleryModal } from './components/CardsGalleryModal';
+import { StoreModal } from './components/StoreModal';
 import { AnimatedQuestionMarksBackground } from './components/AnimatedQuestionMarksBackground';
 import { sounds } from './utils/audio';
 import {
@@ -234,6 +237,10 @@ export default function App() {
   const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
   const [totalCardsSolved, setTotalCardsSolved] = useState<number>(0);
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState<boolean>(false);
+  const [isCardsGalleryOpen, setIsCardsGalleryOpen] = useState<boolean>(false);
+  const [isStoreOpen, setIsStoreOpen] = useState<boolean>(false);
+  const [storeUpsellReason, setStoreUpsellReason] = useState<string | undefined>(undefined);
+  const [unlockedPacksVersion, setUnlockedPacksVersion] = useState<number>(0);
 
   // Authoritative Host refs to prevent closure staleness across network events
   const playersRef = useRef<Player[]>(players);
@@ -253,34 +260,37 @@ export default function App() {
   const serverTurnDataRef = useRef<TurnStartedPayload | null>(serverTurnData);
   serverTurnDataRef.current = serverTurnData;
 
-  // Custom cards
-  const [customCards, setCustomCards] = useState<CardItem[]>(() => {
-    const saved = localStorage.getItem('game_custom_cards');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
+  // Clear any legacy custom cards from localStorage to ensure strictly Unsplash verified cards
+  const [customCards, setCustomCards] = useState<CardItem[]>([]);
+  useEffect(() => {
+    try {
+      localStorage.removeItem('game_custom_cards');
+    } catch (e) {}
+  }, []);
 
   const [isCustomCardModalOpen, setIsCustomCardModalOpen] = useState(false);
   const [playedCardIds, setPlayedCardIds] = useState<Set<string>>(() => new Set());
+  const playedCardIdsRef = useRef<Set<string>>(playedCardIds);
+  playedCardIdsRef.current = playedCardIds;
 
-  // Shuffled deck using Fisher-Yates algorithm
+  // Shuffled deck using Fisher-Yates algorithm initialized strictly from active unlocked packs
   const [shuffledDeck, setShuffledDeck] = useState<CardItem[]>(() => {
-    return shuffleDeck([...DEFAULT_CARDS]);
+    return shuffleDeck(getPlayableCards(getUnlockedPackIds()));
   });
 
+  // Re-sync deck whenever content packs are unlocked
+  useEffect(() => {
+    const currentPool = getPlayableCards(getUnlockedPackIds());
+    setShuffledDeck(shuffleDeck(currentPool));
+  }, [unlockedPacksVersion]);
+
   const activeDeck = useMemo(() => {
-    const all = [...shuffledDeck, ...customCards];
     if (settings.selectedCategories.includes('הכל')) {
-      return all;
+      return shuffledDeck;
     }
-    return all.filter((c) => settings.selectedCategories.includes(c.category));
-  }, [shuffledDeck, customCards, settings.selectedCategories]);
+    const filtered = shuffledDeck.filter((c) => settings.selectedCategories.includes(c.category));
+    return filtered.length > 0 ? filtered : shuffledDeck;
+  }, [shuffledDeck, settings.selectedCategories]);
 
   // Authoritative Turn Rotation managed strictly by the Host
   const advanceHostTurn = useCallback(() => {
@@ -298,9 +308,11 @@ export default function App() {
     const nextPlayer = currentPlayers[nextIndex] || currentPlayers[0];
     const newHolderId = nextPlayer.id;
 
-    // 2. Advance card index and pick next card randomly from GAME_CARDS
-    const newCard = GAME_CARDS[Math.floor(Math.random() * GAME_CARDS.length)];
-    const nextCardIndex = GAME_CARDS.findIndex((c) => c.id === newCard.id);
+    // 2. Advance card index and pick next card randomly from active unlocked packs
+    const currentPool = getPlayableCards(getUnlockedPackIds());
+    const newCard = getRandomRoundCard(currentPool, Array.from(playedCardIdsRef.current));
+    setPlayedCardIds((prev) => new Set([...prev, newCard.id]));
+    const nextCardIndex = currentPool.findIndex((c) => c.id === newCard.id);
     cardIndexRef.current = nextCardIndex >= 0 ? nextCardIndex : 0;
     setCurrentCardIndex(cardIndexRef.current);
 
@@ -488,15 +500,12 @@ export default function App() {
         });
         broadcastScoreUpdate({ scores: updatedScores });
 
-        // A. Draw a brand new card from STATIC_CARDS (different from current card)
-        const currentCardId = activeDeck[cardIndexRef.current]?.id;
-        const availableCards = STATIC_CARDS.filter((c) => c.id !== currentCardId);
-        const nextCardItem = (availableCards.length > 0
-          ? availableCards[Math.floor(Math.random() * availableCards.length)]
-          : STATIC_CARDS[Math.floor(Math.random() * STATIC_CARDS.length)]) || STATIC_CARDS[0];
+        // A. Draw a brand new card from active unlocked packs pool (different from current card)
+        const currentPool = getPlayableCards(getUnlockedPackIds());
+        const nextCard = getRandomRoundCard(currentPool, Array.from(playedCardIdsRef.current));
+        setPlayedCardIds((prev) => new Set([...prev, nextCard.id]));
 
-        const nextCard = GAME_CARDS.find((c) => c.id === nextCardItem.id) || GAME_CARDS[0];
-        const nextCardIndex = GAME_CARDS.findIndex((c) => c.id === nextCard.id);
+        const nextCardIndex = currentPool.findIndex((c) => c.id === nextCard.id);
         cardIndexRef.current = nextCardIndex >= 0 ? nextCardIndex : 0;
         setCurrentCardIndex(cardIndexRef.current);
 
@@ -810,8 +819,10 @@ export default function App() {
       localStorage.setItem('ttg_player_id', hostId);
     } catch (e) {}
 
-    const firstCard = GAME_CARDS[Math.floor(Math.random() * GAME_CARDS.length)];
-    const firstCardIndex = GAME_CARDS.findIndex((c) => c.id === firstCard.id);
+    const currentPool = getPlayableCards(getUnlockedPackIds());
+    const firstCard = getRandomRoundCard(currentPool, []);
+    setPlayedCardIds(new Set([firstCard.id]));
+    const firstCardIndex = currentPool.findIndex((c) => c.id === firstCard.id);
     cardIndexRef.current = firstCardIndex >= 0 ? firstCardIndex : 0;
     setCurrentCardIndex(cardIndexRef.current);
     const firstWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
@@ -831,7 +842,7 @@ export default function App() {
       turnEndTime: 0,
       turnDuration: settings.turnDuration,
       cardIndex: cardIndexRef.current,
-      totalCards: GAME_CARDS.length,
+      totalCards: currentPool.length,
       holderId: hostId,
       holderName: hostPlayer.name,
       holderAvatar: hostPlayer.avatar || '👑',
@@ -876,8 +887,10 @@ export default function App() {
       localStorage.setItem('ttg_player_id', soloId);
     } catch (e) {}
 
-    const firstCard = GAME_CARDS[Math.floor(Math.random() * GAME_CARDS.length)];
-    const firstCardIndex = GAME_CARDS.findIndex((c) => c.id === firstCard.id);
+    const currentPool = getPlayableCards(getUnlockedPackIds());
+    const firstCard = getRandomRoundCard(currentPool, []);
+    setPlayedCardIds(new Set([firstCard.id]));
+    const firstCardIndex = currentPool.findIndex((c) => c.id === firstCard.id);
     cardIndexRef.current = firstCardIndex >= 0 ? firstCardIndex : 0;
     setCurrentCardIndex(cardIndexRef.current);
     const firstWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
@@ -896,7 +909,7 @@ export default function App() {
     setActivePlayerIndex(0);
     setTotalCardsSolved(0);
     setPlayedCardIds(new Set());
-    setShuffledDeck(shuffleDeck([...DEFAULT_CARDS]));
+    setShuffledDeck(shuffleDeck([...currentPool]));
 
     setServerTurnData({
       isHolder: true,
@@ -905,7 +918,7 @@ export default function App() {
       turnEndTime: 0,
       turnDuration: settings.turnDuration,
       cardIndex: cardIndexRef.current,
-      totalCards: GAME_CARDS.length,
+      totalCards: currentPool.length,
       holderId: soloId,
       holderName: language === 'en' ? 'Player 1' : 'שחקן 1',
       holderAvatar: '🦁',
@@ -1024,6 +1037,21 @@ export default function App() {
       }
       broadcastScoreboardSync({ players: updatedPlayers });
 
+      setTotalCardsSolved((prev) => {
+        const next = prev + 1;
+        if (next === 3 && getUnlockedPackIds().length <= 1) {
+          setTimeout(() => {
+            setStoreUpsellReason(
+              language === 'en'
+                ? 'Great job! Unlock 100+ cards to continue the excitement!'
+                : 'משחק מעולה! שדרגו ל-100+ קלפים חדשים כדי להמשיך ברצף!'
+            );
+            setIsStoreOpen(true);
+          }, 3200);
+        }
+        return next;
+      });
+
       const updatedScores: Record<string, number> = {};
       updatedPlayers.forEach((p) => {
         scoresRef.current[p.id] = p.score || 0;
@@ -1051,7 +1079,8 @@ export default function App() {
     setTotalCardsSolved(0);
     setActivePlayerIndex(0);
     setPlayedCardIds(new Set());
-    setShuffledDeck(shuffleDeck([...DEFAULT_CARDS]));
+    const currentPool = getPlayableCards(getUnlockedPackIds());
+    setShuffledDeck(shuffleDeck([...currentPool]));
     setPlayers((prev) => prev.map((p) => ({ ...p, score: 0, streak: 0 })));
     setHostStep('game');
     setScreen('game');
@@ -1074,6 +1103,49 @@ export default function App() {
     <div className="min-h-screen w-full flex items-center justify-center p-3 sm:p-5 bg-gradient-to-br from-[#120E2E] via-[#2A1045] to-[#0A0D1A] text-white relative overflow-hidden">
       {/* Colorful Animated Question Marks Background */}
       <AnimatedQuestionMarksBackground />
+
+      {/* Corner buttons on Home/Lobby for instant card pool and store checking in Preview */}
+      {!joinedRoom && (
+        <div className="fixed top-3 start-3 sm:top-4 sm:start-4 z-40 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCardsGalleryOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-950/60 border border-purple-500/30 text-purple-200 text-xs font-bold shadow-[0_2px_8px_rgba(0,0,0,0.4)] active:scale-95 transition-all group cursor-pointer hover:bg-purple-900/60 hover:text-white"
+            title="בדיקת מאגר קלפים"
+          >
+            <span>בדיקת מאגר</span>
+            
+            {/* אייקון תמונה וקטורי מוזהב ומבריק */}
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="#fbbf24" 
+              strokeWidth="2.2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              className="w-4 h-4 drop-shadow-[0_2px_5px_rgba(251,191,36,0.6)] group-hover:scale-110 transition-transform"
+            >
+              <rect width="18" height="18" x="3" y="3" rx="4" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="m21 15-5-5L5 21" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setStoreUpsellReason(undefined);
+              setIsStoreOpen(true);
+            }}
+            className="bg-purple-900/90 hover:bg-purple-800 text-amber-300 hover:text-white border border-amber-400/50 hover:border-amber-400 px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-bold shadow-[0_4px_15px_rgba(0,0,0,0.5)] flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer hover:scale-105 active:scale-95 animate-pulse"
+            title="💎 חנות חבילות קלפים"
+          >
+            <span className="text-sm">💎</span>
+            <span>חנות קלפים</span>
+          </button>
+        </div>
+      )}
 
       {/* Main glassmorphic card container */}
       <div className={`relative z-10 w-full ${joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[460px]'} ${screen === 'host' ? 'p-3 sm:p-5 max-h-[98dvh] sm:max-h-none flex flex-col justify-between overflow-hidden' : 'p-4 sm:p-6'} bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[28px] sm:rounded-[32px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all`}>
@@ -1101,6 +1173,11 @@ export default function App() {
             }}
             onQuickStart={handleQuickStart}
             onOpenVideo={() => setIsIntroVideoOpen(true)}
+            onOpenCardsGallery={() => setIsCardsGalleryOpen(true)}
+            onOpenStore={() => {
+              setStoreUpsellReason(undefined);
+              setIsStoreOpen(true);
+            }}
             turnDuration={settings.turnDuration}
             isMuted={isMuted}
             onToggleMute={handleToggleMute}
@@ -1129,6 +1206,10 @@ export default function App() {
             players={players}
             onOpenCustomCardModal={() => setIsCustomCardModalOpen(true)}
             onOpenShareModal={() => setIsShareModalOpen(true)}
+            onOpenStore={() => {
+              setStoreUpsellReason(undefined);
+              setIsStoreOpen(true);
+            }}
             customCardsCount={customCards.length}
             settings={settings}
             onUpdateSettings={handleUpdateSettings}
@@ -1222,6 +1303,14 @@ export default function App() {
         totalCardsPlayed={totalCardsSolved}
         onRestart={handleRestartGame}
         onHome={handleLeaveGame}
+        onOpenStore={() => {
+          setStoreUpsellReason(
+            language === 'en'
+              ? 'Expand your deck with 100+ cards for next games!'
+              : 'שדרגו עכשיו ל-100+ קלפים חדשים למשחקים הבאים!'
+          );
+          setIsStoreOpen(true);
+        }}
         language={language}
       />
 
@@ -1233,6 +1322,21 @@ export default function App() {
         videoUrl={introVideoUrl}
         onUpdateVideoUrl={handleUpdateVideoUrl}
         language={language}
+      />
+
+      <CardsGalleryModal
+        isOpen={isCardsGalleryOpen}
+        onClose={() => setIsCardsGalleryOpen(false)}
+      />
+
+      <StoreModal
+        isOpen={isStoreOpen}
+        onClose={() => setIsStoreOpen(false)}
+        onPacksUpdated={() => {
+          setUnlockedPacksVersion((v) => v + 1);
+        }}
+        language={language}
+        upsellReason={storeUpsellReason}
       />
     </div>
   );
