@@ -56,6 +56,85 @@ const renderPackBadgeIcon = (packId: string) => {
   }
 };
 
+const FloatingCardsBackground: React.FC<{ opacityClass?: string }> = ({
+  opacityClass = 'opacity-30',
+}) => {
+  const cards = [
+    { id: 'f2', word: 'אריה', img: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=600&auto=format&fit=crop&q=80', left: '3%', duration: '24s', delay: '-3s', rot: '-5deg', size: 'w-18 h-24' },
+    { id: 'f7', word: 'פיצה', img: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&auto=format&fit=crop&q=80', left: '88%', duration: '28s', delay: '-14s', rot: '6deg', size: 'w-20 h-28' },
+    { id: 'a6', word: 'דולפין', img: 'https://images.unsplash.com/photo-1570481662006-a3a1374699e8?w=600&auto=format&fit=crop&q=80', left: '11%', duration: '30s', delay: '-8s', rot: '4deg', size: 'w-16 h-22' },
+    { id: 'a_rabbit', word: 'ארנב', img: 'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=600&auto=format&fit=crop&q=80', left: '80%', duration: '26s', delay: '-21s', rot: '-7deg', size: 'w-18 h-24' },
+    { id: 'f1', word: 'צב', img: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=600&auto=format&fit=crop&q=80', left: '6%', duration: '32s', delay: '-17s', rot: '-3deg', size: 'w-16 h-22' },
+    { id: 'f8', word: 'המבורגר', img: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80', left: '84%', duration: '25s', delay: '-5s', rot: '5deg', size: 'w-20 h-26' },
+    { id: 'f4', word: 'כלב', img: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80', left: '15%', duration: '27s', delay: '-23s', rot: '3deg', size: 'w-18 h-24' },
+    { id: 'a5', word: 'זברה', img: 'https://images.unsplash.com/photo-1526095179574-86e545346ae6?auto=format&fit=crop&w=600&q=80', left: '76%', duration: '31s', delay: '-11s', rot: '-4deg', size: 'w-16 h-22' },
+  ];
+
+  return (
+    <div className={`absolute inset-0 pointer-events-none overflow-hidden z-0 select-none ${opacityClass}`}>
+      <style>{`
+        @keyframes floatUp {
+          0% {
+            transform: translateY(105vh);
+            opacity: 0;
+          }
+          8% {
+            opacity: 0.8;
+          }
+          88% {
+            opacity: 0.8;
+          }
+          100% {
+            transform: translateY(-20vh);
+            opacity: 0;
+          }
+        }
+      `}</style>
+
+      {cards.map((card, idx) => (
+        <div
+          key={idx}
+          style={{
+            position: 'absolute',
+            left: card.left,
+            top: 0,
+            animation: `floatUp ${card.duration} linear infinite`,
+            animationDelay: card.delay,
+            willChange: 'transform, opacity',
+          }}
+        >
+          <div
+            style={{
+              transform: `rotate(${card.rot})`,
+            }}
+            className={`${card.size} rounded-2xl overflow-hidden border border-amber-400/50 bg-slate-950/95 shadow-[0_8px_20px_rgba(0,0,0,0.8),0_0_12px_rgba(245,158,11,0.2)] flex flex-col`}
+          >
+            <img
+              src={card.img}
+              alt={card.word}
+              crossOrigin="anonymous"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-black/85 text-[9px] font-black text-amber-300 text-center py-0.5 truncate px-1 border-t border-amber-500/30">
+              {card.word}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(circle at 50% 30%, rgba(245, 158, 11, 0.15) 0%, transparent 70%)',
+        }}
+      />
+    </div>
+  );
+};
+
 export const StoreModal: React.FC<StoreModalProps> = ({
   isOpen,
   onClose,
@@ -151,84 +230,14 @@ export const StoreModal: React.FC<StoreModalProps> = ({
         position: 'fixed',
         inset: 0,
         zIndex: 99999,
-        backgroundColor: '#0a0d14',
         overflow: 'hidden',
       }}
-      className="flex flex-col w-full h-[100dvh] text-white relative select-none animate-fadeIn"
+      className="flex flex-col w-full h-[100dvh] text-white relative select-none animate-fadeIn bg-[#090b14]/75 backdrop-blur-md"
       onClick={(e) => e.stopPropagation()}
       dir={isEn ? 'ltr' : 'rtl'}
     >
       {/* רקע קלפים מרחפים בעדינות */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 select-none">
-        <style>{`
-          @keyframes floatUp {
-            0% {
-              transform: translateY(105vh);
-              opacity: 0;
-            }
-            8% {
-              opacity: 0.42;
-            }
-            88% {
-              opacity: 0.42;
-            }
-            100% {
-              transform: translateY(-20vh);
-              opacity: 0;
-            }
-          }
-        `}</style>
-
-        {[
-          { id: 'f2', word: 'אריה', img: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=600&auto=format&fit=crop&q=80', left: '3%', duration: '24s', delay: '-3s', rot: '-5deg', size: 'w-18 h-24' },
-          { id: 'f7', word: 'פיצה', img: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&auto=format&fit=crop&q=80', left: '88%', duration: '28s', delay: '-14s', rot: '6deg', size: 'w-20 h-28' },
-          { id: 'a6', word: 'דולפין', img: 'https://images.unsplash.com/photo-1570481662006-a3a1374699e8?w=600&auto=format&fit=crop&q=80', left: '11%', duration: '30s', delay: '-8s', rot: '4deg', size: 'w-16 h-22' },
-          { id: 'a_rabbit', word: 'ארנב', img: 'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=600&auto=format&fit=crop&q=80', left: '80%', duration: '26s', delay: '-21s', rot: '-7deg', size: 'w-18 h-24' },
-          { id: 'f1', word: 'צב', img: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=600&auto=format&fit=crop&q=80', left: '6%', duration: '32s', delay: '-17s', rot: '-3deg', size: 'w-16 h-22' },
-          { id: 'f8', word: 'המבורגר', img: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80', left: '84%', duration: '25s', delay: '-5s', rot: '5deg', size: 'w-20 h-26' },
-          { id: 'f4', word: 'כלב', img: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80', left: '15%', duration: '27s', delay: '-23s', rot: '3deg', size: 'w-18 h-24' },
-          { id: 'a5', word: 'זברה', img: 'https://images.unsplash.com/photo-1526095179574-86e545346ae6?auto=format&fit=crop&w=600&q=80', left: '76%', duration: '31s', delay: '-11s', rot: '-4deg', size: 'w-16 h-22' },
-        ].map((card, idx) => (
-          <div
-            key={idx}
-            style={{
-              position: 'absolute',
-              left: card.left,
-              top: 0,
-              animation: `floatUp ${card.duration} linear infinite`,
-              animationDelay: card.delay,
-              willChange: 'transform, opacity',
-            }}
-          >
-            <div
-              style={{
-                transform: `rotate(${card.rot})`,
-              }}
-              className={`${card.size} rounded-2xl overflow-hidden border border-amber-400/50 bg-slate-950/95 shadow-[0_8px_20px_rgba(0,0,0,0.8),0_0_12px_rgba(245,158,11,0.2)] flex flex-col`}
-            >
-              <img
-                src={card.img}
-                alt={card.word}
-                crossOrigin="anonymous"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-              <div className="absolute inset-x-0 bottom-0 bg-black/85 text-[9px] font-black text-amber-300 text-center py-0.5 truncate px-1 border-t border-amber-500/30">
-                {card.word}
-              </div>
-            </div>
-          </div>
-        ))}
-
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: 'radial-gradient(circle at 50% 30%, rgba(245, 158, 11, 0.12) 0%, transparent 70%)',
-          }}
-        />
-      </div>
+      <FloatingCardsBackground opacityClass="opacity-30" />
 
       {/* ================= LAYER 1: PACK INSPECTION (FULL-SCREEN ISOLATED MODAL) ================= */}
       {inspectingPack ? (
@@ -330,9 +339,12 @@ export const StoreModal: React.FC<StoreModalProps> = ({
       ) : checkoutPack ? (
         /* ================= LAYER 2: DEDICATED CHECKOUT VIEW ================= */
         <div
-          className="absolute inset-0 z-50 bg-[#0a0d14]/75 backdrop-blur-sm pt-8 px-4 pb-6 overflow-y-auto flex flex-col items-center justify-start select-none animate-fadeIn"
+          className="absolute inset-0 z-50 bg-[#090b14]/80 backdrop-blur-md pt-8 pb-4 px-4 overflow-y-auto flex flex-col items-center justify-start select-none animate-fadeIn"
           onClick={(e) => e.stopPropagation()}
         >
+          {/* רקע קלפים מרחפים בתוך עמוד הרכישה */}
+          <FloatingCardsBackground opacityClass="opacity-25" />
+
           <div className="w-full max-w-lg relative z-10 flex flex-col gap-3">
             {/* בלוק הכותרת העליונה (הקפסולה הסגולה) הממורכז */}
             <div className="relative w-full rounded-2xl border border-purple-500/30 bg-[#121024]/70 p-3 flex items-center justify-center">
@@ -575,7 +587,7 @@ export const StoreModal: React.FC<StoreModalProps> = ({
       ) : (
         /* ================= LAYER 3: MAIN STORE VIEW ================= */
         <div className="flex-1 overflow-y-auto w-full flex flex-col items-center justify-start p-4 sm:p-6 pb-20">
-          <div className="w-full max-w-2xl bg-gradient-to-b from-[#181530] via-[#101222] to-[#0a0c16] border border-amber-500/30 rounded-3xl p-4 sm:p-6 shadow-[0_16px_45px_rgba(0,0,0,0.8),0_0_50px_rgba(234,179,8,0.1)] relative z-10">
+          <div className="w-full max-w-2xl bg-gradient-to-b from-[#181530]/85 via-[#101222]/85 to-[#0a0c16]/85 border border-amber-500/30 rounded-3xl p-4 sm:p-6 shadow-[0_16px_45px_rgba(0,0,0,0.8),0_0_50px_rgba(234,179,8,0.1)] relative z-10 backdrop-blur-sm">
             {/* בלוק הכותרת העליונה (הקפסולה הסגולה) הממורכז */}
             <div className="relative w-full rounded-2xl border border-purple-500/30 bg-[#121024]/70 p-3 flex items-center justify-center mb-3">
               {/* כפתור סגירה מיושר אבסולוטית לשמאל */}

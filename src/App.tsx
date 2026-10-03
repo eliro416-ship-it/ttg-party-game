@@ -1104,49 +1104,6 @@ export default function App() {
       {/* Colorful Animated Question Marks Background */}
       <AnimatedQuestionMarksBackground />
 
-      {/* Corner buttons on Home/Lobby for instant card pool and store checking in Preview */}
-      {!joinedRoom && (
-        <div className="fixed top-3 start-3 sm:top-4 sm:start-4 z-40 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsCardsGalleryOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-950/60 border border-purple-500/30 text-purple-200 text-xs font-bold shadow-[0_2px_8px_rgba(0,0,0,0.4)] active:scale-95 transition-all group cursor-pointer hover:bg-purple-900/60 hover:text-white"
-            title="בדיקת מאגר קלפים"
-          >
-            <span>בדיקת מאגר</span>
-            
-            {/* אייקון תמונה וקטורי מוזהב ומבריק */}
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="#fbbf24" 
-              strokeWidth="2.2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              className="w-4 h-4 drop-shadow-[0_2px_5px_rgba(251,191,36,0.6)] group-hover:scale-110 transition-transform"
-            >
-              <rect width="18" height="18" x="3" y="3" rx="4" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="m21 15-5-5L5 21" />
-            </svg>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setStoreUpsellReason(undefined);
-              setIsStoreOpen(true);
-            }}
-            className="bg-purple-900/90 hover:bg-purple-800 text-amber-300 hover:text-white border border-amber-400/50 hover:border-amber-400 px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-bold shadow-[0_4px_15px_rgba(0,0,0,0.5)] flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer hover:scale-105 active:scale-95 animate-pulse"
-            title="💎 חנות חבילות קלפים"
-          >
-            <span className="text-sm">💎</span>
-            <span>חנות קלפים</span>
-          </button>
-        </div>
-      )}
-
       {/* Main glassmorphic card container */}
       <div className={`relative z-10 w-full ${joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[460px]'} ${screen === 'host' ? 'p-3 sm:p-5 max-h-[98dvh] sm:max-h-none flex flex-col justify-between overflow-hidden' : 'p-4 sm:p-6'} bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[28px] sm:rounded-[32px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all`}>
         {/* Welcome / Role Select screen */}

@@ -38,22 +38,40 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
   return (
     <div className="w-full flex flex-col items-center text-center animate-fadeIn select-none" dir={isEn ? 'ltr' : 'rtl'}>
-      {/* Top bar with Language Switcher, Store, Photo Gallery, Intro Video, and Speaker Button */}
-      <div className="w-full flex items-center justify-between gap-1.5 px-3 pt-3 pb-2 z-20">
-        <button
-          onClick={() => {
-            sounds.soundKeypress();
-            onToggleLanguage();
-          }}
-          className="btn-3d btn-3d-dark text-white px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0"
-          title={isEn ? 'Switch to Hebrew' : 'עבור לאנגלית'}
-        >
-          <Globe className="w-3.5 h-3.5 text-pink-400" />
-          <span>{t.langBtn}</span>
-        </button>
+      {/* Top bar with [ סאונד | סרטון פתיחה | אייקון גלריה/מאגר | אייקון חנות/יהלום | English ] */}
+      <div className="w-full flex items-center justify-between gap-1 sm:gap-2 px-1 sm:px-2 pt-2 pb-3 z-20">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* סאונד */}
+          <button
+            type="button"
+            onClick={onToggleMute}
+            className="h-9 w-9 flex-shrink-0 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 flex items-center justify-center text-purple-200 active:scale-95 transition-all cursor-pointer shadow-sm"
+            title={isMuted ? (isEn ? 'Unmute' : 'הפעל סאונד') : (isEn ? 'Mute' : 'השתק סאונד')}
+          >
+            <span className="text-sm">{isMuted ? '🔇' : '🔊'}</span>
+          </button>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* כפתור תמונה / גלריה - ללא מסגרת */}
+          {/* סרטון פתיחה */}
+          {onOpenVideo && (
+            <button
+              type="button"
+              onClick={() => {
+                sounds.soundKeypress();
+                onOpenVideo();
+              }}
+              className="h-9 px-2.5 sm:px-3 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 text-pink-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              title={isEn ? 'Watch Intro Video' : 'צפייה בסרטון הפתיחה'}
+            >
+              <div className="w-4 h-4 rounded-full bg-pink-500/20 flex items-center justify-center border border-pink-400/40">
+                <Film className="w-2.5 h-2.5 text-pink-300" strokeWidth={2.4} />
+              </div>
+              <span className="font-extrabold">{isEn ? 'Intro' : 'סרטון פתיחה'}</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* אייקון גלריה / מאגר */}
           {onOpenCardsGallery && (
             <button
               type="button"
@@ -61,7 +79,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 sounds.soundKeypress();
                 onOpenCardsGallery();
               }}
-              className="w-10 h-10 flex-shrink-0 rounded-2xl bg-purple-900/40 hover:bg-purple-800/50 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+              className="h-9 w-9 flex-shrink-0 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-sm group"
               title={isEn ? 'Photo Cards' : 'מאגר תמונות'}
             >
               <svg 
@@ -72,7 +90,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 strokeWidth="2.2" 
                 strokeLinecap="round" 
                 strokeLinejoin="round" 
-                className="w-5 h-5 drop-shadow-[0_2px_4px_rgba(251,191,36,0.4)]"
+                className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(251,191,36,0.4)] group-hover:scale-110 transition-transform"
               >
                 <rect width="18" height="18" x="3" y="3" rx="4" />
                 <circle cx="8.5" cy="8.5" r="1.5" />
@@ -81,7 +99,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
             </button>
           )}
 
-          {/* כפתור יהלום / חנות - ללא מסגרת */}
+          {/* אייקון חנות / יהלום */}
           {onOpenStore && (
             <button
               type="button"
@@ -89,39 +107,24 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 sounds.soundKeypress();
                 onOpenStore();
               }}
-              className="w-10 h-10 flex-shrink-0 rounded-2xl bg-purple-900/40 hover:bg-purple-800/50 flex items-center justify-center active:scale-95 transition-all text-xl cursor-pointer"
+              className="h-9 w-9 flex-shrink-0 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-amber-400/40 flex items-center justify-center active:scale-95 transition-all text-base cursor-pointer shadow-sm group"
               title={isEn ? 'Card Packs Store' : 'חנות חבילות'}
             >
-              <span className="drop-shadow-[0_2px_6px_rgba(56,189,248,0.5)]">💎</span>
+              <span className="drop-shadow-[0_2px_6px_rgba(56,189,248,0.5)] group-hover:scale-110 transition-transform">💎</span>
             </button>
           )}
 
-          {/* Single clean Header Video Button */}
-          {onOpenVideo && (
-            <button
-              type="button"
-              onClick={() => {
-                sounds.soundKeypress();
-                onOpenVideo();
-              }}
-              className="btn-3d btn-3d-dark text-pink-300 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-sm shrink-0"
-              title={isEn ? 'Watch Intro Video' : 'צפייה בסרטון הפתיחה'}
-            >
-              <div className="w-4 h-4 rounded-full bg-pink-500/20 flex items-center justify-center border border-pink-400/40">
-                <Film className="w-2.5 h-2.5 text-pink-300" strokeWidth={2.4} />
-              </div>
-              <span className="font-extrabold">{isEn ? 'Intro Video' : 'סרטון פתיחה'}</span>
-            </button>
-          )}
-
-          {/* Speaker Button - Fixed size without shrinking */}
+          {/* שפה English / עברית */}
           <button
-            type="button"
-            onClick={onToggleMute}
-            className="w-10 h-10 flex-shrink-0 rounded-2xl bg-purple-950/60 border border-purple-500/30 flex items-center justify-center text-purple-300 shadow-[0_3px_0_#2e1065] active:translate-y-[2px] transition-all cursor-pointer"
-            title={isMuted ? (isEn ? 'Unmute' : 'הפעל סאונד') : (isEn ? 'Mute' : 'השתק סאונד')}
+            onClick={() => {
+              sounds.soundKeypress();
+              onToggleLanguage();
+            }}
+            className="h-9 px-2.5 sm:px-3 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+            title={isEn ? 'Switch to Hebrew' : 'עבור לאנגלית'}
           >
-            <span className="text-base">{isMuted ? '🔇' : '🔊'}</span>
+            <Globe className="w-3.5 h-3.5 text-pink-400" />
+            <span>{t.langBtn}</span>
           </button>
         </div>
       </div>
