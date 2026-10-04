@@ -80,6 +80,9 @@ export const SpecialBonusModal: React.FC<SpecialBonusModalProps> = ({
             "_subject": `🎯 ליד חדש למשחק: ${trimmedName} (${trimmedCountry || 'ישראל'})`,
             "_template": "table",
             "_captcha": "false",
+            "_autoresponse": isEn
+              ? `Hello ${trimmedName}! Thank you for registering for Time To Guess. We're happy to gift you 10 extra game cards. We'll update you at this email as soon as the full card store and payment system officially launch. Enjoy the game!`
+              : `שלום ${trimmedName}! תודה שנרשמת ל-Time To Guess. שמחנו להעניק לך 10 קלפי משחק נוספים במתנה. נעדכן אותך במייל זה ברגע שחנות הקלפים המלאה ומערכת התשלומים יושקו רשמית. תיהנו במשחק!`,
           }),
         }).catch((err) => {
           console.warn('Silent submission network note:', err);
