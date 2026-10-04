@@ -27,6 +27,7 @@ export interface Player {
   score: number;
   isHost: boolean;
   streak: number;
+  correctGuesses?: number;
   isOnline?: boolean;
 }
 

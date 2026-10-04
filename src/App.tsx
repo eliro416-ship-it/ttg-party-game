@@ -29,6 +29,9 @@ import {
   broadcastNewTurn,
   broadcastScoreUpdate,
   broadcastScoreboardSync,
+  broadcastGameOver,
+  broadcastGameRestart,
+  GameOverPayload,
   encodeWordHash,
   TurnStartedPayload,
   RoomStatePayload,
@@ -237,6 +240,7 @@ export default function App() {
   const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
   const [totalCardsSolved, setTotalCardsSolved] = useState<number>(0);
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState<boolean>(false);
+  const [gamePhase, setGamePhase] = useState<'PLAYING' | 'GAME_OVER'>('PLAYING');
   const [isCardsGalleryOpen, setIsCardsGalleryOpen] = useState<boolean>(false);
   const [isStoreOpen, setIsStoreOpen] = useState<boolean>(false);
   const [storeUpsellReason, setStoreUpsellReason] = useState<string | undefined>(undefined);
@@ -292,6 +296,28 @@ export default function App() {
     return filtered.length > 0 ? filtered : shuffledDeck;
   }, [shuffledDeck, settings.selectedCategories]);
 
+  // Trigger game over and victory screen across the entire room
+  const handleGameOver = useCallback(() => {
+    sounds.soundWin();
+    const currentPlayers = playersRef.current && playersRef.current.length > 0 ? playersRef.current : players;
+    const sortedPlayers = [...currentPlayers].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const currentPool = getPlayableCards(getUnlockedPackIds());
+    const totalCardsInHostDeck = currentPool.length;
+
+    setGamePhase('GAME_OVER');
+    setIsGameOverModalOpen(true);
+
+    broadcastGameOver({
+      scores: sortedPlayers,
+      players: sortedPlayers,
+      totalCardsPlayed: totalCardsInHostDeck,
+      winner: sortedPlayers[0],
+    });
+  }, [players]);
+
+  const handleGameOverRef = useRef<() => void>(() => {});
+  handleGameOverRef.current = handleGameOver;
+
   // Authoritative Turn Rotation managed strictly by the Host
   const advanceHostTurn = useCallback(() => {
     if (myPlayerId !== 'p-host') return;
@@ -299,7 +325,15 @@ export default function App() {
     const currentPlayers = playersRef.current;
     if (!currentPlayers || currentPlayers.length === 0) return;
 
-    // 1. Calculate next player index:
+    // 1. Check if all cards in host deck have been played
+    const currentPool = getPlayableCards(getUnlockedPackIds());
+    const totalCardsInHostDeck = currentPool.length;
+    if (playedCardIdsRef.current.size >= totalCardsInHostDeck) {
+      handleGameOverRef.current();
+      return;
+    }
+
+    // 2. Calculate next player index:
     // nextIndex = (currentHolderIndex + 1) % players.length
     // newHolderId = players[nextIndex].id
     const currentHolder = currentHolderIdRef.current;
@@ -308,8 +342,7 @@ export default function App() {
     const nextPlayer = currentPlayers[nextIndex] || currentPlayers[0];
     const newHolderId = nextPlayer.id;
 
-    // 2. Advance card index and pick next card randomly from active unlocked packs
-    const currentPool = getPlayableCards(getUnlockedPackIds());
+    // 3. Advance card index and pick next card randomly from active unlocked packs
     const newCard = getRandomRoundCard(currentPool, Array.from(playedCardIdsRef.current));
     setPlayedCardIds((prev) => new Set([...prev, newCard.id]));
     const nextCardIndex = currentPool.findIndex((c) => c.id === newCard.id);
@@ -318,7 +351,7 @@ export default function App() {
 
     const cardWord = (language === 'en' ? (newCard.word_en || newCard.word) : (newCard.word_he || newCard.word)).trim();
 
-    // 3. Official NEW_TURN payload
+    // 4. Official NEW_TURN payload
     const newTurnPayload: NewTurnPayload = {
       holderId: newHolderId,
       holderName: nextPlayer.name,
@@ -330,7 +363,7 @@ export default function App() {
       wordHash: encodeWordHash(cardWord),
     };
 
-    // 4. Host broadcasts official NEW_TURN event to all devices
+    // 5. Host broadcasts official NEW_TURN event to all devices
     broadcastNewTurn(newTurnPayload);
   }, [myPlayerId, activeDeck, language]);
 
@@ -502,6 +535,12 @@ export default function App() {
 
         // A. Draw a brand new card from active unlocked packs pool (different from current card)
         const currentPool = getPlayableCards(getUnlockedPackIds());
+        const totalCardsInHostDeck = currentPool.length;
+        if (playedCardIdsRef.current.size >= totalCardsInHostDeck) {
+          handleGameOverRef.current();
+          return;
+        }
+
         const nextCard = getRandomRoundCard(currentPool, Array.from(playedCardIdsRef.current));
         setPlayedCardIds((prev) => new Set([...prev, nextCard.id]));
 
@@ -716,6 +755,24 @@ export default function App() {
       }
     });
 
+    const unsubGameOver = addSupabaseListener('GAME_OVER', (payload) => {
+      sounds.soundWin();
+      if (payload.players && payload.players.length > 0) {
+        setPlayers(payload.players);
+        playersRef.current = payload.players;
+      }
+      setGamePhase('GAME_OVER');
+      setIsGameOverModalOpen(true);
+    });
+
+    const unsubGameRestart = addSupabaseListener('GAME_RESTART', () => {
+      setIsGameOverModalOpen(false);
+      setGamePhase('PLAYING');
+      setPlayedCardIds(new Set());
+      playedCardIdsRef.current = new Set();
+      setScreen('game');
+    });
+
     return () => {
       unsubStatus();
       unsubPresence();
@@ -732,6 +789,8 @@ export default function App() {
       unsubSettings();
       unsubSyncState();
       unsubRequestSync();
+      unsubGameOver();
+      unsubGameRestart();
     };
   }, [pin, joinedRoom, hostStep, screen, myPlayerId, activeDeck, language, settings.turnDuration]);
 
@@ -1022,7 +1081,13 @@ export default function App() {
     // Host authoritatively updates scores and schedules next turn
     if (myPlayerId === 'p-host') {
       const updatedPlayers = (playersRef.current && playersRef.current.length > 0 ? playersRef.current : players).map((p) =>
-        p.id === winnerPlayerId ? { ...p, score: (p.score || 0) + 10 } : p
+        p.id === winnerPlayerId
+          ? {
+              ...p,
+              score: (p.score || 0) + 10,
+              correctGuesses: (p.correctGuesses || 0) + 1,
+            }
+          : p
       );
       playersRef.current = updatedPlayers;
       setPlayers(updatedPlayers);
@@ -1074,23 +1139,100 @@ export default function App() {
   }, [myPlayerId]);
 
   const handleRestartGame = useCallback(() => {
+    sounds.soundSuccess();
     setIsGameOverModalOpen(false);
+    setGamePhase('PLAYING');
     setCurrentCardIndex(0);
     setTotalCardsSolved(0);
     setActivePlayerIndex(0);
     setPlayedCardIds(new Set());
+    playedCardIdsRef.current = new Set();
+
     const currentPool = getPlayableCards(getUnlockedPackIds());
     setShuffledDeck(shuffleDeck([...currentPool]));
-    setPlayers((prev) => prev.map((p) => ({ ...p, score: 0, streak: 0 })));
+
+    // Reset scores and streaks for fresh match
+    const resetPlayers = (playersRef.current && playersRef.current.length > 0 ? playersRef.current : players).map((p) => ({
+      ...p,
+      score: 0,
+      streak: 0,
+      correctGuesses: 0,
+    }));
+    playersRef.current = resetPlayers;
+    setPlayers(resetPlayers);
+
+    broadcastScoreboardSync({ players: resetPlayers });
+    broadcastGameRestart();
+
+    // Draw first card of new match
+    const firstCard = getRandomRoundCard(currentPool, []);
+    setPlayedCardIds(new Set([firstCard.id]));
+    playedCardIdsRef.current = new Set([firstCard.id]);
+
+    const firstCardIndex = currentPool.findIndex((c) => c.id === firstCard.id);
+    cardIndexRef.current = firstCardIndex >= 0 ? firstCardIndex : 0;
+    setCurrentCardIndex(cardIndexRef.current);
+
+    const duration = settings.turnDuration || 15;
+    const newEndTime = Date.now() + duration * 1000;
+    const cardWord = (language === 'en' ? (firstCard.word_en || firstCard.word) : (firstCard.word_he || firstCard.word)).trim();
+
+    const holderId = resetPlayers[0]?.id || 'p-host';
+    const holderName = resetPlayers[0]?.name || (language === 'en' ? 'Host' : 'מארח/ת');
+    const holderAvatar = resetPlayers[0]?.avatar || '👑';
+
+    const streakPayload: RoundStartPayload = {
+      holderId,
+      holderName,
+      holderAvatar,
+      cardIndex: cardIndexRef.current,
+      cardId: firstCard.id,
+      card: firstCard,
+      word: cardWord,
+      wordHash: encodeWordHash(cardWord),
+      category: language === 'en' ? (firstCard.category_en || firstCard.category) : firstCard.category,
+      wordLength: cardWord.length,
+      duration,
+      turnDuration: duration,
+      endTime: newEndTime,
+      roundEndTime: newEndTime,
+      roundEndsAt: newEndTime,
+    };
+
+    setServerTurnData({
+      isHolder: myPlayerId === holderId,
+      roundStatus: 'active',
+      roundEndsAt: newEndTime,
+      turnEndTime: newEndTime,
+      turnDuration: duration,
+      cardIndex: cardIndexRef.current,
+      totalCards: currentPool.length,
+      holderId,
+      holderName,
+      holderAvatar,
+      cardId: firstCard.id,
+      image: firstCard.imageUrl || firstCard.image,
+      imageUrl: firstCard.imageUrl || firstCard.image,
+      fallback: firstCard.fallback || null,
+      word: cardWord,
+      category: language === 'en' ? (firstCard.category_en || firstCard.category) : firstCard.category,
+      hint: null,
+      wordLength: cardWord.length,
+      players: resetPlayers,
+    });
+
+    broadcastRoundStart(streakPayload);
     setHostStep('game');
     setScreen('game');
-  }, []);
+  }, [settings.turnDuration, language, myPlayerId, players]);
 
   const handleLeaveGame = useCallback(() => {
+    sounds.soundKeypress();
     setJoinedRoom(false);
     setHostStep('create');
     setScreen('welcome');
     setIsGameOverModalOpen(false);
+    setGamePhase('PLAYING');
     setServerTurnData(null);
     try {
       window.history.replaceState({}, '', window.location.pathname);
@@ -1255,9 +1397,10 @@ export default function App() {
       />
 
       <GameOverModal
-        isOpen={isGameOverModalOpen}
+        isOpen={isGameOverModalOpen || gamePhase === 'GAME_OVER'}
         players={players}
-        totalCardsPlayed={totalCardsSolved}
+        totalCardsPlayed={getPlayableCards(getUnlockedPackIds()).length}
+        isHost={myPlayerId === 'p-host'}
         onRestart={handleRestartGame}
         onHome={handleLeaveGame}
         onOpenStore={() => {

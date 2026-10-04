@@ -181,6 +181,13 @@ export interface RoomStatePayload {
   cardIndex: number;
 }
 
+export interface GameOverPayload {
+  scores?: Player[];
+  players?: Player[];
+  totalCardsPlayed?: number;
+  winner?: Player;
+}
+
 // Global active channel and listener sets
 // Local tab-to-tab BroadcastChannel for 0-latency instant sync between tabs on same origin
 let localTabChannel: BroadcastChannel | null = null;
@@ -211,6 +218,8 @@ const syncStateListeners = new Set<(payload: SyncStatePayload) => void>();
 const requestSyncListeners = new Set<(payload: RequestSyncPayload) => void>();
 const statusListeners = new Set<(status: string) => void>();
 const scoreboardSyncListeners = new Set<(payload: ScoreboardSyncPayload) => void>();
+const gameOverListeners = new Set<(payload: GameOverPayload) => void>();
+const gameRestartListeners = new Set<() => void>();
 
 export function getLocalTabChannel(): BroadcastChannel | null {
   return localTabChannel;
@@ -367,6 +376,33 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
   channel.on('broadcast', { event: 'turn_timeout' }, handleTurnTimeoutBroadcast);
   channel.on('broadcast', { event: 'TURN_TIMEOUT' }, handleTurnTimeoutBroadcast);
 
+  const handleGameOverBroadcast = ({ payload }: { payload: any }) => {
+    if (!payload) return;
+    gameOverListeners.forEach((fn) => {
+      try {
+        fn(payload as GameOverPayload);
+      } catch (err) {
+        console.error('Error in gameOver listener:', err);
+      }
+    });
+  };
+
+  channel.on('broadcast', { event: 'GAME_OVER' }, handleGameOverBroadcast);
+  channel.on('broadcast', { event: 'game_over' }, handleGameOverBroadcast);
+
+  const handleGameRestartBroadcast = () => {
+    gameRestartListeners.forEach((fn) => {
+      try {
+        fn();
+      } catch (err) {
+        console.error('Error in gameRestart listener:', err);
+      }
+    });
+  };
+
+  channel.on('broadcast', { event: 'GAME_RESTART' }, handleGameRestartBroadcast);
+  channel.on('broadcast', { event: 'game_restart' }, handleGameRestartBroadcast);
+
   if (localTabChannel) {
     const existingOnMessage = localTabChannel.onmessage;
     localTabChannel.onmessage = (event) => {
@@ -376,6 +412,12 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
       }
       if ((event.data?.type === 'SCOREBOARD_SYNC' || event.data?.type === 'scoreboard_sync') && event.data.payload) {
         handleScoreboardSyncBroadcast({ payload: event.data.payload });
+      }
+      if ((event.data?.type === 'GAME_OVER' || event.data?.type === 'game_over') && event.data.payload) {
+        handleGameOverBroadcast({ payload: event.data.payload });
+      }
+      if (event.data?.type === 'GAME_RESTART' || event.data?.type === 'game_restart') {
+        handleGameRestartBroadcast();
       }
     };
   }
@@ -454,6 +496,8 @@ export function addSupabaseListener(event: 'sync_state', fn: (payload: SyncState
 export function addSupabaseListener(event: 'SCOREBOARD_SYNC' | 'scoreboard_sync', fn: (payload: ScoreboardSyncPayload) => void): () => void;
 export function addSupabaseListener(event: 'request_sync', fn: (payload: RequestSyncPayload) => void): () => void;
 export function addSupabaseListener(event: 'status', fn: (status: string) => void): () => void;
+export function addSupabaseListener(event: 'GAME_OVER' | 'game_over', fn: (payload: GameOverPayload) => void): () => void;
+export function addSupabaseListener(event: 'GAME_RESTART' | 'game_restart', fn: () => void): () => void;
 export function addSupabaseListener(event: string, fn: any): () => void {
   if (event === 'presence') presenceListeners.add(fn);
   else if (event === 'game_start') gameStartListeners.add(fn);
@@ -470,6 +514,8 @@ export function addSupabaseListener(event: string, fn: any): () => void {
   else if (event === 'SCOREBOARD_SYNC' || event === 'scoreboard_sync') scoreboardSyncListeners.add(fn);
   else if (event === 'request_sync') requestSyncListeners.add(fn);
   else if (event === 'status') statusListeners.add(fn);
+  else if (event === 'GAME_OVER' || event === 'game_over') gameOverListeners.add(fn);
+  else if (event === 'GAME_RESTART' || event === 'game_restart') gameRestartListeners.add(fn);
 
   return () => {
     if (event === 'presence') presenceListeners.delete(fn);
@@ -487,7 +533,63 @@ export function addSupabaseListener(event: string, fn: any): () => void {
     else if (event === 'SCOREBOARD_SYNC' || event === 'scoreboard_sync') scoreboardSyncListeners.delete(fn);
     else if (event === 'request_sync') requestSyncListeners.delete(fn);
     else if (event === 'status') statusListeners.delete(fn);
+    else if (event === 'GAME_OVER' || event === 'game_over') gameOverListeners.delete(fn);
+    else if (event === 'GAME_RESTART' || event === 'game_restart') gameRestartListeners.delete(fn);
   };
+}
+
+export function broadcastGameOver(payload: GameOverPayload): void {
+  gameOverListeners.forEach((fn) => {
+    try {
+      fn(payload);
+    } catch (e) {
+      console.error('Error dispatching game_over locally:', e);
+    }
+  });
+
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'GAME_OVER',
+      payload,
+    }).catch((err) => console.error('Error broadcasting GAME_OVER:', err));
+  }
+
+  if (localTabChannel) {
+    try {
+      localTabChannel.postMessage({
+        type: 'GAME_OVER',
+        payload,
+      });
+    } catch (e) {}
+  }
+}
+
+export function broadcastGameRestart(): void {
+  gameRestartListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch (e) {
+      console.error('Error dispatching game_restart locally:', e);
+    }
+  });
+
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'GAME_RESTART',
+      payload: {},
+    }).catch((err) => console.error('Error broadcasting GAME_RESTART:', err));
+  }
+
+  if (localTabChannel) {
+    try {
+      localTabChannel.postMessage({
+        type: 'GAME_RESTART',
+        payload: {},
+      });
+    } catch (e) {}
+  }
 }
 
 export function broadcastNewTurn(payload: NewTurnPayload): void {
