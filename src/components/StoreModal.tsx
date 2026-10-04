@@ -4,16 +4,15 @@ import {
   Check,
   Crown,
   ShieldCheck,
-  CreditCard,
   RotateCcw,
   Eye,
-  Lock,
+  Sparkles,
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
-import { CardPack, getAllPacks, unlockPack, resetPacks, getUnlockedPackIds } from '../data/packs';
+import { CardPack, getAllPacks, resetPacks, getUnlockedPackIds } from '../data/packs';
 import { ALL_GAME_CARDS } from '../data/cards';
 import { sounds } from '../utils/audio';
 import { Language } from '../types/game';
+import { SpecialBonusModal } from './SpecialBonusModal';
 
 interface StoreModalProps {
   isOpen: boolean;
@@ -142,17 +141,16 @@ export const StoreModal: React.FC<StoreModalProps> = ({
   const isEn = language === 'en';
   const [packs, setPacks] = useState<CardPack[]>([]);
   const [inspectingPack, setInspectingPack] = useState<CardPack | null>(null);
-  const [checkoutPack, setCheckoutPack] = useState<CardPack | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
+  const [isBonusModalOpen, setIsBonusModalOpen] = useState(false);
+  const [bonusTargetPack, setBonusTargetPack] = useState<CardPack | null>(null);
+  const [bonusSuccessToast, setBonusSuccessToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       refreshPacks();
-      setPurchaseSuccess(null);
-      setIsProcessing(false);
-      setCheckoutPack(null);
       setInspectingPack(null);
+      setIsBonusModalOpen(false);
+      setBonusTargetPack(null);
     }
   }, [isOpen]);
 
@@ -163,55 +161,60 @@ export const StoreModal: React.FC<StoreModalProps> = ({
 
   if (!isOpen) return null;
 
-  const totalUnlockedCards = packs.reduce(
-    (sum, p) => (p.isUnlocked ? sum + p.cardCount : sum),
-    0
-  );
+  // חישוב קפדני: 10 קלפים כברירת מחדל, ו-20 בדיוק אם מומש הבונוס
+  const hasClaimedBonus = typeof localStorage !== 'undefined' && localStorage.getItem('ttg_bonus_claimed') === 'true';
+  const totalUnlockedCards = hasClaimedBonus ? 20 : 10;
   const isAllVipUnlocked = getUnlockedPackIds().includes('pack_vip');
 
   const handleOpenCheckout = (pack: CardPack) => {
     sounds.soundKeypress();
     if (pack.isUnlocked) return;
-    setCheckoutPack(pack);
-    setInspectingPack(null);
-    setPurchaseSuccess(null);
-    setIsProcessing(false);
-  };
 
-  const handleExecutePayment = (method: 'bit' | 'apple_google_pay' | 'card') => {
-    if (!checkoutPack) return;
-    setIsProcessing(true);
-    sounds.soundKeypress();
+    if (hasClaimedBonus) {
+      setBonusSuccessToast(
+        isEn
+          ? "You've already received 10 free cards! The remaining packs will unlock upon payment system launch."
+          : "כבר קיבלת 10 קלפים במתנה! שאר החבילות ייפתחו עם השקת מערכת התשלומים."
+      );
+      setTimeout(() => setBonusSuccessToast(null), 4500);
+      return;
+    }
 
-    setTimeout(() => {
-      unlockPack(checkoutPack.id);
-      refreshPacks();
-      setIsProcessing(false);
-      setPurchaseSuccess(checkoutPack.title);
-
-      // Audio & Confetti Celebration
-      sounds.soundSuccess();
-      try {
-        confetti({
-          particleCount: 130,
-          spread: 90,
-          origin: { y: 0.6 },
-          colors: ['#fbbf24', '#f59e0b', '#ec4899', '#a855f7', '#10b981'],
-        });
-      } catch {
-        // ignore
-      }
-
-      if (onPacksUpdated) {
-        onPacksUpdated();
-      }
-    }, 900);
+    setBonusTargetPack(pack);
+    setIsBonusModalOpen(true);
   };
 
   const handleBuyVip = () => {
     sounds.soundKeypress();
+
+    if (hasClaimedBonus) {
+      setBonusSuccessToast(
+        isEn
+          ? "You've already received 10 free cards! The remaining packs will unlock upon payment system launch."
+          : "כבר קיבלת 10 קלפים במתנה! שאר החבילות ייפתחו עם השקת מערכת התשלומים."
+      );
+      setTimeout(() => setBonusSuccessToast(null), 4500);
+      return;
+    }
+
     const vipPack = packs.find((p) => p.id === 'pack_vip');
-    if (vipPack) handleOpenCheckout(vipPack);
+    setBonusTargetPack(vipPack || null);
+    setIsBonusModalOpen(true);
+  };
+
+  const handleBonusSuccess = (packTitle: string) => {
+    refreshPacks();
+    if (onPacksUpdated) {
+      onPacksUpdated();
+    }
+    setBonusSuccessToast(
+      isEn
+        ? `Awesome! 10 new cards were added to your game pool (20 active cards total) 🎉`
+        : `מעולה! 10 קלפים חדשים נוספו למאגר שלך (סך הכל 20 קלפים פעילים) 🎉`
+    );
+    setTimeout(() => {
+      setBonusSuccessToast(null);
+    }, 5000);
   };
 
   const handleResetForTesting = () => {
@@ -219,6 +222,10 @@ export const StoreModal: React.FC<StoreModalProps> = ({
     resetPacks();
     refreshPacks();
     if (onPacksUpdated) onPacksUpdated();
+    setBonusSuccessToast(
+      isEn ? 'Packs reset to default 10 cards' : 'המאגר אופס ל-10 קלפי ברירת מחדל'
+    );
+    setTimeout(() => setBonusSuccessToast(null), 3000);
   };
 
   const modalContent = (
@@ -319,9 +326,15 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                   setInspectingPack(null);
                   handleOpenCheckout(pack);
                 }}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-black text-xs shadow-md active:scale-95 transition-transform cursor-pointer"
+                className={`px-5 py-2.5 rounded-xl font-black text-xs shadow-md active:scale-95 transition-transform cursor-pointer ${
+                  hasClaimedBonus
+                    ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700'
+                    : 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 hover:brightness-105'
+                }`}
               >
-                {isEn ? 'Purchase Pack' : 'רכישת החבילה ⚡'}
+                {hasClaimedBonus
+                  ? (isEn ? 'Available on Full Launch 🔒' : 'בקרוב בהשקה הרשמית 🔒')
+                  : (isEn ? 'Claim Free Bonus Pack 🎁' : 'פתיחה במתנה 🎁')}
               </button>
             </div>
           ) : (
@@ -334,219 +347,8 @@ export const StoreModal: React.FC<StoreModalProps> = ({
             </div>
           )}
         </div>
-      ) : checkoutPack ? (
-        /* ================= LAYER 2: DEDICATED CHECKOUT VIEW ================= */
-        <div
-          className="absolute inset-0 z-30 bg-[#0c0f17]/95 backdrop-blur-md flex flex-col w-full h-full overflow-y-auto select-none animate-fadeIn"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* סרגל עליון */}
-          <div className="flex-shrink-0 w-full bg-[#121626] border-b border-purple-500/20 px-4 py-3 flex items-center justify-between shadow-xl z-20">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">💳</span>
-              <span className="text-sm font-black text-amber-300">
-                {isEn ? 'Checkout' : 'קופת רכישה מאובטחת'}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                sounds.soundKeypress();
-                setCheckoutPack(null);
-                setPurchaseSuccess(null);
-              }}
-              className="w-8 h-8 rounded-full bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-xs active:scale-90 cursor-pointer hover:text-white"
-              title={isEn ? 'Back to Store' : 'חזרה לחנות'}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="flex-1 w-full max-w-md mx-auto overflow-y-auto px-4 py-4 space-y-4 overscroll-contain">
-            {/* Header Title */}
-            <div className="text-center pt-1">
-              <h2 className="text-xl font-black text-amber-300 drop-shadow-[0_2px_8px_rgba(234,179,8,0.4)]">
-                {isEn ? 'Complete Pack Purchase' : 'השלמת רכישת חבילת קלפים'}
-              </h2>
-              <p className="text-xs text-purple-200/80 mt-0.5 font-medium">
-                {isEn ? 'Instant permanent unlock for your entire game' : 'פתיחה מיידית וקבועה של החבילה למשחק'}
-              </p>
-            </div>
-
-            {/* Order Summary Card */}
-            <div className="w-full rounded-3xl p-4 sm:p-5 border border-amber-400/30 bg-[#121626]/90 shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-3">
-              <div className="flex items-center gap-3 pb-3 border-b border-purple-500/20">
-                {renderPackBadgeIcon(checkoutPack.id)}
-                <div className="flex-1">
-                  <h3 className="text-base font-black text-white flex items-center gap-2">
-                    <span>{checkoutPack.title}</span>
-                  </h3>
-                  <p className="text-xs text-amber-300/90 font-bold mt-0.5">
-                    ✨ {isEn ? 'Permanently unlocks 10 new cards!' : 'פותח 10 קלפי משחק חדשים לצמיתות!'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Feature bullets */}
-              <div className="space-y-1.5 text-xs text-slate-300">
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span>
-                  <span>{isEn ? '10 Verified HD Photos' : '10 תמונות HD מאומתות'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span>
-                  <span>{isEn ? 'Available in every game' : 'זמין בכל משחק עם חברים'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span>
-                  <span>{isEn ? 'One-time payment, no subscription' : 'תשלום חד-פעמי (ללא מנוי)'}</span>
-                </div>
-              </div>
-
-              {/* Total Price row */}
-              <div className="pt-2 border-t border-purple-500/20 flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-200">{isEn ? 'Total Price:' : 'מחיר סופי:'}</span>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(234,179,8,0.4)]">
-                    {checkoutPack.priceDisplay}
-                  </span>
-                  <span className="text-[11px] text-slate-400 font-medium">{isEn ? 'one-time' : 'חד-פעמי'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Success celebration banner or payment methods */}
-            {purchaseSuccess ? (
-              <div className="w-full p-5 rounded-3xl bg-gradient-to-b from-emerald-900/90 to-emerald-950/90 border-2 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.4)] text-center animate-fadeIn flex flex-col items-center gap-3">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center animate-bounce">
-                  <Check className="w-8 h-8 text-emerald-300" strokeWidth={3} />
-                </div>
-                <div>
-                  <h4 className="text-lg font-black text-white">{isEn ? 'Pack Unlocked Successfully! 🎉' : 'החבילה נפתחה בהצלחה! 🎉'}</h4>
-                  <p className="text-xs text-emerald-200 mt-1 font-medium">
-                    {isEn ? `All 10 new cards of ${checkoutPack.title} are now ready!` : `כל 10 הקלפים החדשים של ${checkoutPack.title} זמינים עכשיו במשחק!`}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    sounds.soundKeypress();
-                    setCheckoutPack(null);
-                    setPurchaseSuccess(null);
-                  }}
-                  className="w-full py-3 rounded-2xl bg-white text-emerald-950 font-black text-sm shadow-md active:scale-95 cursor-pointer mt-1"
-                >
-                  {isEn ? 'Back to Store' : 'חזרה לחנות 🛍️'}
-                </button>
-              </div>
-            ) : (
-              <div className="w-full space-y-3">
-                {/* 1. Bit Button */}
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleExecutePayment('bit');
-                  }}
-                  className="w-full py-3 px-4 rounded-2xl bg-[#00B4D8] hover:bg-[#0096C7] text-white font-black text-sm flex items-center justify-between shadow-[0_4px_14px_rgba(0,180,216,0.35)] active:scale-98 transition-all cursor-pointer border border-white/20"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-black">bit</span>
-                    <span>תשלום מהיר באפליקציית ביט</span>
-                  </div>
-                  <span className="bg-black/20 px-2 py-0.5 rounded-lg text-xs font-bold">
-                    {checkoutPack.priceDisplay}
-                  </span>
-                </button>
-
-                {/* 2. Apple / Google Pay */}
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleExecutePayment('apple_google_pay');
-                  }}
-                  className="w-full py-3 px-4 rounded-2xl bg-slate-900 hover:bg-black text-white font-black text-sm flex items-center justify-between border-2 border-slate-700/80 shadow-[0_4px_14px_rgba(0,0,0,0.5)] active:scale-98 transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-lg"></span>
-                    <span className="tracking-wide">Apple Pay / Google Pay</span>
-                  </div>
-                  <span className="bg-white/10 px-2.5 py-1 rounded-lg text-xs font-black text-amber-300">
-                    {checkoutPack.priceDisplay}
-                  </span>
-                </button>
-
-                {/* 3. Secure Credit Card Option */}
-                <div className="w-full rounded-3xl p-4 sm:p-5 border border-purple-500/25 bg-[#121626]/90 shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-                    <span className="flex items-center gap-1.5">
-                      <CreditCard className="w-4 h-4 text-amber-400" />
-                      <span>תשלום מאובטח בכרטיס אשראי</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400">ויזה / מאסטרקארד / ישראכרט</span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/50 backdrop-blur-sm border border-slate-700/50 text-xs text-slate-300 font-mono flex items-center justify-between">
-                      <span>•••• •••• •••• 4242</span>
-                      <span className="text-[10px] font-sans font-bold text-emerald-400">
-                        כרטיס שמור בדפדפן
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="px-3.5 py-2 rounded-xl bg-slate-900/50 backdrop-blur-sm border border-slate-700/50 text-xs text-slate-300 font-mono text-center">
-                        12/28
-                      </div>
-                      <div className="px-3.5 py-2 rounded-xl bg-slate-900/50 backdrop-blur-sm border border-slate-700/50 text-xs text-slate-300 font-mono text-center">
-                        CVV: •••
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={isProcessing}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleExecutePayment('card');
-                    }}
-                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-[0_4px_0_#b45309] hover:brightness-110 active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                        <span>מעבד תשלום מאובטח...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="w-3.5 h-3.5 text-slate-950" />
-                        <span>אישור תשלום {checkoutPack.priceDisplay} ופתיחת החבילה 🔒</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Security line */}
-                <div className="flex flex-col items-center justify-center text-center gap-1 text-[11px] text-slate-400 pt-1">
-                  <span className="flex items-center gap-1 font-medium">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>תשלום מאובטח ומוצפן 256-Bit SSL 🔒</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    העסקה מאושרת מיידית והחבילה תתווסף למאגר הקלפים בכל מכשירי החדר
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       ) : (
-        /* ================= LAYER 3: MAIN STORE VIEW ================= */
+        /* ================= LAYER 2: MAIN STORE VIEW ================= */
         <div className="flex flex-col w-full h-full overflow-hidden">
           {/* סרגל עליון קבוע ונעול לרוחב 100% */}
           <div className="flex-shrink-0 w-full bg-[#121626] border-b border-purple-500/20 px-4 py-3 flex items-center justify-between z-20">
@@ -570,9 +372,17 @@ export const StoreModal: React.FC<StoreModalProps> = ({
             </button>
           </div>
 
+          {/* הודעת הצלחה / התראה אם נפתחו כרטיסים */}
+          {bonusSuccessToast && (
+            <div className="flex-shrink-0 w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs py-2.5 px-4 text-center shadow-lg flex items-center justify-center gap-2 animate-fadeIn z-30">
+              <Sparkles className="w-4 h-4 text-amber-200" />
+              <span>{bonusSuccessToast}</span>
+            </div>
+          )}
+
           {/* שטח תוכן נגלל שתופס 100% רוחב */}
           <div className="flex-1 w-full max-w-md mx-auto overflow-y-auto px-4 py-4 space-y-4 overscroll-contain relative z-10">
-            {/* Header: תיאור ומצב מאגר */}
+            {/* Header: תיאור ומצב מאגר מדויק (10 או 20 קלפים) */}
             <div className="text-center pt-1">
               <p className="text-xs text-purple-200/80 font-medium">
                 Time To Guess Premium Edition
@@ -590,56 +400,84 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                 </p>
               )}
 
-              {/* סרגל סטטוס VIP ומספר קלפים פעילים */}
+              {/* סרגל סטטוס VIP ומספר קלפים פעילים - מציג 10 או בדיוק 20 */}
               <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
-                <div className="px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 flex items-center gap-1.5 text-xs shadow-sm">
+                <div className="px-3.5 py-1.5 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 flex items-center gap-1.5 text-xs shadow-sm">
                   <Check className="w-3.5 h-3.5 text-emerald-400" strokeWidth={3} />
                   <span className="font-bold">
-                    {isEn ? 'Unlocked Cards:' : 'קלפים פתוחים:'}
+                    {isEn ? 'Unlocked Cards in Pool:' : 'קלפים פתוחים במאגר:'}
                   </span>
                   <span className="font-black text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]">
                     {totalUnlockedCards}
                   </span>
                 </div>
 
-                {isAllVipUnlocked ? (
-                  <div className="px-3 py-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 font-black text-xs flex items-center gap-1.5 shadow-sm">
-                    <Crown className="w-3.5 h-3.5 text-amber-950 fill-amber-950" />
-                    <span>VIP ACTIVE</span>
+                {hasClaimedBonus ? (
+                  <div className="px-3 py-1.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{isEn ? '20 Cards Active' : 'בונוס 20 קלפים פעיל ✔️'}</span>
                   </div>
                 ) : (
-                  <div className="px-3 py-1 rounded-full bg-purple-950/70 border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-1.5">
+                  <div className="px-3 py-1.5 rounded-full bg-purple-950/70 border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-1.5">
                     <Crown className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{isEn ? 'Standard Edition' : 'גרסה רגילה'}</span>
+                    <span>{isEn ? 'Standard Edition (10 Cards)' : 'גרסה רגילה (10 קלפים)'}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* כרטיס מגה פאק VIP ברוחב מלא w-full */}
-            {!isAllVipUnlocked && (
-              <div className="w-full relative rounded-3xl p-4 sm:p-5 border border-amber-400/40 bg-gradient-to-b from-[#191834]/95 to-[#100f24]/95 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col gap-3">
-                <div className="flex items-center justify-between w-full">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black">
-                    <span>{isEn ? 'Best Value Deal' : 'המשתלם ביותר'}</span>
-                    <span>🔥</span>
-                  </div>
-                  <div className="w-9 h-9 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-lg">
-                    👑
-                  </div>
+            {/* כרטיס מגה פאק VIP / מתנת הבונוס ברוחב מלא w-full */}
+            <div className="w-full relative rounded-3xl p-4 sm:p-5 border border-amber-400/40 bg-gradient-to-b from-[#191834]/95 to-[#100f24]/95 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col gap-3">
+              <div className="flex items-center justify-between w-full">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black">
+                  <span>
+                    {hasClaimedBonus
+                      ? (isEn ? 'Bonus Claimed (20/20 in Deck) ✔️' : 'מימשת את מתנת 10 הקלפים הנוספים (20/20 פעילים במאגר) ✔️')
+                      : (isEn ? 'Special Gift Available' : 'מתנה מיוחדת זמינה')}
+                  </span>
+                  <span>{hasClaimedBonus ? '✔️' : '🎁'}</span>
                 </div>
-
-                <div className="text-right">
-                  <h3 className="text-base sm:text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-500 leading-snug">
-                    {isEn ? 'VIP Mega Pack – All Decks Forever' : 'מגה פאק VIP – כל המאגרים לתמיד'}
-                  </h3>
-                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                    {isEn
-                      ? 'Unlocks all cards, animals, professions, foods, and global expansions with a single click! Saves over 50%.'
-                      : 'פותח את כל הקלפים, חיות, מקצועות, מאכלים והרחבות עולמיות בלחיצה אחת! חסכון של מעל 50%.'}
-                  </p>
+                <div className="w-9 h-9 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-lg">
+                  👑
                 </div>
+              </div>
 
+              <div className="text-right">
+                <h3 className="text-base sm:text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-500 leading-snug">
+                  {hasClaimedBonus
+                    ? (isEn ? 'Bonus Active: 20 Cards in Your Deck!' : 'מימשת את מתנת 10 הקלפים הנוספים (20/20 פעילים במאגר) ✔️')
+                    : (isEn ? 'VIP Mega Pack – Get 10 Bonus Cards Now!' : 'מגה פאק VIP – כל המאגרים לתמיד')}
+                </h3>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  {hasClaimedBonus
+                    ? (isEn
+                        ? 'Your 10 free bonus cards are active in every match! Remaining packs will unlock upon full store launch.'
+                        : '10 קלפי הבונוס שלך פעילים בכל משחק! שאר החבילות ייפתחו במערכת התשלומים.')
+                    : (isEn
+                        ? 'Unlocks all cards, animals, professions, foods, and global expansions! Try 10 cards free now.'
+                        : 'פותח את כל הקלפים, חיות, מקצועות, מאכלים והרחבות עולמיות! קבלו 10 קלפים נוספים במתנה כבר עכשיו.')}
+                </p>
+              </div>
+
+              {hasClaimedBonus ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    sounds.soundKeypress();
+                    setBonusSuccessToast(
+                      isEn
+                        ? "You've already received 10 free cards! The remaining packs will unlock upon payment system launch."
+                        : "כבר קיבלת 10 קלפים במתנה! שאר החבילות ייפתחו עם השקת מערכת התשלומים."
+                    );
+                    setTimeout(() => setBonusSuccessToast(null), 4500);
+                  }}
+                  className="w-full mt-1 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-amber-300 font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>{isEn ? 'Bonus Active on Your Account 🎁' : 'הבונוס כבר פעיל בחשבונך 🎁'}</span>
+                  <span>✔️</span>
+                </button>
+              ) : (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -648,11 +486,11 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                   }}
                   className="w-full mt-1 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black text-sm shadow-[0_4px_0_#b45309] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer hover:brightness-105"
                 >
-                  <span>{isEn ? 'Unlock VIP for ₪12.90' : 'פתח VIP ב-₪12.90 בלבד'}</span>
-                  <span>⚡</span>
+                  <span>{isEn ? 'Claim 10 Free Bonus Cards! 🚀' : 'פתחו לי 10 קלפים במתנה! 🚀'}</span>
+                  <span>🎁</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* כרטיסי החבילות ברוחב מלא w-full */}
             <div className="w-full space-y-4">
@@ -774,12 +612,18 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                           e.stopPropagation();
                           handleOpenCheckout(pack);
                         }}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black text-xs shadow-[0_4px_0_#b45309] active:translate-y-[2px] active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer hover:brightness-105"
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                          hasClaimedBonus
+                            ? 'bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-200/90 shadow-sm'
+                            : 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 shadow-[0_4px_0_#b45309] active:translate-y-[2px] active:shadow-none hover:brightness-105'
+                        }`}
                       >
-                        <span>{isEn ? 'Purchase Now' : 'רכישה עכשיו'}</span>
-                        <span className="bg-black/15 px-1.5 py-0.5 rounded-md">
-                          {pack.priceDisplay}
+                        <span>
+                          {hasClaimedBonus
+                            ? (isEn ? 'Available on Full Launch 🔒' : 'בקרוב בהשקה הרשמית 🔒')
+                            : (isEn ? 'Get 10 Cards Free' : 'קבל 10 קלפים במתנה')}
                         </span>
+                        <span>{hasClaimedBonus ? '🔒' : '🎁'}</span>
                       </button>
                     )}
                   </div>
@@ -814,6 +658,15 @@ export const StoreModal: React.FC<StoreModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Special Bonus Gift Modal for Pre-Launch Market Validation */}
+      <SpecialBonusModal
+        isOpen={isBonusModalOpen}
+        onClose={() => setIsBonusModalOpen(false)}
+        onSuccess={handleBonusSuccess}
+        language={language}
+        targetPack={bonusTargetPack}
+      />
     </div>
   );
 

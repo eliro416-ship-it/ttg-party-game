@@ -147,14 +147,18 @@ export const GAME_CARDS: CardItem[] = ALL_GAME_CARDS.map((c) => ({
   fallback: generateCardFallback(c.word, c.category, EMOJI_MAP[c.word] || '✨'),
 }));
 
-// 1. Definition of Playable Cards according to unlocked packs
+// 1. Definition of Playable Cards according to unlocked packs (strictly 10 or 20 cards)
 export function getPlayableCards(unlockedPackIds: string[] = ['starter_free']): CardItem[] {
-  // starter_free is always included
-  const allowedPacks = new Set(['starter_free', ...(unlockedPackIds || [])]);
-  return GAME_CARDS.filter((card) => {
+  const hasClaimed = typeof localStorage !== 'undefined' && localStorage.getItem('ttg_bonus_claimed') === 'true';
+  const effectivePacks = hasClaimed ? ['starter_free', 'animals_pro'] : ['starter_free'];
+  const allowedPacks = new Set(effectivePacks);
+
+  const cards = GAME_CARDS.filter((card) => {
     const raw = ALL_GAME_CARDS.find((c) => c.id === card.id);
     return raw ? allowedPacks.has(raw.packId) : false;
   });
+
+  return cards.slice(0, hasClaimed ? 20 : 10);
 }
 
 // 2. Random Round Card Selector

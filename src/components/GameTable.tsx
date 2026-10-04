@@ -183,6 +183,10 @@ export const GameTable: React.FC<GameTableProps> = ({
     return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   }, [syncedScoreboardPlayers, players, serverTurnData?.players]);
 
+  // Live cards counter logic: cards remaining in match from host deck (10 or 20)
+  const totalCards = cards && cards.length > 0 ? cards.length : 10;
+  const remainingCards = Math.max(0, totalCards - currentCardIndex);
+
   // Active card: matched authoritatively from CARDS_POOL by cardId or activeTurnCard
   const [activeTurnCard, setActiveTurnCard] = useState<any | null>(null);
   const activeCard = useMemo(() => {
@@ -1176,61 +1180,75 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* Top action bar: Controlled layout with padding, overflow safety, and strict compact dimensions */}
-      <div className="w-full px-2 box-border overflow-hidden flex items-center justify-between gap-1 sm:gap-1.5 mb-2.5">
-        {/* 1. Leave Game */}
-        <button
-          onClick={onLeaveGame}
-          className="btn-3d btn-3d-dark h-9 px-2 sm:px-2.5 rounded-xl text-xs font-bold text-slate-200 hover:text-rose-300 flex items-center justify-center gap-1 cursor-pointer shadow-sm shrink-0"
-          title={isEn ? 'Leave Game' : 'צא מהמשחק'}
-        >
-          <LogOut className={`w-3.5 h-3.5 text-slate-300 ${isEn ? '' : 'rotate-180'}`} strokeWidth={2.2} />
-          <span className="hidden xs:inline">{t.leaveGame}</span>
-        </button>
-
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* 2. Room PIN badge - ALWAYS displayed in network room */}
-          <div
-            className="btn-3d btn-3d-dark h-9 px-2 sm:px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1 shadow-sm shrink-0 select-text"
-            title={`Room PIN: ${effectivePin}`}
+      {/* Top action bar: Controlled layout with PIN, Live Cards Counter, and Exit */}
+      <div className="flex items-center justify-between w-full px-2 py-2 gap-1.5 select-none" dir="ltr">
+        {/* Left side: Utility Controls (Sound, WhatsApp, Language) */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={onToggleMute}
+            className="w-8 h-8 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 text-purple-200 flex items-center justify-center text-xs cursor-pointer shadow-sm transition-all"
+            title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
           >
-            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" strokeWidth={2.2} />
-            <span className="text-emerald-300 font-mono tracking-wider font-black text-[11px] sm:text-xs">PIN: {effectivePin}</span>
-          </div>
+            {isMuted ? '🔇' : '🔊'}
+          </button>
 
-          {/* 3. Language Switcher */}
+          <WhatsAppShareButton
+            pin={currentPin}
+            language={language}
+            variant="icon"
+            className="!h-8 !w-8 !min-w-[32px] !rounded-xl !bg-emerald-950/60 !border !border-emerald-500/30 !text-emerald-400 !text-xs !p-0"
+          />
+
           {onToggleLanguage && (
             <button
               onClick={() => {
                 sounds.soundKeypress();
                 onToggleLanguage();
               }}
-              className="btn-3d btn-3d-dark h-9 w-9 min-w-[36px] rounded-xl text-xs font-bold text-white flex items-center justify-center cursor-pointer shadow-sm shrink-0"
+              className="w-8 h-8 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 text-purple-200 flex items-center justify-center text-xs cursor-pointer shadow-sm transition-all"
               title={isEn ? 'Switch to Hebrew' : 'עבור לאנגלית'}
             >
-              <Globe className="w-3.5 h-3.5 text-pink-300 shrink-0" strokeWidth={2.2} />
+              🌐
             </button>
           )}
+        </div>
 
-          {/* 4. WhatsApp Share Room Button */}
-          <WhatsAppShareButton
-            pin={currentPin}
-            language={language}
-            variant="icon"
-            className="!h-9 !w-9 !min-w-[36px]"
-          />
-
-          {/* 5. Sound Toggle - Fixed compact w-9 h-9 size (36px x 36px) prevents any overflow */}
-          <button
-            onClick={onToggleMute}
-            className="btn-3d btn-3d-dark h-9 w-9 min-w-[36px] rounded-xl flex items-center justify-center text-slate-300 cursor-pointer shadow-sm shrink-0"
-            title={isMuted ? (isEn ? 'Unmute' : 'הפעל צלילים') : (isEn ? 'Mute' : 'השתק')}
+        {/* Right side: PIN, Live Cards Counter, and Exit Button */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Room PIN */}
+          <div
+            className="px-3 py-1.5 rounded-xl bg-purple-950/70 border border-purple-500/30 text-purple-200 text-xs font-black tracking-wider flex items-center gap-1 select-text"
+            title={`Room PIN: ${effectivePin}`}
           >
-            {isMuted ? (
-              <VolumeX className="w-4 h-4 text-rose-400" strokeWidth={2.2} />
-            ) : (
-              <Volume2 className="w-4 h-4 text-emerald-400" strokeWidth={2.2} />
-            )}
+            <span className="text-[10px] text-purple-400">PIN:</span>
+            <span className="font-mono text-emerald-300">{effectivePin}</span>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+          </div>
+
+          {/* מונה קלפים חי - בין ה-PIN לכפתור היציאה */}
+          <div
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-300 shadow-[0_2px_8px_rgba(245,158,11,0.2)]"
+            title={isEn ? `Cards remaining: ${remainingCards} of ${totalCards}` : `קלפים שנותרו למשחק: ${remainingCards} מתוך ${totalCards}`}
+          >
+            <span className="text-xs">🃏</span>
+            <span className="text-xs font-black text-amber-200">
+              {remainingCards}
+            </span>
+            <span className="text-[10px] text-amber-300/60">
+              /{totalCards}
+            </span>
+          </div>
+
+          {/* כפתור יציאה חזרה [->] */}
+          <button
+            onClick={() => {
+              sounds.soundKeypress();
+              onLeaveGame();
+            }}
+            className="w-8 h-8 rounded-xl bg-purple-950/60 hover:bg-rose-950/60 border border-purple-500/30 hover:border-rose-500/40 text-purple-200 hover:text-rose-300 flex items-center justify-center text-sm font-bold active:scale-95 transition-all cursor-pointer"
+            title={isEn ? 'Leave Game' : 'יציאה'}
+          >
+            ➜
           </button>
         </div>
       </div>

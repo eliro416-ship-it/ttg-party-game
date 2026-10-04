@@ -87,12 +87,9 @@ export const RAW_PACKS_METADATA: Omit<CardPack, 'isUnlocked'>[] = [
 // Read unlocked pack IDs from localStorage
 export function getUnlockedPackIds(): string[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return ['starter_free'];
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      if (!parsed.includes('starter_free')) parsed.unshift('starter_free');
-      return parsed;
+    const hasClaimedBonus = typeof localStorage !== 'undefined' && localStorage.getItem('ttg_bonus_claimed') === 'true';
+    if (hasClaimedBonus) {
+      return ['starter_free', 'animals_pro'];
     }
   } catch {
     // fallback
@@ -102,68 +99,41 @@ export function getUnlockedPackIds(): string[] {
 
 // Unlock a specific pack ID and persist to localStorage
 export function unlockPack(packId: string): string[] {
-  const current = getUnlockedPackIds();
-  const next = new Set(current);
-  next.add(packId);
-
-  // If VIP Mega pack is purchased, unlock all packs automatically!
-  if (packId === 'pack_vip') {
-    next.add('starter_free');
-    next.add('animals_pro');
-    next.add('food_and_fun');
-    next.add('pack_vip');
-  }
-
-  const updated = Array.from(next);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem('ttg_bonus_claimed', 'true');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(['starter_free', 'animals_pro']));
   } catch {
     // LocalStorage quota or blocked
   }
-  return updated;
+  return ['starter_free', 'animals_pro'];
 }
 
 // Check if a pack is unlocked
 export function isPackUnlocked(packId: string): boolean {
   const unlocked = getUnlockedPackIds();
-  if (unlocked.includes('pack_vip')) return true;
   return unlocked.includes(packId);
 }
 
-// Return all packs populated with current unlock status
+// Return all packs populated with current unlock status (strictly max 20 cards)
 export function getAllPacks(): CardPack[] {
   const unlocked = getUnlockedPackIds();
-  const isVipUnlocked = unlocked.includes('pack_vip');
 
   return RAW_PACKS_METADATA.map((p) => ({
     ...p,
-    isUnlocked: isVipUnlocked || unlocked.includes(p.id)
+    isUnlocked: unlocked.includes(p.id)
   }));
 }
 
 // Aggregates all unique active cards from currently unlocked packs
 export function getActiveUnlockedCards(): CardItem[] {
-  const packs = getAllPacks();
-  const cardMap = new Map<string, CardItem>();
-
-  for (const pack of packs) {
-    if (pack.isUnlocked) {
-      for (const card of pack.cards) {
-        if (!cardMap.has(card.word)) {
-          cardMap.set(card.word, card);
-        }
-      }
-    }
-  }
-
-  const result = Array.from(cardMap.values());
-  // If for any reason empty, return starter cards
-  return result.length > 0 ? result : STARTER_CARDS;
+  const hasClaimed = typeof localStorage !== 'undefined' && localStorage.getItem('ttg_bonus_claimed') === 'true';
+  return hasClaimed ? GAME_CARDS.slice(0, 20) : GAME_CARDS.slice(0, 10);
 }
 
 // Reset unlocked packs for testing/restoring defaults
 export function resetPacks(): void {
   try {
+    localStorage.removeItem('ttg_bonus_claimed');
     localStorage.setItem(STORAGE_KEY, JSON.stringify(['starter_free']));
   } catch {
     // ignore

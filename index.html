@@ -130,6 +130,14 @@
         });
       }
     </script>
+    <!-- Netlify Forms pre-rendering hook for lead collection -->
+    <form name="ttg_early_leads" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input type="text" name="name" />
+      <input type="text" name="country" />
+      <input type="email" name="email" />
+      <input type="text" name="unlockedPack" />
+      <input type="text" name="bot-field" />
+    </form>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
