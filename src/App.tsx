@@ -15,6 +15,7 @@ import { CardsGalleryModal } from './components/CardsGalleryModal';
 import { StoreModal } from './components/StoreModal';
 import { AnimatedQuestionMarksBackground } from './components/AnimatedQuestionMarksBackground';
 import { sounds } from './utils/audio';
+import { useWakeLock } from './hooks/useWakeLock';
 import {
   getSupabaseRoomChannel,
   getCurrentSupabaseChannel,
@@ -242,6 +243,10 @@ export default function App() {
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState<boolean>(false);
   const [gamePhase, setGamePhase] = useState<'PLAYING' | 'GAME_OVER'>('PLAYING');
   const [isCardsGalleryOpen, setIsCardsGalleryOpen] = useState<boolean>(false);
+
+  // Keep phone/device screen awake during active gameplay (Screen Wake Lock API)
+  const isGameActive = (screen === 'game' || (joinedRoom && hostStep === 'game')) && gamePhase !== 'GAME_OVER';
+  useWakeLock(isGameActive);
   const [isStoreOpen, setIsStoreOpen] = useState<boolean>(false);
   const [storeUpsellReason, setStoreUpsellReason] = useState<string | undefined>(undefined);
   const [unlockedPacksVersion, setUnlockedPacksVersion] = useState<number>(0);
@@ -1242,7 +1247,7 @@ export default function App() {
   const activePlayer = players[activePlayerIndex] || players[0] || { id: 'p-host', name: 'מארח', avatar: '👑', score: 0, streak: 0, isHost: true, isOnline: true };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-3 sm:p-5 bg-gradient-to-br from-[#120E2E] via-[#2A1045] to-[#0A0D1A] text-white relative overflow-hidden">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-3 sm:p-5 bg-gradient-to-br from-[#120E2E] via-[#2A1045] to-[#0A0D1A] text-white relative overflow-hidden">
       {/* Colorful Animated Question Marks Background */}
       <AnimatedQuestionMarksBackground />
 

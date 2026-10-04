@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  X,
   Check,
   Crown,
   ShieldCheck,
-  Zap,
   CreditCard,
   RotateCcw,
   Eye,
-  ChevronLeft,
-  ChevronRight,
   Lock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -30,26 +27,26 @@ const renderPackBadgeIcon = (packId: string) => {
   switch (packId) {
     case 'starter_free':
       return (
-        <div className="w-13 h-13 p-2.5 rounded-2xl bg-gradient-to-br from-amber-500/20 via-purple-900/60 to-slate-950 border border-amber-400/40 shadow-[0_4px_12px_rgba(245,158,11,0.25)] flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 p-2 rounded-2xl bg-gradient-to-br from-amber-500/20 via-purple-900/60 to-slate-950 border border-amber-400/40 shadow-[0_4px_12px_rgba(245,158,11,0.25)] flex items-center justify-center shrink-0">
           <span className="text-2xl drop-shadow-[0_2px_8px_rgba(245,158,11,0.6)]">🎁</span>
         </div>
       );
     case 'animals_pro':
       return (
-        <div className="w-13 h-13 p-2.5 rounded-2xl bg-gradient-to-br from-orange-500/20 via-purple-900/60 to-slate-950 border border-orange-400/40 shadow-[0_4px_12px_rgba(249,115,22,0.25)] flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 p-2 rounded-2xl bg-gradient-to-br from-orange-500/20 via-purple-900/60 to-slate-950 border border-orange-400/40 shadow-[0_4px_12px_rgba(249,115,22,0.25)] flex items-center justify-center shrink-0">
           <span className="text-2xl drop-shadow-[0_2px_8px_rgba(249,115,22,0.6)]">🦁</span>
         </div>
       );
     case 'food_and_fun':
       return (
-        <div className="w-13 h-13 p-2.5 rounded-2xl bg-gradient-to-br from-emerald-500/20 via-purple-900/60 to-slate-950 border border-emerald-400/40 shadow-[0_4px_12px_rgba(16,185,129,0.25)] flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 p-2 rounded-2xl bg-gradient-to-br from-emerald-500/20 via-purple-900/60 to-slate-950 border border-emerald-400/40 shadow-[0_4px_12px_rgba(16,185,129,0.25)] flex items-center justify-center shrink-0">
           <span className="text-2xl drop-shadow-[0_2px_8px_rgba(16,185,129,0.6)]">🍕</span>
         </div>
       );
     case 'pack_vip':
     default:
       return (
-        <div className="w-13 h-13 p-2.5 rounded-2xl bg-gradient-to-br from-yellow-500/20 via-purple-900/60 to-slate-950 border border-yellow-400/40 shadow-[0_4px_12px_rgba(234,179,8,0.3)] flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 p-2 rounded-2xl bg-gradient-to-br from-yellow-500/20 via-purple-900/60 to-slate-950 border border-yellow-400/40 shadow-[0_4px_12px_rgba(234,179,8,0.3)] flex items-center justify-center shrink-0">
           <span className="text-2xl drop-shadow-[0_2px_8px_rgba(234,179,8,0.7)]">👑</span>
         </div>
       );
@@ -57,7 +54,7 @@ const renderPackBadgeIcon = (packId: string) => {
 };
 
 const FloatingCardsBackground: React.FC<{ opacityClass?: string }> = ({
-  opacityClass = 'opacity-30',
+  opacityClass = 'opacity-25',
 }) => {
   const cards = [
     { id: 'f2', word: 'אריה', img: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=600&auto=format&fit=crop&q=80', left: '3%', duration: '24s', delay: '-3s', rot: '-5deg', size: 'w-18 h-24' },
@@ -224,29 +221,30 @@ export const StoreModal: React.FC<StoreModalProps> = ({
     if (onPacksUpdated) onPacksUpdated();
   };
 
-  return (
+  const modalContent = (
     <div
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 99999,
-        overflow: 'hidden',
+        width: '100vw',
+        height: '100dvh',
       }}
-      className="flex flex-col w-full h-[100dvh] text-white relative select-none animate-fadeIn bg-[#090b14]/75 backdrop-blur-md"
+      className="fixed inset-0 z-50 w-screen h-[100dvh] bg-[#0c0f17]/95 backdrop-blur-md flex flex-col justify-start items-stretch overflow-hidden select-none text-white"
       onClick={(e) => e.stopPropagation()}
       dir={isEn ? 'ltr' : 'rtl'}
     >
       {/* רקע קלפים מרחפים בעדינות */}
-      <FloatingCardsBackground opacityClass="opacity-30" />
+      <FloatingCardsBackground opacityClass="opacity-25" />
 
       {/* ================= LAYER 1: PACK INSPECTION (FULL-SCREEN ISOLATED MODAL) ================= */}
       {inspectingPack ? (
         <div
-          className="absolute inset-0 z-50 bg-[#0c0f17] flex flex-col w-full h-full select-none animate-fadeIn"
+          className="absolute inset-0 z-30 bg-[#0c0f17] flex flex-col w-full h-full select-none animate-fadeIn"
           onClick={(e) => e.stopPropagation()}
         >
           {/* סרגל עליון נעול ואטום */}
-          <div className="flex-shrink-0 w-full bg-[#131826] border-b border-purple-500/20 px-4 py-3 flex items-center justify-between shadow-xl">
+          <div className="flex-shrink-0 w-full bg-[#121626] border-b border-purple-500/20 px-4 py-3 flex items-center justify-between shadow-xl z-20">
             <div className="flex items-center gap-2.5">
               <span className="text-2xl">{inspectingPack.icon}</span>
               <div>
@@ -255,8 +253,8 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                 </h2>
                 <span className="text-[11px] text-slate-400">
                   {inspectingPack.id === 'pack_vip'
-                    ? 'כל 30 הקלפים כלולים'
-                    : '10 קלפים כלולים בחבילה זו'}
+                    ? (isEn ? 'All 30 cards included' : 'כל 30 הקלפים כלולים')
+                    : (isEn ? '10 cards included in this pack' : '10 קלפים כלולים בחבילה זו')}
                 </span>
               </div>
             </div>
@@ -265,10 +263,10 @@ export const StoreModal: React.FC<StoreModalProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 sounds.soundKeypress();
-                setInspectingPack(null); // מחזיר אך ורק לדף החנות!
+                setInspectingPack(null);
               }}
-              className="w-9 h-9 rounded-full bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-sm active:scale-90 cursor-pointer hover:text-white"
-              title="חזרה לחנות"
+              className="w-8 h-8 rounded-full bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-xs active:scale-90 cursor-pointer hover:text-white"
+              title={isEn ? 'Back to Store' : 'חזרה לחנות'}
             >
               ✕
             </button>
@@ -276,7 +274,7 @@ export const StoreModal: React.FC<StoreModalProps> = ({
 
           {/* שטח גלילה נקי לקלפים בלבד */}
           <div className="flex-1 overflow-y-auto p-4 overscroll-contain">
-            <div className="grid grid-cols-2 gap-3 pb-8 max-w-2xl mx-auto">
+            <div className="grid grid-cols-2 gap-3 pb-8 max-w-md mx-auto">
               {(inspectingPack.id === 'pack_vip'
                 ? ALL_GAME_CARDS
                 : ALL_GAME_CARDS.filter((c) => c.packId === inspectingPack.id)
@@ -296,7 +294,7 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                   <div className="p-2.5 text-center bg-[#111624]">
                     <div className="text-sm font-black text-amber-200">{card.word}</div>
                     <div className="text-[10px] text-slate-400 mt-0.5">
-                      {card.category} • {card.word.length} אותיות
+                      {card.category} • {card.word.length} {isEn ? 'letters' : 'אותיות'}
                     </div>
                   </div>
                 </div>
@@ -306,9 +304,9 @@ export const StoreModal: React.FC<StoreModalProps> = ({
 
           {/* סרגל תחתון נעול: כפתור רכישה (אם נעולה) או חיווי פעיל */}
           {!inspectingPack.isUnlocked ? (
-            <div className="flex-shrink-0 w-full bg-[#131826] border-t border-purple-500/20 p-3.5 flex items-center justify-between shadow-2xl">
+            <div className="flex-shrink-0 w-full bg-[#131826] border-t border-purple-500/20 p-3.5 flex items-center justify-between shadow-2xl z-20">
               <div>
-                <div className="text-[10px] text-slate-400">מחיר חד-פעמי</div>
+                <div className="text-[10px] text-slate-400">{isEn ? 'One-time price' : 'מחיר חד-פעמי'}</div>
                 <div className="text-sm font-black text-amber-300">
                   {inspectingPack.priceDisplay || `₪${inspectingPack.price}`}
                 </div>
@@ -321,17 +319,17 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                   setInspectingPack(null);
                   handleOpenCheckout(pack);
                 }}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-black text-xs shadow-[0_3px_0_#b45309] active:translate-y-[1px] cursor-pointer hover:brightness-105"
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-black text-xs shadow-md active:scale-95 transition-transform cursor-pointer"
               >
-                רכישה עכשיו ⚡
+                {isEn ? 'Purchase Pack' : 'רכישת החבילה ⚡'}
               </button>
             </div>
           ) : (
-            <div className="flex-shrink-0 w-full bg-[#131826] border-t border-purple-500/20 p-3.5 flex items-center justify-between shadow-2xl">
-              <div className="text-xs font-bold text-slate-300">סטטוס חבילה</div>
+            <div className="flex-shrink-0 w-full bg-[#131826] border-t border-purple-500/20 p-3.5 flex items-center justify-between shadow-2xl z-20">
+              <div className="text-xs font-bold text-slate-300">{isEn ? 'Pack Status' : 'סטטוס חבילה'}</div>
               <div className="px-4 py-1.5 rounded-xl bg-emerald-600/30 text-emerald-300 border border-emerald-500/50 font-bold text-xs flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 text-emerald-400" strokeWidth={3} />
-                <span>החבילה פתוחה ופעילה ✓</span>
+                <span>{isEn ? 'Pack Active & Unlocked ✓' : 'החבילה פתוחה ופעילה ✓'}</span>
               </div>
             </div>
           )}
@@ -339,39 +337,36 @@ export const StoreModal: React.FC<StoreModalProps> = ({
       ) : checkoutPack ? (
         /* ================= LAYER 2: DEDICATED CHECKOUT VIEW ================= */
         <div
-          className="absolute inset-0 z-50 bg-[#090b14]/80 backdrop-blur-md pt-8 pb-4 px-4 overflow-y-auto flex flex-col items-center justify-start select-none animate-fadeIn"
+          className="absolute inset-0 z-30 bg-[#0c0f17]/95 backdrop-blur-md flex flex-col w-full h-full overflow-y-auto select-none animate-fadeIn"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* רקע קלפים מרחפים בתוך עמוד הרכישה */}
-          <FloatingCardsBackground opacityClass="opacity-25" />
-
-          <div className="w-full max-w-lg relative z-10 flex flex-col gap-3">
-            {/* בלוק הכותרת העליונה (הקפסולה הסגולה) הממורכז */}
-            <div className="relative w-full rounded-2xl border border-purple-500/30 bg-[#121024]/70 p-3 flex items-center justify-center">
-              {/* כפתור סגירה מיושר אבסולוטית לשמאל */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  sounds.soundKeypress();
-                  setCheckoutPack(null);
-                  setPurchaseSuccess(null);
-                }}
-                className="absolute left-3 w-8 h-8 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/60 flex items-center justify-center font-bold text-xs active:scale-90 transition-transform cursor-pointer hover:text-white"
-                title="חזרה לחנות"
-              >
-                ✕
-              </button>
-
-              {/* כותרת ממורכזת באופן מוחלט במרכז המסגרת */}
-              <span className="text-center font-black tracking-widest text-amber-300 text-sm drop-shadow-[0_2px_4px_rgba(245,158,11,0.3)]">
-                TIME TO GUESS
+          {/* סרגל עליון */}
+          <div className="flex-shrink-0 w-full bg-[#121626] border-b border-purple-500/20 px-4 py-3 flex items-center justify-between shadow-xl z-20">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💳</span>
+              <span className="text-sm font-black text-amber-300">
+                {isEn ? 'Checkout' : 'קופת רכישה מאובטחת'}
               </span>
             </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                sounds.soundKeypress();
+                setCheckoutPack(null);
+                setPurchaseSuccess(null);
+              }}
+              className="w-8 h-8 rounded-full bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-xs active:scale-90 cursor-pointer hover:text-white"
+              title={isEn ? 'Back to Store' : 'חזרה לחנות'}
+            >
+              ✕
+            </button>
+          </div>
 
+          <div className="flex-1 w-full max-w-md mx-auto overflow-y-auto px-4 py-4 space-y-4 overscroll-contain">
             {/* Header Title */}
-            <div className="text-center pt-1 pb-1">
-              <h2 className="mt-1 text-center text-xl font-black text-amber-300 drop-shadow-[0_2px_8px_rgba(234,179,8,0.4)]">
+            <div className="text-center pt-1">
+              <h2 className="text-xl font-black text-amber-300 drop-shadow-[0_2px_8px_rgba(234,179,8,0.4)]">
                 {isEn ? 'Complete Pack Purchase' : 'השלמת רכישת חבילת קלפים'}
               </h2>
               <p className="text-xs text-purple-200/80 mt-0.5 font-medium">
@@ -379,23 +374,16 @@ export const StoreModal: React.FC<StoreModalProps> = ({
               </p>
             </div>
 
-            {/* Order Summary Card (Frosted Glass Inline Style) */}
-            <div
-              style={{
-                backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-              }}
-              className="rounded-3xl p-5 border border-amber-400/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)] my-3 flex flex-col gap-3.5"
-            >
+            {/* Order Summary Card */}
+            <div className="w-full rounded-3xl p-4 sm:p-5 border border-amber-400/30 bg-[#121626]/90 shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-3">
               <div className="flex items-center gap-3 pb-3 border-b border-purple-500/20">
                 {renderPackBadgeIcon(checkoutPack.id)}
                 <div className="flex-1">
-                  <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                  <h3 className="text-base font-black text-white flex items-center gap-2">
                     <span>{checkoutPack.title}</span>
                   </h3>
                   <p className="text-xs text-amber-300/90 font-bold mt-0.5">
-                    ✨ פותח 10 קלפי משחק חדשים לצמיתות!
+                    ✨ {isEn ? 'Permanently unlocks 10 new cards!' : 'פותח 10 קלפי משחק חדשים לצמיתות!'}
                   </p>
                 </div>
               </div>
@@ -404,76 +392,58 @@ export const StoreModal: React.FC<StoreModalProps> = ({
               <div className="space-y-1.5 text-xs text-slate-300">
                 <div className="flex items-center gap-2">
                   <span className="text-emerald-400 font-bold">✓</span>
-                  <span>10 תמונות HD מאומתות מרחבי העולם</span>
+                  <span>{isEn ? '10 Verified HD Photos' : '10 תמונות HD מאומתות'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-emerald-400 font-bold">✓</span>
-                  <span>זמין בכל משחק (אונליין ומשחק עם חברים)</span>
+                  <span>{isEn ? 'Available in every game' : 'זמין בכל משחק עם חברים'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-emerald-400 font-bold">✓</span>
-                  <span>תשלום חד-פעמי (ללא מנוי, ללא חידוש אוטומטי)</span>
+                  <span>{isEn ? 'One-time payment, no subscription' : 'תשלום חד-פעמי (ללא מנוי)'}</span>
                 </div>
               </div>
 
               {/* Total Price row */}
-              <div className="pt-3 border-t border-purple-500/20 flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-200">מחיר סופי:</span>
+              <div className="pt-2 border-t border-purple-500/20 flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-200">{isEn ? 'Total Price:' : 'מחיר סופי:'}</span>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-2xl font-black text-amber-300 drop-shadow-[0_2px_4px_rgba(234,179,8,0.4)]">
                     {checkoutPack.priceDisplay}
                   </span>
-                  <span className="text-[11px] text-slate-400 font-medium">חד-פעמי</span>
+                  <span className="text-[11px] text-slate-400 font-medium">{isEn ? 'one-time' : 'חד-פעמי'}</span>
                 </div>
               </div>
             </div>
 
             {/* Success celebration banner or payment methods */}
             {purchaseSuccess ? (
-              <div className="p-5 rounded-3xl bg-gradient-to-b from-emerald-900/90 to-emerald-950/90 border-2 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.4)] text-center animate-fadeIn flex flex-col items-center gap-3">
+              <div className="w-full p-5 rounded-3xl bg-gradient-to-b from-emerald-900/90 to-emerald-950/90 border-2 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.4)] text-center animate-fadeIn flex flex-col items-center gap-3">
                 <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center animate-bounce">
                   <Check className="w-8 h-8 text-emerald-300" strokeWidth={3} />
                 </div>
                 <div>
-                  <h4 className="text-lg font-black text-white">החבילה נפתחה בהצלחה! 🎉</h4>
+                  <h4 className="text-lg font-black text-white">{isEn ? 'Pack Unlocked Successfully! 🎉' : 'החבילה נפתחה בהצלחה! 🎉'}</h4>
                   <p className="text-xs text-emerald-200 mt-1 font-medium">
-                    כל 10 הקלפים החדשים של {checkoutPack.title} זמינים עכשיו במשחק!
+                    {isEn ? `All 10 new cards of ${checkoutPack.title} are now ready!` : `כל 10 הקלפים החדשים של ${checkoutPack.title} זמינים עכשיו במשחק!`}
                   </p>
                 </div>
-                <div className="flex gap-2 w-full pt-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const p = checkoutPack;
-                      setCheckoutPack(null);
-                      setPurchaseSuccess(null);
-                      setInspectingPack(p);
-                    }}
-                    className="flex-1 py-2.5 rounded-xl bg-slate-800 text-amber-300 font-bold text-xs border border-amber-400/40 hover:bg-slate-700 active:scale-95 transition-all cursor-pointer"
-                  >
-                    צפה בקלפי החבילה
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCheckoutPack(null);
-                      setPurchaseSuccess(null);
-                      onClose();
-                    }}
-                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black text-xs shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-                  >
-                    המשך למשחק 🎮
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    sounds.soundKeypress();
+                    setCheckoutPack(null);
+                    setPurchaseSuccess(null);
+                  }}
+                  className="w-full py-3 rounded-2xl bg-white text-emerald-950 font-black text-sm shadow-md active:scale-95 cursor-pointer mt-1"
+                >
+                  {isEn ? 'Back to Store' : 'חזרה לחנות 🛍️'}
+                </button>
               </div>
             ) : (
-              /* Payment Options */
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-bold text-slate-300 px-1">בחר אמצעי תשלום מועדף:</span>
-
-                {/* 1. Bit Payment Button */}
+              <div className="w-full space-y-3">
+                {/* 1. Bit Button */}
                 <button
                   type="button"
                   disabled={isProcessing}
@@ -481,20 +451,18 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                     e.stopPropagation();
                     handleExecutePayment('bit');
                   }}
-                  className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-[#00A3E0] to-[#0082b8] hover:from-[#00b2f5] hover:to-[#0094d1] text-white font-black text-sm flex items-center justify-between shadow-[0_4px_14px_rgba(0,163,224,0.45)] border-t border-t-white/30 active:scale-98 transition-all cursor-pointer"
+                  className="w-full py-3 px-4 rounded-2xl bg-[#00B4D8] hover:bg-[#0096C7] text-white font-black text-sm flex items-center justify-between shadow-[0_4px_14px_rgba(0,180,216,0.35)] active:scale-98 transition-all cursor-pointer border border-white/20"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-white text-[#00A3E0] flex items-center justify-center font-black text-base shadow-sm">
-                      b
-                    </div>
-                    <span className="tracking-wide">תשלום מהיר ב-Bit</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-black">bit</span>
+                    <span>תשלום מהיר באפליקציית ביט</span>
                   </div>
-                  <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs font-black">
+                  <span className="bg-black/20 px-2 py-0.5 rounded-lg text-xs font-bold">
                     {checkoutPack.priceDisplay}
                   </span>
                 </button>
 
-                {/* 2. Apple Pay / Google Pay Button */}
+                {/* 2. Apple / Google Pay */}
                 <button
                   type="button"
                   disabled={isProcessing}
@@ -513,15 +481,8 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                   </span>
                 </button>
 
-                {/* 3. Secure Credit Card Option (Frosted Glass Inline Style) */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                  }}
-                  className="rounded-3xl p-5 border border-purple-500/25 shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-3"
-                >
+                {/* 3. Secure Credit Card Option */}
+                <div className="w-full rounded-3xl p-4 sm:p-5 border border-purple-500/25 bg-[#121626]/90 shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-3">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-300">
                     <span className="flex items-center gap-1.5">
                       <CreditCard className="w-4 h-4 text-amber-400" />
@@ -586,45 +547,43 @@ export const StoreModal: React.FC<StoreModalProps> = ({
         </div>
       ) : (
         /* ================= LAYER 3: MAIN STORE VIEW ================= */
-        <div className="flex-1 overflow-y-auto w-full flex flex-col items-center justify-start p-4 sm:p-6 pb-20">
-          <div className="w-full max-w-2xl bg-gradient-to-b from-[#181530]/85 via-[#101222]/85 to-[#0a0c16]/85 border border-amber-500/30 rounded-3xl p-4 sm:p-6 shadow-[0_16px_45px_rgba(0,0,0,0.8),0_0_50px_rgba(234,179,8,0.1)] relative z-10 backdrop-blur-sm">
-            {/* בלוק הכותרת העליונה (הקפסולה הסגולה) הממורכז */}
-            <div className="relative w-full rounded-2xl border border-purple-500/30 bg-[#121024]/70 p-3 flex items-center justify-center mb-3">
-              {/* כפתור סגירה מיושר אבסולוטית לשמאל */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  sounds.soundKeypress();
-                  onClose();
-                }}
-                className="absolute left-3 w-8 h-8 rounded-full bg-slate-800/80 text-slate-300 border border-slate-700/60 flex items-center justify-center font-bold text-xs active:scale-90 transition-transform cursor-pointer hover:text-white"
-                title={isEn ? 'Close' : 'סגור'}
-              >
-                ✕
-              </button>
-
-              {/* כותרת ממורכזת באופן מוחלט במרכז המסגרת */}
-              <span className="text-center font-black tracking-widest text-amber-300 text-sm drop-shadow-[0_2px_4px_rgba(245,158,11,0.3)]">
-                TIME TO GUESS
+        <div className="flex flex-col w-full h-full overflow-hidden">
+          {/* סרגל עליון קבוע ונעול לרוחב 100% */}
+          <div className="flex-shrink-0 w-full bg-[#121626] border-b border-purple-500/20 px-4 py-3 flex items-center justify-between z-20">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💎</span>
+              <span className="text-sm font-black text-amber-300">
+                {isEn ? 'Card Packs Store' : 'חנות חבילות הקלפים'}
               </span>
             </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                sounds.soundKeypress();
+                onClose();
+              }}
+              className="w-8 h-8 rounded-full bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-xs active:scale-90 cursor-pointer hover:text-white"
+              title={isEn ? 'Close' : 'סגור'}
+            >
+              ✕
+            </button>
+          </div>
 
-            {/* Header: כותרת מבריקה */}
-            <div className="text-center pt-1 pb-3 relative">
-              <h1 className="text-2xl font-black text-center bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500 bg-clip-text text-transparent drop-shadow-[0_2px_8px_rgba(234,179,8,0.4)]">
-                {isEn ? 'Card Packs Store' : 'חנות חבילות הקלפים'}
-              </h1>
-              <p className="text-xs text-center text-purple-200/80 mt-1 font-medium">
+          {/* שטח תוכן נגלל שתופס 100% רוחב */}
+          <div className="flex-1 w-full max-w-md mx-auto overflow-y-auto px-4 py-4 space-y-4 overscroll-contain relative z-10">
+            {/* Header: תיאור ומצב מאגר */}
+            <div className="text-center pt-1">
+              <p className="text-xs text-purple-200/80 font-medium">
                 Time To Guess Premium Edition
               </p>
 
               {upsellReason ? (
-                <p className="text-xs text-center text-amber-300 font-bold mt-1.5 bg-amber-500/15 py-1 px-3.5 rounded-full inline-block border border-amber-500/30 shadow-sm mx-auto">
+                <p className="text-xs text-amber-300 font-bold mt-1 bg-amber-500/15 py-1 px-3.5 rounded-full inline-block border border-amber-500/30 shadow-sm mx-auto">
                   {upsellReason}
                 </p>
               ) : (
-                <p className="text-[11px] text-center text-slate-300 max-w-xs mx-auto mt-1 leading-relaxed">
+                <p className="text-[11px] text-slate-300 max-w-xs mx-auto mt-1 leading-relaxed">
                   {isEn
                     ? 'Expand your game with over 100 verified HD photos, animals, foods, and professions!'
                     : 'שדרגו את המשחק עם מעל 100 תמונות HD מאומתות, חיות מרתקות, מאכלים ומקצועות!'}
@@ -632,24 +591,24 @@ export const StoreModal: React.FC<StoreModalProps> = ({
               )}
 
               {/* סרגל סטטוס VIP ומספר קלפים פעילים */}
-              <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2.5">
-                <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-slate-700 via-slate-800 to-slate-900 border border-slate-400/40 text-slate-300 shadow-[0_3px_0_#1e293b,0_4px_10px_rgba(0,0,0,0.4)] flex items-center gap-2">
+              <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
+                <div className="px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 flex items-center gap-1.5 text-xs shadow-sm">
                   <Check className="w-3.5 h-3.5 text-emerald-400" strokeWidth={3} />
-                  <span className="text-xs font-bold">
-                    {isEn ? 'Unlocked Cards:' : 'קלפים פתוחים במאגר:'}
+                  <span className="font-bold">
+                    {isEn ? 'Unlocked Cards:' : 'קלפים פתוחים:'}
                   </span>
-                  <span className="text-xs font-black text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]">
+                  <span className="font-black text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]">
                     {totalUnlockedCards}
                   </span>
                 </div>
 
                 {isAllVipUnlocked ? (
-                  <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-b from-amber-300 via-yellow-400 to-amber-500 border-t border-t-white/50 border-amber-200 shadow-[0_4px_0_#92400e,0_4px_12px_rgba(234,179,8,0.35)] text-amber-950 font-black text-xs flex items-center gap-1.5">
+                  <div className="px-3 py-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 font-black text-xs flex items-center gap-1.5 shadow-sm">
                     <Crown className="w-3.5 h-3.5 text-amber-950 fill-amber-950" />
                     <span>VIP ACTIVE</span>
                   </div>
                 ) : (
-                  <div className="px-3 py-1.5 rounded-full bg-purple-950/70 border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-1.5 shadow-[0_2px_0_#3b0764]">
+                  <div className="px-3 py-1 rounded-full bg-purple-950/70 border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-1.5">
                     <Crown className="w-3.5 h-3.5 text-amber-400" />
                     <span>{isEn ? 'Standard Edition' : 'גרסה רגילה'}</span>
                   </div>
@@ -657,49 +616,37 @@ export const StoreModal: React.FC<StoreModalProps> = ({
               </div>
             </div>
 
-            {/* כרטיס מגה פאק VIP */}
+            {/* כרטיס מגה פאק VIP ברוחב מלא w-full */}
             {!isAllVipUnlocked && (
-              <div
-                style={{
-                  backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
-                }}
-                className="relative mb-5 rounded-3xl p-5 border border-amber-400/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-3"
-              >
-                {/* שורת תגית עליונה מיושרת לימין ולשמאל */}
+              <div className="w-full relative rounded-3xl p-4 sm:p-5 border border-amber-400/40 bg-gradient-to-b from-[#191834]/95 to-[#100f24]/95 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col gap-3">
                 <div className="flex items-center justify-between w-full">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/40 text-amber-300 text-xs font-black shadow-sm">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black">
                     <span>{isEn ? 'Best Value Deal' : 'המשתלם ביותר'}</span>
                     <span>🔥</span>
                   </div>
-
-                  {/* תג כתר VIP מעוצב */}
-                  <div className="w-10 h-10 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-xl shadow-inner">
+                  <div className="w-9 h-9 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-lg">
                     👑
                   </div>
                 </div>
 
-                {/* כותרת מגה פאק נקייה וברורה ללא הפרעות */}
                 <div className="text-right">
-                  <h3 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-500 leading-snug">
+                  <h3 className="text-base sm:text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-500 leading-snug">
                     {isEn ? 'VIP Mega Pack – All Decks Forever' : 'מגה פאק VIP – כל המאגרים לתמיד'}
                   </h3>
-                  <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                     {isEn
                       ? 'Unlocks all cards, animals, professions, foods, and global expansions with a single click! Saves over 50%.'
                       : 'פותח את כל הקלפים, חיות, מקצועות, מאכלים והרחבות עולמיות בלחיצה אחת! חסכון של מעל 50%.'}
                   </p>
                 </div>
 
-                {/* כפתור רכישה תלת-ממדי מובלט */}
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleBuyVip();
                   }}
-                  className="w-full mt-2 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black text-sm shadow-[0_4px_0_#b45309] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer hover:brightness-105"
+                  className="w-full mt-1 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black text-sm shadow-[0_4px_0_#b45309] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer hover:brightness-105"
                 >
                   <span>{isEn ? 'Unlock VIP for ₪12.90' : 'פתח VIP ב-₪12.90 בלבד'}</span>
                   <span>⚡</span>
@@ -707,145 +654,141 @@ export const StoreModal: React.FC<StoreModalProps> = ({
               </div>
             )}
 
-            {/* כרטיסי החבילות */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mb-5">
-              {packs.filter((p) => p.id !== 'pack_vip').map((pack) => {
-
-                return (
-                  <div
-                    key={pack.id}
-                    className={`relative flex flex-col justify-between p-4 sm:p-5 rounded-3xl border border-purple-500/30 bg-[#121626]/90 backdrop-blur-md shadow-[0_8px_24px_rgba(0,0,0,0.6)] transition-all duration-200 ${
-                      pack.isUnlocked
-                        ? 'border-emerald-500/40 hover:border-emerald-400/60'
-                        : 'border-purple-500/30 hover:border-purple-400/50'
-                    }`}
-                  >
-                    {/* Pack Header */}
-                    <div>
-                      <div className="flex justify-between items-start gap-2 mb-2">
-                        <div className="flex items-center gap-3">
-                          {renderPackBadgeIcon(pack.id)}
-                          <div>
-                            <h4 className="font-black text-sm sm:text-base text-white flex items-center gap-1.5 leading-snug">
-                              {pack.title}
-                            </h4>
-                            <span className="text-[11px] text-amber-300/90 font-bold">
-                              {pack.cardCount} {isEn ? 'verified cards' : 'קלפים מאומתים'}
-                            </span>
-                          </div>
+            {/* כרטיסי החבילות ברוחב מלא w-full */}
+            <div className="w-full space-y-4">
+              {packs.filter((p) => p.id !== 'pack_vip').map((pack) => (
+                <div
+                  key={pack.id}
+                  className={`w-full relative flex flex-col justify-between p-4 sm:p-5 rounded-3xl border ${
+                    pack.isUnlocked
+                      ? 'border-emerald-500/40 bg-[#121626]/95'
+                      : 'border-purple-500/30 bg-[#121626]/95'
+                  } shadow-[0_8px_24px_rgba(0,0,0,0.6)]`}
+                >
+                  <div>
+                    <div className="flex justify-between items-start gap-2 mb-2">
+                      <div className="flex items-center gap-3">
+                        {renderPackBadgeIcon(pack.id)}
+                        <div>
+                          <h4 className="font-black text-sm sm:text-base text-white flex items-center gap-1.5 leading-snug">
+                            {pack.title}
+                          </h4>
+                          <span className="text-[11px] text-amber-300/90 font-bold">
+                            {pack.cardCount} {isEn ? 'verified cards' : 'קלפים מאומתים'}
+                          </span>
                         </div>
-
-                        {pack.badge && (
-                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-amber-950 border border-yellow-200 shadow-[0_2px_0_#92400e,0_2px_8px_rgba(234,179,8,0.35)] shrink-0">
-                            {pack.badge}
-                          </span>
-                        )}
                       </div>
 
-                      <p className="text-xs text-slate-300 mb-2 leading-relaxed font-normal">
-                        {pack.subtitle}
-                      </p>
-
-                      {/* Preview Thumbnail Row - only 4 sample thumbnails + "+6 עוד" */}
-                      <div className="flex gap-2 overflow-hidden mb-2 py-1">
-                        {pack.cards.slice(0, 4).map((c) => (
-                          <div
-                            key={c.id}
-                            className="w-12 h-14 rounded-xl overflow-hidden border border-slate-400/30 bg-slate-950 shadow-[0_2px_6px_rgba(0,0,0,0.4)] shrink-0 relative"
-                            title={c.word}
-                          >
-                            <img
-                              src={c.imageUrl || c.image}
-                              alt={c.word}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                            <div className="absolute inset-x-0 bottom-0 bg-black/80 text-[8px] text-center font-black text-amber-200 truncate px-0.5 py-0.5">
-                              {c.word}
-                            </div>
-                          </div>
-                        ))}
-                        {pack.cardCount > 4 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              sounds.soundKeypress();
-                              setInspectingPack(pack);
-                            }}
-                            className="w-12 h-14 rounded-xl border border-dashed border-amber-400/50 bg-amber-500/10 hover:bg-amber-500/20 flex flex-col items-center justify-center text-[10px] text-amber-300 font-black shrink-0 shadow-[0_2px_6px_rgba(0,0,0,0.3)] cursor-pointer active:scale-95 transition-all"
-                            title="צפה בכל הקלפים"
-                          >
-                            <span>+{pack.cardCount - 4}</span>
-                            <span className="text-[7px] text-amber-200/80 font-bold">עוד</span>
-                          </button>
-                        )}
-                      </div>
-
-                      {/* כפתור צפייה ישיר בכל 10 הקלפים */}
-                      <div className="flex items-center justify-between mb-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            sounds.soundKeypress();
-                            setInspectingPack(pack);
-                          }}
-                          className="text-[11px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-amber-400" />
-                          <span className="underline underline-offset-2">
-                            {isEn ? `View all ${pack.cardCount} cards` : `צפה בכל ${pack.cardCount} הקלפים`}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Footer Action: כפתור רכישה מובלט בתלת-ממד */}
-                    <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-base sm:text-lg font-black text-amber-300 drop-shadow-[0_1px_3px_rgba(234,179,8,0.3)]">
-                          {pack.priceDisplay}
+                      {pack.badge && (
+                        <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-amber-950 border border-yellow-200 shadow-sm shrink-0">
+                          {pack.badge}
                         </span>
-                        {pack.price > 0 && (
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            {isEn ? 'one-time' : 'חד-פעמי'}
-                          </span>
-                        )}
-                      </div>
-
-                      {pack.isUnlocked ? (
-                        <div className="flex items-center gap-1.5 text-xs font-black text-white bg-gradient-to-b from-emerald-500 to-emerald-700 px-3.5 py-2 rounded-xl border-t border-t-emerald-300/40 border-emerald-600 shadow-[0_4px_0_#065f46] shadow-emerald-950/40 select-none">
-                          <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                          <span>{isEn ? 'Active & Ready' : 'פתוח ופעיל ✓'}</span>
-                        </div>
-                      ) : (
-                        /* כפתור רכישה תלת-ממדי מובלט */
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenCheckout(pack);
-                          }}
-                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black text-xs shadow-[0_4px_0_#b45309] active:translate-y-[2px] active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer hover:brightness-105"
-                        >
-                          <span>{isEn ? 'Purchase Now' : 'רכישה עכשיו'}</span>
-                          <span className="bg-black/15 px-1.5 py-0.5 rounded-md">
-                            {pack.priceDisplay}
-                          </span>
-                        </button>
                       )}
                     </div>
+
+                    <p className="text-xs text-slate-300 mb-2 leading-relaxed font-normal">
+                      {pack.subtitle}
+                    </p>
+
+                    {/* Preview Thumbnail Row - קוביית +6 עוד במלואה ללא חיתוך + 4 תמונות ממוזערות */}
+                    <div className="w-full flex items-center justify-start gap-2 px-1 py-1 overflow-x-visible mb-2">
+                      {/* קוביית +6 עוד במלואה ללא חיתוך */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sounds.soundKeypress();
+                          setInspectingPack(pack);
+                        }}
+                        className="w-14 h-14 flex-shrink-0 rounded-xl border border-dashed border-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 flex flex-col items-center justify-center text-amber-300 font-bold active:scale-95 transition-transform cursor-pointer shadow-sm"
+                        title={isEn ? `View all ${pack.cardCount} cards` : 'צפה בכל הקלפים'}
+                      >
+                        <span className="text-xs">+{pack.cardCount > 4 ? pack.cardCount - 4 : 6}</span>
+                        <span className="text-[9px]">{isEn ? 'more' : 'עוד'}</span>
+                      </button>
+
+                      {/* 4 תמונות ממוזערות */}
+                      {pack.cards.slice(0, 4).map((card) => (
+                        <div
+                          key={card.id}
+                          className="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shadow-sm relative"
+                          title={card.word}
+                        >
+                          <img
+                            src={card.imageUrl || card.image}
+                            alt={card.word}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/80 text-[8px] text-center font-black text-amber-200 truncate px-0.5 py-0.5">
+                            {card.word}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* כפתור צפייה ישיר בכל 10 הקלפים */}
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sounds.soundKeypress();
+                          setInspectingPack(pack);
+                        }}
+                        className="text-[11px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="underline underline-offset-2">
+                          {isEn ? `View all ${pack.cardCount} cards` : `צפה בכל ${pack.cardCount} הקלפים`}
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                );
-              })}
+
+                  {/* Footer Action */}
+                  <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-base sm:text-lg font-black text-amber-300 drop-shadow-[0_1px_3px_rgba(234,179,8,0.3)]">
+                        {pack.priceDisplay}
+                      </span>
+                      {pack.price > 0 && (
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {isEn ? 'one-time' : 'חד-פעמי'}
+                        </span>
+                      )}
+                    </div>
+
+                    {pack.isUnlocked ? (
+                      <div className="flex items-center gap-1.5 text-xs font-black text-white bg-gradient-to-b from-emerald-500 to-emerald-700 px-3.5 py-2 rounded-xl border-t border-t-emerald-300/40 border-emerald-600 shadow-[0_4px_0_#065f46] select-none">
+                        <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                        <span>{isEn ? 'Active & Ready' : 'פתוח ופעיל ✓'}</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenCheckout(pack);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black text-xs shadow-[0_4px_0_#b45309] active:translate-y-[2px] active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer hover:brightness-105"
+                      >
+                        <span>{isEn ? 'Purchase Now' : 'רכישה עכשיו'}</span>
+                        <span className="bg-black/15 px-1.5 py-0.5 rounded-md">
+                          {pack.priceDisplay}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Bottom actions & Test Mode Restore */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800 text-xs text-slate-400 pb-8">
               <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 <span>
@@ -855,36 +798,27 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleResetForTesting();
-                  }}
-                  className="text-[10px] text-slate-400 hover:text-rose-300 underline flex items-center gap-1 cursor-pointer"
-                  title="איפוס חבילות לצורך בדיקה"
-                >
-                  <RotateCcw className="w-2.5 h-2.5" />
-                  <span>{isEn ? 'Reset Purchases' : 'איפוס לבדיקות'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    sounds.soundKeypress();
-                    onClose();
-                  }}
-                  className="px-4 py-1.5 rounded-xl text-xs font-bold text-slate-200 bg-slate-800/90 border border-slate-700/80 border-t border-t-white/10 shadow-[0_3px_0_#1e293b] hover:bg-slate-700 active:translate-y-[1px] active:shadow-none transition-all cursor-pointer"
-                >
-                  <span>{isEn ? 'Continue Playing' : 'המשך למשחק'}</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleResetForTesting();
+                }}
+                className="text-[10px] text-slate-400 hover:text-rose-300 underline flex items-center gap-1 cursor-pointer"
+                title="איפוס חבילות לצורך בדיקה"
+              >
+                <RotateCcw className="w-2.5 h-2.5" />
+                <span>{isEn ? 'Reset Purchases' : 'איפוס לבדיקות'}</span>
+              </button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 };

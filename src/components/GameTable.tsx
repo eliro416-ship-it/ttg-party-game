@@ -9,6 +9,7 @@ import { GameTimer } from './GameTimer';
 import { normalizeHebrewInput, lettersMatch } from '../utils/hebrewKeyboard';
 import { sounds } from '../utils/audio';
 import { translations } from '../utils/translations';
+import { useWakeLock } from '../hooks/useWakeLock';
 import {
   getCurrentSupabaseChannel,
   getActiveRoomPin,
@@ -119,6 +120,9 @@ export const GameTable: React.FC<GameTableProps> = ({
 }) => {
   const t = translations[language];
   const isEn = language === 'en';
+
+  // Keep mobile and desktop screens awake during active gameplay
+  useWakeLock(true);
 
   // Internal voice gender state (fallback if not controlled from parent)
   const [internalVoiceGender, setInternalVoiceGender] = useState<VoiceGender>(() => {
