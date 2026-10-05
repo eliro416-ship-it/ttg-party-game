@@ -25,6 +25,7 @@ import {
   broadcastSkipTurn,
   trackPlayer,
   TurnStartedPayload,
+  DeckSyncPayload,
   RoundWonPayload,
   ReactionPayload,
   RoomStatePayload,
@@ -183,9 +184,40 @@ export const GameTable: React.FC<GameTableProps> = ({
     return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   }, [syncedScoreboardPlayers, players, serverTurnData?.players]);
 
-  // Live cards counter logic: cards remaining in match from host deck (10 or 20)
+  // Host identity check
+  const isHost = players.find(p => p.id === myPlayerId)?.isHost || myPlayerId === 'p-host';
+
+  // Live Host-Authoritative Deck Counter Synchronization
+  const [syncedDeckState, setSyncedDeckState] = useState<{
+    remainingCards: number;
+    totalDeckCount: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const unsub = addSupabaseListener('DECK_SYNC', (payload: DeckSyncPayload) => {
+      if (payload && typeof payload.totalDeckCount === 'number') {
+        setSyncedDeckState({
+          remainingCards: payload.remainingCards,
+          totalDeckCount: payload.totalDeckCount,
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Live cards counter logic:
+  // Host calculates directly from active deck.
+  // Guesser/Participant receives 100% from host broadcasts (DECK_SYNC or serverTurnData).
   const totalCards = cards && cards.length > 0 ? cards.length : 10;
   const remainingCards = Math.max(0, totalCards - currentCardIndex);
+
+  const displayTotal = isHost
+    ? totalCards
+    : (syncedDeckState?.totalDeckCount ?? serverTurnData?.totalDeckCount ?? totalCards);
+
+  const displayRemaining = isHost
+    ? remainingCards
+    : (syncedDeckState?.remainingCards ?? serverTurnData?.remainingCards ?? displayTotal);
 
   // Active card: matched authoritatively from CARDS_POOL by cardId or activeTurnCard
   const [activeTurnCard, setActiveTurnCard] = useState<any | null>(null);
@@ -371,8 +403,6 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
     }
   }, [serverTurnData, isRoundActive, roundEndTime]);
-
-  const isHost = players.find(p => p.id === myPlayerId)?.isHost || myPlayerId === 'p-host';
 
   // Responsive sizing, spacing and font-sizes for word boxes based on word length
   const boxConfig = useMemo(() => {
@@ -1225,17 +1255,17 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
           </div>
 
-          {/* מונה קלפים חי - בין ה-PIN לכפתור היציאה */}
+          {/* מונה קלפים חי - מסונכרן 100% מהמארח לכל המשתתפים */}
           <div
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-300 shadow-[0_2px_8px_rgba(245,158,11,0.2)]"
-            title={isEn ? `Cards remaining: ${remainingCards} of ${totalCards}` : `קלפים שנותרו למשחק: ${remainingCards} מתוך ${totalCards}`}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-300 shadow-[0_2px_8px_rgba(245,158,11,0.2)] select-none shrink-0"
+            title={isEn ? `Cards remaining: ${displayRemaining} of ${displayTotal}` : `קלפים שנותרו למשחק: ${displayRemaining} מתוך ${displayTotal}`}
           >
             <span className="text-xs">🃏</span>
             <span className="text-xs font-black text-amber-200">
-              {remainingCards}
+              {displayRemaining}
             </span>
             <span className="text-[10px] text-amber-300/60">
-              /{totalCards}
+              /{displayTotal}
             </span>
           </div>
 

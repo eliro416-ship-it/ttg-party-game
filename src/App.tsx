@@ -32,6 +32,8 @@ import {
   broadcastScoreboardSync,
   broadcastGameOver,
   broadcastGameRestart,
+  broadcastDeckSync,
+  DeckSyncPayload,
   GameOverPayload,
   encodeWordHash,
   TurnStartedPayload,
@@ -365,11 +367,19 @@ export default function App() {
       wordLength: cardWord.length,
       card: newCard,
       cardIndex: cardIndexRef.current,
+      currentCardIndex: cardIndexRef.current,
+      totalDeckCount: activeDeck.length,
+      remainingCards: Math.max(0, activeDeck.length - cardIndexRef.current),
       wordHash: encodeWordHash(cardWord),
     };
 
-    // 5. Host broadcasts official NEW_TURN event to all devices
+    // 5. Host broadcasts official NEW_TURN and DECK_SYNC event to all devices
     broadcastNewTurn(newTurnPayload);
+    broadcastDeckSync({
+      currentCardIndex: cardIndexRef.current,
+      totalDeckCount: activeDeck.length,
+      remainingCards: Math.max(0, activeDeck.length - cardIndexRef.current),
+    });
   }, [myPlayerId, activeDeck, language]);
 
   const advanceHostTurnRef = useRef<() => void>(() => {});
@@ -482,7 +492,12 @@ export default function App() {
           turnEndTime: endsAt,
           turnDuration: duration,
           cardIndex: cardIdx,
-          totalCards: 50,
+          currentCardIndex: payload.currentCardIndex ?? cardIdx,
+          totalCards: payload.totalDeckCount ?? prev?.totalCards ?? 50,
+          totalDeckCount: payload.totalDeckCount ?? prev?.totalDeckCount,
+          remainingCards: payload.remainingCards !== undefined
+            ? payload.remainingCards
+            : (payload.totalDeckCount ? Math.max(0, payload.totalDeckCount - cardIdx) : prev?.remainingCards),
           holderId: payload.holderId || prev?.holderId || currentHolderId,
           holderName: payload.holderName || prev?.holderName || (isHolder ? (language === 'en' ? 'You' : 'אתה/ת') : (language === 'en' ? 'Host' : 'מארח/ת')),
           holderAvatar: payload.holderAvatar || prev?.holderAvatar || '👑',
@@ -568,6 +583,9 @@ export default function App() {
           holderName,
           holderAvatar,
           cardIndex: cardIndexRef.current,
+          currentCardIndex: cardIndexRef.current,
+          totalDeckCount: activeDeck.length,
+          remainingCards: Math.max(0, activeDeck.length - cardIndexRef.current),
           cardId: nextCard.id,
           card: nextCard,
           word: cardWord,
@@ -596,7 +614,10 @@ export default function App() {
           turnEndTime: newEndTime,
           turnDuration: duration,
           cardIndex: cardIndexRef.current,
-          totalCards: STATIC_CARDS.length,
+          currentCardIndex: cardIndexRef.current,
+          totalCards: activeDeck.length,
+          totalDeckCount: activeDeck.length,
+          remainingCards: Math.max(0, activeDeck.length - cardIndexRef.current),
           holderId,
           holderName,
           holderAvatar,
@@ -613,6 +634,11 @@ export default function App() {
 
         // D. Broadcast to all clients
         broadcastRoundStart(streakPayload);
+        broadcastDeckSync({
+          currentCardIndex: cardIndexRef.current,
+          totalDeckCount: activeDeck.length,
+          remainingCards: Math.max(0, activeDeck.length - cardIndexRef.current),
+        });
       }
     });
 
@@ -719,7 +745,12 @@ export default function App() {
         turnEndTime: payload.roundEndsAt,
         turnDuration: payload.turnDuration || settings.turnDuration,
         cardIndex: payload.cardIndex ?? prev?.cardIndex ?? 0,
-        totalCards: 50,
+        currentCardIndex: payload.currentCardIndex ?? payload.cardIndex ?? prev?.currentCardIndex ?? 0,
+        totalCards: payload.totalDeckCount ?? prev?.totalCards ?? 50,
+        totalDeckCount: payload.totalDeckCount ?? prev?.totalDeckCount,
+        remainingCards: payload.remainingCards !== undefined
+          ? payload.remainingCards
+          : (payload.totalDeckCount ? Math.max(0, payload.totalDeckCount - (payload.currentCardIndex ?? payload.cardIndex ?? 0)) : prev?.remainingCards),
         holderId: payload.holderId,
         holderName: payload.holderName || prev?.holderName || '',
         holderAvatar: payload.holderAvatar || prev?.holderAvatar || '👑',
@@ -751,13 +782,35 @@ export default function App() {
           holderAvatar: currentTurn?.holderAvatar || '👑',
           roundStatus: currentTurn?.roundStatus || 'waiting',
           cardIndex: cardIndexRef.current,
+          currentCardIndex: cardIndexRef.current,
+          totalDeckCount: activeDeck.length,
+          remainingCards: Math.max(0, activeDeck.length - cardIndexRef.current),
           cardId: currentCard.id,
           wordHash: encodeWordHash(currentWord),
           turnDuration: settings.turnDuration,
         });
 
+        broadcastDeckSync({
+          currentCardIndex: cardIndexRef.current,
+          totalDeckCount: activeDeck.length,
+          remainingCards: Math.max(0, activeDeck.length - cardIndexRef.current),
+        });
+
         broadcastScoreUpdate({ scores: scoresRef.current });
       }
+    });
+
+    // 13. Authoritative deck count sync across all guessers
+    const unsubDeckSync = addSupabaseListener('DECK_SYNC', (payload: DeckSyncPayload) => {
+      setServerTurnData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          currentCardIndex: payload.currentCardIndex,
+          totalDeckCount: payload.totalDeckCount,
+          remainingCards: payload.remainingCards,
+        };
+      });
     });
 
     const unsubGameOver = addSupabaseListener('GAME_OVER', (payload) => {
@@ -794,6 +847,7 @@ export default function App() {
       unsubSettings();
       unsubSyncState();
       unsubRequestSync();
+      unsubDeckSync();
       unsubGameOver();
       unsubGameRestart();
     };
@@ -906,7 +960,10 @@ export default function App() {
       turnEndTime: 0,
       turnDuration: settings.turnDuration,
       cardIndex: cardIndexRef.current,
+      currentCardIndex: cardIndexRef.current,
       totalCards: currentPool.length,
+      totalDeckCount: currentPool.length,
+      remainingCards: Math.max(0, currentPool.length - cardIndexRef.current),
       holderId: hostId,
       holderName: hostPlayer.name,
       holderAvatar: hostPlayer.avatar || '👑',
@@ -921,13 +978,17 @@ export default function App() {
       players: players.map((p) => ({ ...p, isHolder: p.id === hostId, isOnline: true })),
     });
 
-    // 4. Broadcast game_start and authoritative NEW_TURN via Supabase Realtime channel
+    // 4. Broadcast game_start, authoritative NEW_TURN and DECK_SYNC via Supabase Realtime channel
     broadcastGameStart({
       holderId: hostId,
       holderName: hostPlayer.name,
       holderAvatar: hostPlayer.avatar || '👑',
       turnDuration: settings.turnDuration,
       cardIndex: 0,
+      currentCardIndex: 0,
+      totalCards: currentPool.length,
+      totalDeckCount: currentPool.length,
+      remainingCards: currentPool.length,
     });
 
     broadcastNewTurn({
@@ -938,7 +999,16 @@ export default function App() {
       wordLength: firstWord.length,
       card: firstCard,
       cardIndex: 0,
+      currentCardIndex: 0,
+      totalDeckCount: currentPool.length,
+      remainingCards: currentPool.length,
       wordHash: encodeWordHash(firstWord),
+    });
+
+    broadcastDeckSync({
+      currentCardIndex: 0,
+      totalDeckCount: currentPool.length,
+      remainingCards: currentPool.length,
     });
   };
 

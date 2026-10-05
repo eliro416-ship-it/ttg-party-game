@@ -30,6 +30,9 @@ export interface NewTurnPayload {
   wordLength: number;
   card: CardItem;
   cardIndex?: number;
+  currentCardIndex?: number;
+  totalDeckCount?: number;
+  remainingCards?: number;
   wordHash?: string;
 }
 
@@ -48,6 +51,9 @@ export interface RoundStartPayload {
   holderName?: string;
   holderAvatar?: string;
   cardIndex?: number;
+  currentCardIndex?: number;
+  totalDeckCount?: number;
+  remainingCards?: number;
   cardId?: string;
   card?: CardItem;
   word?: string;
@@ -97,6 +103,12 @@ export interface HintPayload {
   hint: string;
 }
 
+export interface DeckSyncPayload {
+  currentCardIndex: number;
+  totalDeckCount: number;
+  remainingCards: number;
+}
+
 export interface SyncStatePayload {
   category: string;
   wordLength: number;
@@ -106,6 +118,9 @@ export interface SyncStatePayload {
   holderAvatar: string;
   roundStatus: 'waiting' | 'active' | 'ended';
   cardIndex?: number;
+  currentCardIndex?: number;
+  totalDeckCount?: number;
+  remainingCards?: number;
   cardId?: string;
   wordHash?: string;
   turnDuration?: number;
@@ -129,6 +144,10 @@ export interface GameStartPayload {
   holderAvatar: string;
   turnDuration: number;
   cardIndex: number;
+  currentCardIndex?: number;
+  totalCards?: number;
+  totalDeckCount?: number;
+  remainingCards?: number;
 }
 
 export interface TurnStartedPayload {
@@ -139,7 +158,10 @@ export interface TurnStartedPayload {
   card?: any;
   cardId?: string;
   cardIndex: number;
+  currentCardIndex?: number;
   totalCards: number;
+  totalDeckCount?: number;
+  remainingCards?: number;
   holderId: string;
   holderName: string;
   holderAvatar: string;
@@ -216,6 +238,7 @@ const hintListeners = new Set<(payload: HintPayload) => void>();
 const settingsListeners = new Set<(payload: SettingsUpdatePayload) => void>();
 const syncStateListeners = new Set<(payload: SyncStatePayload) => void>();
 const requestSyncListeners = new Set<(payload: RequestSyncPayload) => void>();
+const deckSyncListeners = new Set<(payload: DeckSyncPayload) => void>();
 const statusListeners = new Set<(status: string) => void>();
 const scoreboardSyncListeners = new Set<(payload: ScoreboardSyncPayload) => void>();
 const gameOverListeners = new Set<(payload: GameOverPayload) => void>();
@@ -303,6 +326,13 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
   channel.on('broadcast', { event: 'SCOREBOARD_SYNC' }, handleScoreboardSyncBroadcast);
   channel.on('broadcast', { event: 'scoreboard_sync' }, handleScoreboardSyncBroadcast);
 
+  channel.on('broadcast', { event: 'DECK_SYNC' }, ({ payload }) => {
+    deckSyncListeners.forEach((fn) => fn(payload as DeckSyncPayload));
+  });
+  channel.on('broadcast', { event: 'deck_sync' }, ({ payload }) => {
+    deckSyncListeners.forEach((fn) => fn(payload as DeckSyncPayload));
+  });
+
   const handleRoundStartBroadcast = ({ payload }: { payload: any }) => {
     if (!payload) return;
     const duration = Number(payload.turnDuration || payload.duration) || 60;
@@ -318,6 +348,9 @@ export function getSupabaseRoomChannel(pin: string, playerId: string): RealtimeC
       holderName: payload.holderName,
       holderAvatar: payload.holderAvatar,
       cardIndex: payload.cardIndex,
+      currentCardIndex: payload.currentCardIndex ?? payload.cardIndex,
+      totalDeckCount: payload.totalDeckCount,
+      remainingCards: payload.remainingCards,
       cardId: payload.cardId,
       card: payload.card,
       word: payload.word,
@@ -493,6 +526,7 @@ export function addSupabaseListener(event: 'reaction', fn: (payload: ReactionPay
 export function addSupabaseListener(event: 'hint', fn: (payload: HintPayload) => void): () => void;
 export function addSupabaseListener(event: 'update_settings', fn: (payload: SettingsUpdatePayload) => void): () => void;
 export function addSupabaseListener(event: 'sync_state', fn: (payload: SyncStatePayload) => void): () => void;
+export function addSupabaseListener(event: 'DECK_SYNC' | 'deck_sync', fn: (payload: DeckSyncPayload) => void): () => void;
 export function addSupabaseListener(event: 'SCOREBOARD_SYNC' | 'scoreboard_sync', fn: (payload: ScoreboardSyncPayload) => void): () => void;
 export function addSupabaseListener(event: 'request_sync', fn: (payload: RequestSyncPayload) => void): () => void;
 export function addSupabaseListener(event: 'status', fn: (status: string) => void): () => void;
@@ -511,6 +545,7 @@ export function addSupabaseListener(event: string, fn: any): () => void {
   else if (event === 'hint') hintListeners.add(fn);
   else if (event === 'update_settings') settingsListeners.add(fn);
   else if (event === 'sync_state') syncStateListeners.add(fn);
+  else if (event === 'DECK_SYNC' || event === 'deck_sync') deckSyncListeners.add(fn);
   else if (event === 'SCOREBOARD_SYNC' || event === 'scoreboard_sync') scoreboardSyncListeners.add(fn);
   else if (event === 'request_sync') requestSyncListeners.add(fn);
   else if (event === 'status') statusListeners.add(fn);
@@ -530,12 +565,40 @@ export function addSupabaseListener(event: string, fn: any): () => void {
     else if (event === 'hint') hintListeners.delete(fn);
     else if (event === 'update_settings') settingsListeners.delete(fn);
     else if (event === 'sync_state') syncStateListeners.delete(fn);
+    else if (event === 'DECK_SYNC' || event === 'deck_sync') deckSyncListeners.delete(fn);
     else if (event === 'SCOREBOARD_SYNC' || event === 'scoreboard_sync') scoreboardSyncListeners.delete(fn);
     else if (event === 'request_sync') requestSyncListeners.delete(fn);
     else if (event === 'status') statusListeners.delete(fn);
     else if (event === 'GAME_OVER' || event === 'game_over') gameOverListeners.delete(fn);
     else if (event === 'GAME_RESTART' || event === 'game_restart') gameRestartListeners.delete(fn);
   };
+}
+
+export function broadcastDeckSync(payload: DeckSyncPayload): void {
+  if (activeChannel) {
+    activeChannel.send({
+      type: 'broadcast',
+      event: 'DECK_SYNC',
+      payload,
+    }).catch((err) => console.error('Error broadcasting DECK_SYNC:', err));
+  }
+
+  if (localTabChannel) {
+    try {
+      localTabChannel.postMessage({
+        type: 'DECK_SYNC',
+        payload,
+      });
+    } catch (e) {}
+  }
+
+  deckSyncListeners.forEach((fn) => {
+    try {
+      fn(payload);
+    } catch (e) {
+      console.warn('Local listener error in broadcastDeckSync:', e);
+    }
+  });
 }
 
 export function broadcastGameOver(payload: GameOverPayload): void {

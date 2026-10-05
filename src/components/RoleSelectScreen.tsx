@@ -36,19 +36,33 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
   const isEn = language === 'en';
   const durationLabel = turnDuration === 60 ? (isEn ? '1 Minute' : 'דקה') : `${turnDuration} ${isEn ? 'seconds' : 'שניות'}`;
 
+  const handleWhatsAppShare = () => {
+    sounds.soundSuccess();
+    const shareMessage =
+      `🎮 *Time To Guess – הזמן לנחש!* ⏳\n\n` +
+      `יצרנו משחק חברתי חדש בטירוף לסמארטפון – אחד מחזיק בתמונה, כולם חוקרים ומנחשים נגד השעון! 🦁⏱️\n\n` +
+      `🎁 *מתנה מיוחדת למצטרפים עכשיו:*\n` +
+      `פותחים משחק ומקבלים *10 קלפי פרימיום נוספים במתנה* בלחיצה על החנות!\n\n` +
+      `אין צורך בהורדה, נכנסים ישר מהדפדפן ומשחקים:\n` +
+      `👉 https://time-to-guess.netlify.app\n\n` +
+      `בואו נראה מי הראשון שינחש! 🔥`;
+
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareMessage)}`, '_blank');
+  };
+
   return (
     <div className="w-full flex flex-col items-center text-center animate-fadeIn select-none" dir={isEn ? 'ltr' : 'rtl'}>
-      {/* Top bar with [ סאונד | סרטון פתיחה | אייקון גלריה/מאגר | אייקון חנות/יהלום | English ] */}
+      {/* Top bar with [ סאונד | סרטון פתיחה | שיתוף וואטסאפ | אייקון גלריה/מאגר | אייקון חנות/יהלום | English ] */}
       <div className="w-full flex items-center justify-between gap-1 px-3 pt-3 pb-2 flex-nowrap overflow-hidden z-20">
         <div className="flex items-center gap-1 shrink-0">
           {/* סאונד */}
           <button
             type="button"
             onClick={onToggleMute}
-            className="h-8 w-8 flex-shrink-0 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 flex items-center justify-center text-purple-200 active:scale-95 transition-all cursor-pointer shadow-sm"
+            className="p-1.5 flex-shrink-0 bg-transparent border-0 opacity-85 hover:opacity-100 text-purple-200 active:scale-90 transition-all cursor-pointer text-sm"
             title={isMuted ? (isEn ? 'Unmute' : 'הפעל סאונד') : (isEn ? 'Mute' : 'השתק סאונד')}
           >
-            <span className="text-xs">{isMuted ? '🔇' : '🔊'}</span>
+            <span>{isMuted ? '🔇' : '🔊'}</span>
           </button>
 
           {/* סרטון פתיחה */}
@@ -59,15 +73,35 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 sounds.soundKeypress();
                 onOpenVideo();
               }}
-              className="h-8 px-2 py-1 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 text-pink-300 hover:text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              className="p-1.5 flex-shrink-0 bg-transparent border-0 opacity-85 hover:opacity-100 text-pink-300 hover:text-pink-200 text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-90 transition-all"
               title={isEn ? 'Watch Intro Video' : 'צפייה בסרטון הפתיחה'}
             >
-              <div className="w-3.5 h-3.5 rounded-full bg-pink-500/20 flex items-center justify-center border border-pink-400/40">
-                <Film className="w-2 h-2 text-pink-300" strokeWidth={2.4} />
-              </div>
-              <span className="font-extrabold">{isEn ? 'Intro' : 'סרטון פתיחה'}</span>
+              <Film className="w-3.5 h-3.5 text-pink-300" strokeWidth={2.2} />
+              <span className="font-extrabold text-[11px]">{isEn ? 'Intro' : 'סרטון פתיחה'}</span>
             </button>
           )}
+
+          {/* כפתור שיתוף וואטסאפ מינימליסטי ועדין */}
+          <button
+            type="button"
+            onClick={handleWhatsAppShare}
+            title={isEn ? "Share on WhatsApp" : "שתפו בוואטסאפ"}
+            className="p-1.5 flex-shrink-0 bg-transparent border-0 opacity-85 hover:opacity-100 text-emerald-400/80 hover:text-emerald-300 active:scale-90 transition-transform cursor-pointer"
+          >
+            <svg 
+              className="w-4 h-4" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24" 
+              strokeWidth="1.8"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" 
+              />
+            </svg>
+          </button>
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -79,7 +113,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 sounds.soundKeypress();
                 onOpenCardsGallery();
               }}
-              className="h-8 w-8 flex-shrink-0 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-sm group"
+              className="p-1.5 flex-shrink-0 bg-transparent border-0 opacity-85 hover:opacity-100 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
               title={isEn ? 'Photo Cards' : 'מאגר תמונות'}
             >
               <svg 
@@ -90,7 +124,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 strokeWidth="2.2" 
                 strokeLinecap="round" 
                 strokeLinejoin="round" 
-                className="w-3.5 h-3.5 drop-shadow-[0_2px_4px_rgba(251,191,36,0.4)] group-hover:scale-110 transition-transform"
+                className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(251,191,36,0.4)]"
               >
                 <rect width="18" height="18" x="3" y="3" rx="4" />
                 <circle cx="8.5" cy="8.5" r="1.5" />
@@ -107,10 +141,10 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
                 sounds.soundKeypress();
                 onOpenStore();
               }}
-              className="h-8 w-8 flex-shrink-0 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-amber-400/40 flex items-center justify-center active:scale-95 transition-all text-sm cursor-pointer shadow-sm group"
+              className="p-1.5 flex-shrink-0 bg-transparent border-0 opacity-85 hover:opacity-100 flex items-center justify-center active:scale-90 transition-all text-sm cursor-pointer"
               title={isEn ? 'Card Packs Store' : 'חנות חבילות'}
             >
-              <span className="drop-shadow-[0_2px_6px_rgba(56,189,248,0.5)] group-hover:scale-110 transition-transform">💎</span>
+              <span className="drop-shadow-[0_2px_6px_rgba(56,189,248,0.5)]">💎</span>
             </button>
           )}
 
@@ -120,10 +154,10 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
               sounds.soundKeypress();
               onToggleLanguage();
             }}
-            className="h-8 px-2 py-1 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/30 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+            className="p-1.5 flex-shrink-0 bg-transparent border-0 opacity-85 hover:opacity-100 text-purple-200 hover:text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer active:scale-90 transition-all"
             title={isEn ? 'Switch to Hebrew' : 'עבור לאנגלית'}
           >
-            <Globe className="w-3 h-3 text-pink-400" />
+            <Globe className="w-3.5 h-3.5 text-pink-400" />
             <span>{t.langBtn}</span>
           </button>
         </div>
