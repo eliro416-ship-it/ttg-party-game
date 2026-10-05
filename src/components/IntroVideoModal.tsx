@@ -251,13 +251,14 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
       }}
       dir={isEn ? 'ltr' : 'rtl'}
     >
-      {/* 1. CINEMATIC POSTER & SPLASH SCREEN LAYER WITH RADIAL GLOW & SPARKLES */}
+      {/* 1. CINEMATIC POSTER & SPLASH SCREEN LAYER WITH RADIAL GLOW & SPARKLES (z-50 OVERLAY) */}
       <div
-        className={`absolute inset-0 z-10 flex flex-col items-center justify-center transition-opacity duration-700 ease-in-out pointer-events-none ${
-          isVideoReady ? 'opacity-0' : 'opacity-100'
+        className={`absolute inset-0 z-50 flex flex-col items-center justify-center transition-opacity duration-500 ease-in-out pointer-events-none ${
+          isVideoReady ? 'opacity-0 pointer-events-none' : 'opacity-100'
         }`}
         style={{
-          background: 'radial-gradient(circle at center, rgba(168,85,247,0.18) 0%, rgba(59,130,246,0.12) 40%, transparent 70%)',
+          backgroundColor: '#0a0818',
+          backgroundImage: 'radial-gradient(circle at center, rgba(168,85,247,0.18) 0%, rgba(59,130,246,0.12) 40%, transparent 70%)',
         }}
       >
         {/* Floating golden/yellow sparkling dots around the logo */}
@@ -328,12 +329,13 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
           loop={false}
           src={parsed.directSrc}
           preload="auto"
+          poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
           onEnded={handleTransition}
+          onCanPlayThrough={() => setIsVideoReady(true)}
           onCanPlay={() => setIsVideoReady(true)}
-          onLoadedData={() => setIsVideoReady(true)}
           onPlaying={() => setIsVideoReady(true)}
-          className={`w-full h-full object-cover block absolute inset-0 transition-opacity duration-700 ease-in-out ${
-            isVideoReady ? 'opacity-100' : 'opacity-0'
+          className={`w-full h-full object-cover block absolute inset-0 transition-opacity duration-500 ease-in-out ${
+            isVideoReady ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
           style={{
             width: '100vw',
@@ -348,8 +350,8 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
           src={parsed.embedSrc}
           title="Cloudinary Intro Video"
           onLoad={() => setIsVideoReady(true)}
-          className={`w-full h-full border-0 absolute inset-0 transition-opacity duration-700 ease-in-out ${
-            isVideoReady ? 'opacity-100' : 'opacity-0'
+          className={`w-full h-full border-0 absolute inset-0 transition-opacity duration-500 ease-in-out ${
+            isVideoReady ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
           style={{
             width: '100vw',
