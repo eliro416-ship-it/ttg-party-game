@@ -121,25 +121,8 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState<boolean>(true);
   const [needsSoundTap, setNeedsSoundTap] = useState<boolean>(false);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   const parsed = useMemo(() => parseVideoUrl(videoUrl), [videoUrl]);
-
-  // Reset isPlaying when opened or url changes
-  useEffect(() => {
-    if (isOpen) {
-      setIsPlaying(false);
-    }
-  }, [isOpen, videoUrl]);
-
-  // Safety fallback: reveal video gracefully after 2.5s even if event is delayed by mobile browser
-  useEffect(() => {
-    if (!isOpen || isPlaying) return;
-    const timer = setTimeout(() => {
-      setIsPlaying(true);
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [isOpen, isPlaying]);
 
   // Transition to dashboard handler (Skip button or natural onEnded)
   const handleTransition = useCallback(() => {
@@ -228,116 +211,39 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
 
   if (!isOpen) return null;
 
-  const SPARKLES = [
-    { top: '20%', left: '26%', size: 'w-2 h-2', delay: '0s' },
-    { top: '24%', right: '22%', size: 'w-2.5 h-2.5', delay: '0.4s' },
-    { top: '38%', left: '16%', size: 'w-1.5 h-1.5', delay: '0.8s' },
-    { top: '48%', right: '18%', size: 'w-2 h-2', delay: '1.2s' },
-    { bottom: '34%', left: '22%', size: 'w-2.5 h-2.5', delay: '0.6s' },
-    { bottom: '26%', right: '25%', size: 'w-1.5 h-1.5', delay: '1s' },
-    { top: '16%', right: '38%', size: 'w-2 h-2', delay: '0.3s' },
-    { bottom: '22%', left: '38%', size: 'w-2 h-2', delay: '0.9s' },
-  ];
-
   return (
     <div
       onClick={handleTapScreen}
-      className="fixed inset-0 z-50 bg-[#0a0818] flex items-center justify-center overflow-hidden m-0 p-0 select-none cursor-pointer"
-      style={{
-        width: '100vw',
-        height: '100vh',
-        position: 'fixed',
-        inset: 0,
-      }}
+      className="fixed inset-0 z-50 bg-black flex items-center justify-center overflow-hidden m-0 p-0 select-none cursor-pointer"
       dir={isEn ? 'ltr' : 'rtl'}
     >
-      {/* 1. מסך הטעינה המעוצב החדש - מוצג תמיד מעל הכל עד שהווידאו מנגן בפועל */}
-      {!isPlaying && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0818] transition-opacity duration-700">
-          {/* נקודות זוהר צהוב/זהב עדינות */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            {SPARKLES.map((s, idx) => (
-              <div
-                key={idx}
-                className={`absolute ${s.size} rounded-full bg-gradient-to-tr from-amber-300 via-yellow-200 to-white shadow-[0_0_12px_rgba(251,191,36,0.9)] animate-pulse`}
-                style={{
-                  top: s.top,
-                  left: s.left,
-                  right: s.right,
-                  bottom: s.bottom,
-                  animationDelay: s.delay,
-                  animationDuration: '2.2s',
-                }}
-              />
-            ))}
-          </div>
-
-          {/* תוכן מסך הטעינה החדש עם ההילה והלוגו */}
-          <div className="relative flex flex-col items-center">
-            <div className="absolute -inset-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl blur-2xl opacity-40 animate-pulse" />
-            <img 
-              src="https://res.cloudinary.com/afjcyngg/image/upload/v1791185883/IMG-20261005-WA0001.jpg" 
-              alt="TTG" 
-              className="w-36 h-36 sm:w-44 sm:h-44 object-contain relative z-10 rounded-3xl shadow-[0_0_50px_rgba(59,130,246,0.35),0_0_80px_rgba(236,72,153,0.25)]"
-            />
-          </div>
-          
-          <div className="flex flex-col items-center gap-2 mt-8 z-10">
-            <div className="w-28 h-1 rounded-full bg-white/10 overflow-hidden relative">
-              <div className="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-400 rounded-full w-full animate-pulse" />
-            </div>
-            <span className="text-[11px] font-medium tracking-widest uppercase text-purple-300/70">
-              {isEn ? 'Loading Experience...' : 'טוען חוויה...'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* 2. אלמנט הווידאו - מוסתר הרמטית (visibility: hidden ו-opacity: 0) עד שהווידאו ממש מנגן */}
+      {/* אלמנט הווידאו הישיר והנקי */}
       {parsed.directSrc ? (
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted={isMuted}
+          controls={false}
           loop={false}
           src={parsed.directSrc}
           preload="auto"
           onEnded={handleTransition}
-          onPlaying={() => setIsPlaying(true)}
-          style={{
-            visibility: isPlaying ? 'visible' : 'hidden',
-            opacity: isPlaying ? 1 : 0,
-            width: '100vw',
-            height: '100vh',
-            position: 'fixed',
-            inset: 0,
-            objectFit: 'cover',
-          }}
-          className="w-full h-full object-cover transition-opacity duration-500 relative z-10"
+          className="w-full h-full object-cover"
         />
       ) : (
         <iframe
           src={parsed.embedSrc}
-          title="Cloudinary Intro Video"
-          onLoad={() => setIsPlaying(true)}
-          style={{
-            visibility: isPlaying ? 'visible' : 'hidden',
-            opacity: isPlaying ? 1 : 0,
-            width: '100vw',
-            height: '100vh',
-            position: 'fixed',
-            inset: 0,
-          }}
-          className="w-full h-full border-0 transition-opacity duration-500 relative z-10"
+          title="Intro Video"
+          className="w-full h-full border-0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
           allowFullScreen
         />
       )}
 
-      {/* 3. FLOATING CORNER CONTROLS */}
+      {/* כפתורי פינה צפים: השתקה ודילוג */}
       <div className={`fixed top-4 ${isEn ? 'right-4' : 'left-4'} z-[10000] flex items-center gap-2 pointer-events-auto`}>
-        {/* Subtle Mute / Unmute Toggle */}
+        {/* כפתור השתקה / הפעלת סאונד */}
         <button
           type="button"
           onClick={handleToggleMute}
@@ -358,7 +264,7 @@ export const IntroVideoModal: React.FC<IntroVideoModalProps> = ({
           )}
         </button>
 
-        {/* Small floating SKIP BUTTON */}
+        {/* כפתור דילוג */}
         <button
           type="button"
           onClick={handleSkip}
