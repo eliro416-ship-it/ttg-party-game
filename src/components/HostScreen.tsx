@@ -178,7 +178,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
 
       {/* Step 1: Generate Host Room PIN (hostStep === 'create') */}
       {currentStep === 'create' ? (
-        <div className="w-full flex-1 flex flex-col justify-between bg-white/10 border border-white/15 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-center shadow-xl mb-1">
+        <div className="host-inner-box w-full flex-1 flex flex-col justify-between rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-center shadow-xl mb-1">
           <div className="w-12 h-12 mx-auto mb-2 bg-gradient-to-tr from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30 shrink-0">
             <CreditCard className="w-6 h-6 text-white" />
           </div>
@@ -192,7 +192,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
           </p>
 
           {/* Quick Timer Selection before activation */}
-          <div className={`bg-black/30 border border-white/10 rounded-xl p-2.5 mb-3 ${isEn ? 'text-left' : 'text-right'}`}>
+          <div className={`timer-selection host-inner-box rounded-xl p-2.5 mb-3 ${isEn ? 'text-left' : 'text-right'}`}>
             <div className="flex justify-between items-center mb-1.5">
               <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
                 <Timer className="w-3.5 h-3.5 text-pink-400" />
@@ -230,6 +230,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
 
           <button
             type="button"
+            id="generateRoomBtn"
             onClick={() => {
               sounds.soundSuccess();
               if (onGenerateRoom) {
@@ -241,16 +242,15 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                 setHostStep('lobby');
               }
             }}
-            className="btn-3d btn-3d-emerald w-full py-3 sm:py-3.5 px-4 text-white font-black text-sm sm:text-base rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-lg active:scale-98"
+            className="btn-generate-room create-room-btn w-full py-3 sm:py-3.5 px-4 text-white font-black text-sm sm:text-base rounded-2xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-lg"
           >
-            <span className="shimmer-sweep" />
-            <Sparkles className="w-4 h-4 text-yellow-300 drop-shadow" />
+            <Sparkles className="w-5 h-5 text-yellow-300 drop-shadow shrink-0" />
             <span>{t.btnGetCode}</span>
           </button>
         </div>
       ) : (
         /* Step 2: Ready Room with Generated PIN - Compact No-Scroll Mobile View */
-        <div className="w-full flex-1 flex flex-col justify-between bg-white/10 border border-white/20 rounded-2xl sm:rounded-3xl p-2.5 sm:p-4 text-center shadow-2xl overflow-hidden">
+        <div className="host-inner-box w-full flex-1 flex flex-col justify-between rounded-2xl sm:rounded-3xl p-2.5 sm:p-4 text-center shadow-2xl overflow-hidden">
           <div className="w-full flex flex-col items-center">
             {/* PIN Code Label */}
             <p className="text-[10px] sm:text-xs font-bold text-purple-300 uppercase tracking-wider mb-0.5">

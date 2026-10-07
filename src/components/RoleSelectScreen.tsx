@@ -332,7 +332,12 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
         </button>
       </div>
 
-      {/* כפתור זהב יחיד למאגר הקלפים */}
+      {/* PWA Install Banner */}
+      <div className="w-full max-w-[420px]">
+        <PWAInstallBanner language={language} />
+      </div>
+
+      {/* כפתור זהב יחיד למאגר הקלפים - האלמנט התחתון ביותר */}
       <div className="bottom-gold-container">
         <button
           className="gold-shop-btn btn-blue"
@@ -351,46 +356,6 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
           <span className="gold-shine" />
           <span className="gold-text">🎴 {isEn ? 'Card Gallery & Shop 🛒' : 'למאגר ולחנות הקלפים 🛒'}</span>
         </button>
-      </div>
-
-      {/* PWA Install Banner */}
-      <div className="w-full max-w-[420px] mb-2">
-        <PWAInstallBanner language={language} />
-      </div>
-
-      {/* 4. שורת הגדרות תחתונה */}
-      <div className="bottom-pill-bar w-full max-w-[420px]">
-        {/* כפתור גלולה שמאלי: הצטרפות מהירה */}
-        <button
-          type="button"
-          id="btn-fast-join"
-          onClick={() => {
-            sounds.soundKeypress();
-            onOpenPlayer();
-          }}
-          className="bottom-bar-item pill pill-item text-cyan-200 cursor-pointer active:translate-y-0.5 transition-transform"
-        >
-          {isEn ? 'Fast PIN Join' : 'הצטרפות מהירה'}
-        </button>
-
-        {/* כפתור גלולה אמצעי: משחק מרובה משתתפים */}
-        <button
-          type="button"
-          id="btn-multiplayer"
-          onClick={() => {
-            sounds.soundKeypress();
-            onOpenHost();
-          }}
-          className="bottom-bar-item pill pill-item text-cyan-200 cursor-pointer active:translate-y-0.5 transition-transform"
-        >
-          {isEn ? 'Live Multiplayer' : 'משחק מרובה משתתפים'}
-        </button>
-
-        {/* גלולה ימנית: זמן תור */}
-        <div className="bottom-bar-item pill pill-item text-amber-300 flex items-center gap-1">
-          <span>{durationLabel}</span>
-          <span>⏱️</span>
-        </div>
       </div>
     </div>
   );

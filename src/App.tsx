@@ -1342,7 +1342,7 @@ export default function App() {
           joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[420px]'
         } ${
           screen === 'host'
-            ? 'p-3 sm:p-5 max-h-[98dvh] sm:max-h-none flex flex-col justify-between overflow-hidden rounded-[28px] border border-purple-500/40 bg-[#120E2E]/85 backdrop-blur-2xl text-white'
+            ? 'host-modal-card host-container room-modal p-3 sm:p-5 max-h-[98dvh] sm:max-h-none flex flex-col justify-between overflow-hidden rounded-[28px] text-white'
             : screen === 'welcome'
             ? 'p-1 sm:p-2 bg-transparent border-0 shadow-none'
             : 'p-4 sm:p-6 rounded-[28px] sm:rounded-[32px] border border-white/20 bg-white/[0.07] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] backdrop-blur-2xl text-white'

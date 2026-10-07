@@ -414,6 +414,57 @@ button:active, .btn:active, [class*="btn"]:active {
   min-width: unset !important;
 }
 
+/* 2. עמוד הפעלת חדר (Host Room Screen): */
+/* רקע חצי-שקוף לכרטיס המרכזי */
+.host-modal-card, [class*="host-container"], [class*="room-modal"] {
+  background: rgba(76, 29, 149, 0.65) !important; /* סגול שקוף למחצה */
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 3px solid rgba(216, 180, 254, 0.4) !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* שקיפות מותאמת גם לתיבות הפנימיות */
+.host-inner-box, [class*="timer-selection"] {
+  background: rgba(59, 7, 100, 0.45) !important;
+  border: 1.5px solid rgba(192, 132, 252, 0.25) !important;
+}
+
+/* כפתור "הפקת קוד חדר חי" בסגנון אבן חן 3D (כמו במסך הראשי) */
+.btn-generate-room, [id*="generateRoom"], [class*="create-room-btn"] {
+  background: linear-gradient(180deg, #6ee7b7 0%, #10b981 35%, #047857 75%, #064e3b 100%) !important;
+  border: 3px solid rgba(255, 255, 255, 0.8) !important;
+  border-top-color: #ffffff !important;
+  border-radius: 22px !important;
+  box-shadow: 0 10px 0 #022c22, 0 16px 22px rgba(0, 0, 0, 0.5), inset 0 3px 6px rgba(255, 255, 255, 0.8) !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  font-size: 1.25rem !important;
+  text-shadow: 0 -2px 0 rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
+  transition: transform 0.08s ease !important;
+}
+
+.btn-generate-room:active, [id*="generateRoom"]:active, [class*="create-room-btn"]:active {
+  transform: translateY(6px) !important;
+  box-shadow: 0 4px 0 #022c22, 0 6px 10px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* הברקת קריסטל עליונה */
+.btn-generate-room::before, [id*="generateRoom"]::before, [class*="create-room-btn"]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 40%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+  border-radius: 0 0 12px 12px;
+  pointer-events: none;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
