@@ -128,8 +128,10 @@ export const HostScreen: React.FC<HostScreenProps> = ({
         <div className="w-full px-2 box-border overflow-hidden flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
           <button
             type="button"
+            id="backBtn"
             onClick={handleBackNavigation}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+            className="back-btn flex items-center gap-1.5 cursor-pointer"
+            title={t.back}
           >
             {isEn ? <ArrowLeft className="w-3.5 h-3.5 mr-1" /> : <ArrowRight className="w-3.5 h-3.5 ml-1" />}
             <span>{currentStep === 'lobby' ? (isEn ? 'Edit Settings' : 'הגדרות חדר') : t.back}</span>
@@ -139,14 +141,15 @@ export const HostScreen: React.FC<HostScreenProps> = ({
             {onToggleLanguage && (
               <button
                 type="button"
+                id="langBtn"
                 onClick={() => {
                   sounds.soundKeypress();
                   onToggleLanguage();
                 }}
-                className="bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white px-2 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                className="lang-btn flex items-center gap-1 cursor-pointer"
                 title={isEn ? 'עבור לעברית' : 'Switch to English'}
               >
-                <Globe className="w-3 h-3 text-pink-400" />
+                <Globe className="w-3.5 h-3.5 text-pink-400" />
                 <span>{t.langBtn}</span>
               </button>
             )}

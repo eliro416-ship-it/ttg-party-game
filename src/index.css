@@ -238,25 +238,58 @@ button:active, .btn:active, [class*="btn"]:active {
   box-shadow: 0 1px 0 #07152b !important;
 }
 
-.lang-pill {
-  background: linear-gradient(180deg, #1b3860 0%, #0e2240 100%) !important;
-  border: 2px solid #38bdf8 !important;
-  border-radius: 20px !important;
-  padding: 6px 14px !important;
-  font-size: 0.85rem !important;
+/* סגנון 3D אחיד לכפתורי החזרה והשפה */
+.back-btn, [id*="backBtn"], [id*="back-btn"], button[class*="back"], button[id*="back"],
+.lang-btn, [id*="langBtn"], [id*="lang-btn"], button[class*="lang"], button[id*="lang"], .lang-pill {
+  border-radius: 18px !important;
+  padding: 10px 18px !important;
   font-weight: 900 !important;
-  color: #7dd3fc !important;
-  box-shadow: 0 4px 0 #09182f, 0 6px 10px rgba(0,0,0,0.3) !important;
+  font-size: 1rem !important;
+  color: #ffffff !important;
   cursor: pointer !important;
+  border: 2px solid rgba(255, 255, 255, 0.7) !important;
+  border-top-color: #ffffff !important;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease !important;
   display: inline-flex !important;
   align-items: center !important;
+  justify-content: center !important;
   gap: 6px !important;
-  transition: transform 0.08s ease, box-shadow 0.08s ease !important;
-  user-select: none !important;
 }
-.lang-pill:active {
-  transform: translateY(3px) !important;
-  box-shadow: 0 1px 0 #09182f !important;
+
+/* כפתור חזרה - כחול קריסטל 3D */
+.back-btn, [id*="backBtn"], [id*="back-btn"], button[class*="back"], button[id*="back"] {
+  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 45%, #1d4ed8 75%, #1e3a8a 100%) !important;
+  box-shadow: 0 6px 0 #172554, 0 10px 15px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.7) !important;
+}
+
+/* כפתור שפה English - סגול קריסטל 3D תואם */
+.lang-btn, [id*="langBtn"], [id*="lang-btn"], button[class*="lang"], button[id*="lang"], .lang-pill {
+  background: linear-gradient(180deg, #c084fc 0%, #9333ea 45%, #7e22ce 75%, #581c87 100%) !important;
+  box-shadow: 0 6px 0 #3b0764, 0 10px 15px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.7) !important;
+}
+
+/* השתקפות ברק עליונה לשני הכפתורים */
+.back-btn::before, [id*="backBtn"]::before, [id*="back-btn"]::before, button[class*="back"]::before,
+.lang-btn::before, [id*="langBtn"]::before, [id*="lang-btn"]::before, button[class*="lang"]::before, .lang-pill::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 10% !important;
+  right: 10% !important;
+  height: 38% !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%) !important;
+  border-radius: 0 0 8px 8px !important;
+  pointer-events: none !important;
+}
+
+/* תגובת לחיצה פיזית */
+.back-btn:active, [id*="backBtn"]:active, [id*="back-btn"]:active, button[class*="back"]:active,
+.lang-btn:active, [id*="langBtn"]:active, [id*="lang-btn"]:active, button[class*="lang"]:active, .lang-pill:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.6), 0 4px 6px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* שני כפתורי אבני חן */

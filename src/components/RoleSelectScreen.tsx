@@ -146,7 +146,7 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
           </button>
         </div>
         <button
-          className="lang-pill"
+          className="lang-pill lang-btn"
           id="langBtn"
           type="button"
           onClick={() => {

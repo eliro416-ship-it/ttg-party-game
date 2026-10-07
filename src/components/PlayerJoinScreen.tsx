@@ -125,27 +125,32 @@ export const PlayerJoinScreen: React.FC<PlayerJoinScreenProps> = ({
       {/* Top back navigation */}
       <div className="w-full flex items-center justify-between mb-4">
         <button
+          type="button"
+          id="backBtn"
           onClick={() => {
             sounds.soundKeypress();
             onBack();
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-sm font-semibold transition-all cursor-pointer"
+          className="back-btn flex items-center gap-1.5 cursor-pointer"
+          title={t.back}
         >
-          {isEn ? <ArrowLeft className="w-4 h-4 mr-1" /> : <ArrowRight className="w-4 h-4 ml-1" />}
+          {isEn ? <ArrowLeft className="w-4 h-4 mr-1 shrink-0" /> : <ArrowRight className="w-4 h-4 ml-1 shrink-0" />}
           <span>{t.back}</span>
         </button>
 
         <div className="flex items-center gap-2">
           {onToggleLanguage && (
             <button
+              type="button"
+              id="langBtn"
               onClick={() => {
                 sounds.soundKeypress();
                 onToggleLanguage();
               }}
-              className="bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+              className="lang-btn flex items-center gap-1 cursor-pointer"
               title={isEn ? 'עבור לעברית' : 'Switch to English'}
             >
-              <Globe className="w-3 h-3 text-pink-400" />
+              <Globe className="w-3.5 h-3.5 shrink-0" />
               <span>{t.langBtn}</span>
             </button>
           )}
