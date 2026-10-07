@@ -125,13 +125,13 @@ export const HostScreen: React.FC<HostScreenProps> = ({
       {/* Top Header Section */}
       <div className="w-full shrink-0">
         {/* Top navigation */}
-        <div className="w-full px-2 box-border overflow-hidden flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+        <div className="room-top-bar room-header w-full px-2 box-border overflow-hidden flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
           <button
             type="button"
-            id="backBtn"
+            id={currentStep === 'lobby' ? "settingsBtn" : "backBtn"}
             onClick={handleBackNavigation}
-            className="back-btn flex items-center gap-1.5 cursor-pointer"
-            title={t.back}
+            className={`${currentStep === 'lobby' ? 'settings-btn' : 'back-btn'} flex items-center gap-1.5 cursor-pointer`}
+            title={currentStep === 'lobby' ? (isEn ? 'Edit Settings' : 'הגדרות חדר') : t.back}
           >
             {isEn ? <ArrowLeft className="w-3.5 h-3.5 mr-1" /> : <ArrowRight className="w-3.5 h-3.5 ml-1" />}
             <span>{currentStep === 'lobby' ? (isEn ? 'Edit Settings' : 'הגדרות חדר') : t.back}</span>
@@ -149,7 +149,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                 className="lang-btn flex items-center gap-1 cursor-pointer"
                 title={isEn ? 'עבור לעברית' : 'Switch to English'}
               >
-                <Globe className="w-3.5 h-3.5 text-pink-400" />
+                <Globe className="w-3.5 h-3.5 text-cyan-300" />
                 <span>{t.langBtn}</span>
               </button>
             )}
@@ -267,52 +267,50 @@ export const HostScreen: React.FC<HostScreenProps> = ({
               </span>
             </div>
 
-            {/* 1. All 3 Share buttons organized equally in 3 columns (grid-cols-3), clean text wrapping and centered */}
-            <div className="grid grid-cols-3 gap-2 items-center w-full my-1.5">
+            {/* 1. שורת שלושת כפתורי השיתוף (העתק, וואטסאפ, QR/קישור) במראה יהלומים */}
+            <div className="share-buttons-row share-group">
               {/* Button 1: Copy PIN / קוד */}
               <button
                 type="button"
+                id="copyPinBtn"
                 onClick={handleCopyPin}
-                className="btn-3d btn-3d-dark h-[42px] w-full px-2 rounded-xl text-xs font-medium text-white flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
+                className="share-btn share-copy"
                 title={t.copyPin}
               >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <Copy className="w-3.5 h-3.5 text-slate-200 shrink-0" />}
-                <span className="whitespace-nowrap">{copied ? t.pinCopied : (isEn ? 'Copy Code' : 'העתק קוד')}</span>
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-200 shrink-0 inline-block" /> : <Copy className="w-3.5 h-3.5 text-blue-100 shrink-0 inline-block" />}
+                <span className="truncate">{copied ? t.pinCopied : (isEn ? 'Copy Code' : 'העתק קוד')}</span>
               </button>
 
-              {/* Button 2: WhatsApp - Instant Direct Share (3D Glossy WhatsApp Button) */}
+              {/* Button 2: WhatsApp */}
               <button
                 type="button"
+                id="whatsappShareBtn"
                 onClick={handleWhatsAppShare}
-                className="btn-whatsapp-3d flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-white font-bold text-xs flex-1 transition-all duration-150 ease-out hover:scale-[1.02] active:translate-y-[3px] cursor-pointer h-[42px] whitespace-nowrap"
-                style={{
-                  background: 'linear-gradient(180deg, #2ae06b 0%, #20ba59 100%)',
-                  boxShadow: '0 4px 0 #15803d, 0 8px 15px rgba(37, 211, 102, 0.35)',
-                  borderTop: '1px solid rgba(255, 255, 255, 0.3)',
-                }}
+                className="share-btn share-whatsapp"
                 title={isEn ? 'WhatsApp' : 'ווטסאפ'}
               >
-                <WhatsAppIcon className="w-4 h-4 fill-white drop-shadow shrink-0" />
-                <span className="drop-shadow whitespace-nowrap">{isEn ? 'WhatsApp' : 'ווטסאפ'}</span>
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-white shrink-0 inline-block" />
+                <span className="truncate">{isEn ? 'WhatsApp' : 'וואטסאפ'}</span>
               </button>
 
               {/* Button 3: QR & Link */}
               <button
                 type="button"
+                id="qrShareBtn"
                 onClick={() => {
                   sounds.soundKeypress();
                   onOpenShareModal();
                 }}
-                className="btn-3d btn-3d-pink h-[42px] w-full px-2 rounded-xl text-xs font-medium text-white flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
+                className="share-btn share-qr"
                 title={isEn ? 'QR & Link' : 'QR וקישור'}
               >
-                <Share2 className="w-3.5 h-3.5 text-pink-100 shrink-0" />
-                <span className="whitespace-nowrap">{isEn ? 'QR & Link' : 'QR וקישור'}</span>
+                <Share2 className="w-3.5 h-3.5 text-pink-100 shrink-0 inline-block" />
+                <span className="truncate">{isEn ? 'QR & Link' : 'QR / קישור'}</span>
               </button>
             </div>
 
-            {/* 2. Connected players list preview - Compact Spacing */}
-            <div className={`w-full bg-white/5 border border-white/10 rounded-xl p-2 sm:p-2.5 my-1 ${isEn ? 'text-left' : 'text-right'}`}>
+            {/* 2. רשימת משתתפים מחוברים */}
+            <div className={`w-full bg-white/5 border border-white/10 rounded-xl p-2 sm:p-2.5 my-1.5 ${isEn ? 'text-left' : 'text-right'}`}>
               <div className="flex justify-between items-center mb-1">
                 <span className="text-[11px] sm:text-xs font-bold text-slate-300 flex items-center gap-1">
                   <Users className="w-3.5 h-3.5 text-purple-400" />
@@ -323,7 +321,7 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                 </span>
               </div>
 
-              <div className="flex flex-wrap gap-1 max-h-[46px] overflow-y-auto no-scrollbar">
+              <div className="flex flex-wrap gap-1 max-h-[56px] overflow-y-auto no-scrollbar">
                 {players.map((p) => (
                   <div
                     key={p.id}
@@ -337,67 +335,29 @@ export const HostScreen: React.FC<HostScreenProps> = ({
               </div>
             </div>
 
-            {/* 2. Dedicated Timer Selector - Compact Spacing */}
-            <div className={`w-full my-1 bg-black/25 border border-white/10 rounded-xl p-2 sm:p-2.5 ${isEn ? 'text-left' : 'text-right'}`}>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-[11px] sm:text-xs font-bold text-slate-200 flex items-center gap-1">
-                  <Timer className="w-3.5 h-3.5 text-pink-400" />
-                  <span>{t.timerSettingsTitle}</span>
-                </label>
-                <span className="text-[10px] sm:text-[11px] font-black text-amber-300 bg-amber-400/10 px-1.5 py-0.5 rounded-md border border-amber-400/25 flex items-center gap-1 shadow-sm">
-                  <Timer className="w-3 h-3 text-amber-300" strokeWidth={2.2} />
-                  <span>{settings.turnDuration === 60 ? (isEn ? '1 Min' : 'דקה') : `${settings.turnDuration} ${isEn ? 'sec' : 'שנ׳'}`}</span>
-                </span>
-              </div>
-
-              <div className="grid grid-cols-4 gap-1 sm:gap-1.5">
-                {[
-                  { sec: 15, label: t.sec15, note: isEn ? 'Fast' : 'מהיר' },
-                  { sec: 30, label: t.sec30, note: isEn ? 'Classic' : 'קלאסי' },
-                  { sec: 45, label: t.sec45, note: isEn ? 'Chill' : 'רגוע' },
-                  { sec: 60, label: t.sec60, note: isEn ? 'Think' : 'מחשבה' },
-                ].map(({ sec, label, note }) => {
-                  const isSelected = settings.turnDuration === sec;
-                  return (
-                    <button
-                      key={sec}
-                      type="button"
-                      onClick={() => {
-                        sounds.soundKeypress();
-                        onUpdateSettings({ ...settings, turnDuration: sec });
-                      }}
-                      className={`btn-3d py-1 sm:py-1.5 px-0.5 sm:px-1 rounded-lg text-center flex flex-col items-center justify-center cursor-pointer transition-all ${
-                        isSelected ? 'btn-3d-timer-active text-white' : 'btn-3d-timer-inactive text-slate-300'
-                      }`}
-                    >
-                      <span className={`text-[10px] sm:text-xs font-black leading-tight ${isSelected ? 'text-pink-200' : 'text-slate-100'}`}>
-                        {label}
-                      </span>
-                      <span className={`text-[8px] sm:text-[9px] mt-0.5 font-bold ${isSelected ? 'text-pink-300' : 'text-slate-400'}`}>
-                        {note}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Collapsible settings (Categories & Custom Cards) */}
-            <div className={`w-full my-0.5 ${isEn ? 'text-left' : 'text-right'}`}>
+            {/* 3. שלושת הכפתורים התחתונים כמטילי יהלומים 3D עם אנימציית ברק */}
+            {/* כפתור 1: התאם קטגוריות וקלפים אישיים (אבן חן כחולה/ציאן) */}
+            <div className="w-full">
               <button
                 type="button"
+                id="categoriesSettingsBtn"
                 onClick={() => setShowSettings(!showSettings)}
-                className="text-[10px] sm:text-[11px] font-bold text-purple-300 hover:text-purple-200 flex items-center gap-1 cursor-pointer py-0.5"
+                className="room-action-btn action-btn-blue"
+                title={showSettings ? (isEn ? 'Hide Categories' : 'הסתר הגדרות קטגוריות') : (isEn ? 'Custom Categories & Cards' : 'התאם קטגוריות וקלפים אישיים')}
               >
-                <Settings className="w-3 h-3" />
-                <span>{showSettings ? (isEn ? 'Hide Categories' : 'הסתר הגדרות קטגוריות') : (isEn ? 'Custom Categories & Cards' : 'התאם קטגוריות וקלפים אישיים')}</span>
+                <Settings className="w-5 h-5 shrink-0" />
+                <span className="truncate">
+                  {showSettings
+                    ? (isEn ? 'Hide Categories' : 'הסתר קטגוריות')
+                    : (isEn ? 'Custom Categories & Cards' : 'התאם קטגוריות וקלפים אישיים')}
+                </span>
               </button>
 
               {showSettings && (
-                <div className="bg-black/30 p-2 rounded-xl border border-white/10 space-y-1.5 animate-fadeIn mt-1 text-xs max-h-[130px] overflow-y-auto no-scrollbar">
+                <div className="bg-black/40 p-2.5 rounded-2xl border border-white/15 space-y-2 animate-fadeIn mt-1 text-xs max-h-[140px] overflow-y-auto no-scrollbar shadow-inner text-right">
                   <div>
-                    <label className="block text-[10px] sm:text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                      <Layers className="w-3 h-3 text-indigo-400" />
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5 text-indigo-400" />
                       {isEn ? 'Categories:' : 'קטגוריות משחק:'}
                     </label>
                     <div className="flex flex-wrap gap-1">
@@ -423,16 +383,16 @@ export const HostScreen: React.FC<HostScreenProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-1 border-t border-white/10 flex justify-between items-center">
-                    <span className="text-[10px] sm:text-[11px] text-slate-300">
+                  <div className="pt-1.5 border-t border-white/10 flex justify-between items-center">
+                    <span className="text-[11px] text-slate-300">
                       {isEn ? 'Custom Cards:' : 'קלפים אישיים:'} <span className="font-bold text-pink-400">{customCardsCount}</span>
                     </span>
                     <button
                       type="button"
                       onClick={onOpenCustomCardModal}
-                      className="btn-3d btn-3d-pink flex items-center gap-1 px-2 py-0.5 text-white rounded-lg text-[10px] sm:text-[11px] font-bold cursor-pointer"
+                      className="btn-3d btn-3d-pink flex items-center gap-1 px-2.5 py-1 text-white rounded-lg text-[10px] sm:text-[11px] font-bold cursor-pointer"
                     >
-                      <PlusCircle className="w-3 h-3" />
+                      <PlusCircle className="w-3.5 h-3.5" />
                       {t.customCards}
                     </button>
                   </div>
@@ -441,45 +401,42 @@ export const HostScreen: React.FC<HostScreenProps> = ({
             </div>
           </div>
 
-          {/* Store / Upgrade Packs Button */}
+          {/* כפתור 2: שדרג חבילות קלפים (אבן חן סגולה עמוקה) */}
           {onOpenStore && (
-            <div className="w-full pt-1 shrink-0">
+            <div className="w-full shrink-0">
               <button
                 type="button"
+                id="upgradePacksBtn"
                 onClick={() => {
                   sounds.soundKeypress();
                   onOpenStore();
                 }}
-                className="w-full py-2 px-3 rounded-xl font-black text-xs sm:text-sm text-amber-200 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md border border-amber-400/40 animate-pulse relative overflow-hidden group"
-                style={{
-                  background: 'linear-gradient(135deg, #4c1d95 0%, #7e22ce 40%, #b45309 100%)',
-                  boxShadow: '0 4px 15px rgba(217, 119, 6, 0.3)',
-                }}
+                className="room-action-btn action-btn-purple"
                 title={isEn ? 'Upgrade Card Packs' : 'שדרג חבילות קלפים'}
               >
-                <span className="shimmer-sweep" />
-                <span className="text-base drop-shadow">💎</span>
-                <span className="truncate tracking-wide font-extrabold text-amber-100">
+                <span className="text-xl shrink-0">💎</span>
+                <span className="truncate">
                   {isEn
-                    ? '💎 Upgrade Card Packs | Unlock 100+ New Photos'
-                    : '💎 שדרג חבילות קלפים | פתח 100+ תמונות חדשות'}
+                    ? '💎 Upgrade Card Packs | Unlock 100+ Photos'
+                    : '💎 שדרג חבילות קלפים | פתח 100+ תמונות'}
                 </span>
               </button>
             </div>
           )}
 
-          {/* 3. Bottom Button: 3D Purple-Neon, always accessible and visible without scrolling */}
-          <div className="w-full pt-1.5 shrink-0">
+          {/* כפתור 3: כפתור הפעולה הנוסף - התחל משחק (אבן חן סגולה עמוקה) */}
+          <div className="w-full shrink-0">
             <button
               type="button"
+              id="startGameBtn"
               onClick={() => {
                 sounds.soundSuccess();
                 onStartGame();
               }}
-              className="btn-3d btn-3d-purple-neon w-full py-3 sm:py-3.5 px-4 text-white font-black text-sm sm:text-base rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98]"
+              className="room-action-btn action-btn-purple"
+              title={t.btnStartGame}
             >
-              <span className="shimmer-sweep" />
-              <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white drop-shadow shrink-0" />
+              <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-white drop-shadow shrink-0" />
               <span className="tracking-wide font-black truncate">{t.btnStartGame}</span>
             </button>
           </div>

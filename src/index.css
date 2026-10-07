@@ -498,6 +498,156 @@ button:active, .btn:active, [class*="btn"]:active {
   pointer-events: none;
 }
 
+/* 1. סרגל עליון אחיד כמו במסך הראשי במסך ניהול החדר */
+.room-top-bar button, 
+[class*="room-header"] button,
+[id*="settingsBtn"],
+.room-top-bar [id*="langBtn"],
+[class*="room-header"] [id*="langBtn"] {
+  background: rgba(13, 40, 80, 0.75) !important;
+  border: 1.5px solid #00d2ff !important;
+  border-radius: 12px !important;
+  padding: 6px 12px !important;
+  min-height: 40px !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 0.95rem !important;
+  box-shadow: 0 4px 0 #07172e, inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6) !important;
+}
+
+.room-top-bar button:active,
+[class*="room-header"] button:active,
+[id*="settingsBtn"]:active,
+.room-top-bar [id*="langBtn"]:active {
+  transform: translateY(3px) !important;
+  box-shadow: 0 1px 0 #07172e !important;
+}
+
+.room-top-bar button::before,
+[class*="room-header"] button::before,
+[id*="settingsBtn"]::before,
+.room-top-bar [id*="langBtn"]::before {
+  display: none !important;
+}
+
+/* 2. שורת שלושת כפתורי השיתוף (העתק, וואטסאפ, QR/קישור) במראה יהלומים */
+.share-buttons-row, [class*="share-group"] {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px !important;
+  width: 100% !important;
+  margin: 12px 0 !important;
+}
+
+.share-btn {
+  padding: 10px 4px !important;
+  border-radius: 14px !important;
+  font-weight: 800 !important;
+  font-size: 0.85rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  color: #ffffff !important;
+  border: 2px solid rgba(255, 255, 255, 0.7) !important;
+  border-top-color: #ffffff !important;
+  cursor: pointer !important;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.6) !important;
+  transition: transform 0.08s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+}
+
+.share-btn:active {
+  transform: translateY(3px) !important;
+}
+
+/* יהלום כחול - העתק קוד */
+.share-copy {
+  background: linear-gradient(135deg, #60a5fa 0%, #2563eb 50%, #1e3a8a 100%) !important;
+}
+
+/* יהלום ירוק - וואטסאפ */
+.share-whatsapp {
+  background: linear-gradient(135deg, #4ade80 0%, #16a34a 50%, #14532d 100%) !important;
+}
+
+/* יהלום ורוד - QR / קישור */
+.share-qr {
+  background: linear-gradient(135deg, #f472b6 0%, #db2777 50%, #831843 100%) !important;
+}
+
+/* 4. שלושת הכפתורים התחתונים כמטילי יהלומים 3D עם אנימציית ברק */
+.room-action-btn, [class*="action-btn-large"] {
+  width: 100% !important;
+  margin: 8px 0 !important;
+  padding: 14px 18px !important;
+  border-radius: 20px !important;
+  border: 3px solid rgba(255, 255, 255, 0.75) !important;
+  border-top-color: #ffffff !important;
+  font-weight: 900 !important;
+  font-size: 1.15rem !important;
+  color: #ffffff !important;
+  text-shadow: 0 -2px 0 rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+  cursor: pointer !important;
+  position: relative !important;
+  overflow: hidden !important;
+  transition: transform 0.08s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+
+/* אבן חן סגולה עמוקה */
+.action-btn-purple {
+  background: linear-gradient(180deg, #d8b4fe 0%, #9333ea 40%, #581c87 100%) !important;
+  box-shadow: 0 8px 0 #3b0764, 0 14px 18px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.8) !important;
+}
+
+.action-btn-purple:active {
+  transform: translateY(5px) !important;
+  box-shadow: 0 3px 0 #3b0764 !important;
+}
+
+/* אבן חן כחולה/ציאן */
+.action-btn-blue {
+  background: linear-gradient(180deg, #67e8f9 0%, #06b6d4 40%, #164e63 100%) !important;
+  box-shadow: 0 8px 0 #083344, 0 14px 18px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.8) !important;
+}
+
+.action-btn-blue:active {
+  transform: translateY(5px) !important;
+  box-shadow: 0 3px 0 #083344 !important;
+}
+
+/* אנימציית ברק רץ לאבני החן */
+.room-action-btn::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: -120% !important;
+  width: 60% !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent) !important;
+  transform: skewX(-25deg) !important;
+  animation: gemSweep 4s infinite !important;
+  pointer-events: none !important;
+}
+
+@keyframes gemSweep {
+  0% { left: -120%; }
+  30%, 100% { left: 160%; }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
