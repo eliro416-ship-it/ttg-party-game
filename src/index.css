@@ -9,6 +9,190 @@
   }
 }
 
+body, html {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 25%, #0d2850 0%, #050f24 55%, #020612 100%) !important;
+  color: #ffffff;
+  direction: rtl;
+}
+
+/* עננים מעורפלים ברקע */
+.clouds-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: 
+    radial-gradient(circle at 10% 25%, rgba(180, 215, 255, 0.35) 0%, transparent 22%),
+    radial-gradient(circle at 85% 20%, rgba(200, 230, 255, 0.4) 0%, transparent 25%),
+    radial-gradient(circle at 15% 75%, rgba(170, 210, 255, 0.3) 0%, transparent 28%),
+    radial-gradient(circle at 90% 80%, rgba(190, 225, 255, 0.35) 0%, transparent 24%);
+  filter: blur(10px);
+}
+
+/* הסרת הזוהר הלבן המסנוור מסימני השאלה והאלמנטים */
+* {
+  text-shadow: none !important;
+}
+
+/* 1. רקע שמי לילה עמוק עם עננים */
+.screen-container, .game-screen-container, body, #root {
+  background: radial-gradient(circle at 50% 25%, #0d2850 0%, #050f24 55%, #020612 100%) !important;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  color: #ffffff;
+  font-family: 'Rubik', system-ui, sans-serif;
+  direction: rtl;
+}
+
+/* עננים נפחיים */
+.clouds-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: 
+    radial-gradient(circle at 5% 25%, rgba(190, 225, 255, 0.45) 0%, transparent 22%),
+    radial-gradient(circle at 95% 20%, rgba(200, 235, 255, 0.45) 0%, transparent 24%),
+    radial-gradient(circle at 8% 75%, rgba(180, 220, 255, 0.4) 0%, transparent 26%),
+    radial-gradient(circle at 92% 80%, rgba(195, 230, 255, 0.45) 0%, transparent 24%);
+  filter: blur(8px);
+  z-index: 1;
+}
+
+/* סימני שאלה תלת-ממדיים ללא זוהר לבן */
+.q-mark {
+  position: absolute;
+  font-weight: 900;
+  user-select: none;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.85;
+  filter: drop-shadow(0 6px 8px rgba(0,0,0,0.5));
+}
+.q-pink { color: #ff2a7a; }
+.q-cyan { color: #00d2ff; }
+.q-yellow { color: #ffc400; }
+.q-green { color: #00e676; }
+
+/* לוח חוקים מעוצב כקלף תלת-ממדי עבה */
+.rules-box, [class*="rules"], [id*="rules"] {
+  background: #fdf5df !important;
+  border: 5px solid #b88344 !important;
+  border-radius: 24px !important;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5), inset 0 2px 6px rgba(255, 255, 255, 0.6) !important;
+  padding: 20px 16px !important;
+  margin: 15px auto !important;
+  max-width: 92% !important;
+  position: relative !important;
+  z-index: 5 !important;
+}
+
+/* הדגשת כל הטקסטים והכותרות בתוך הלוח לקריאות מלאה */
+.rules-box *, [class*="rules"] *, [id*="rules"] * {
+  color: #2e1704 !important;
+  text-shadow: none !important;
+  font-weight: 700 !important;
+  line-height: 1.5 !important;
+}
+
+/* כותרת חוקי המשחק */
+.rules-box h2, .rules-box h3, [class*="rules"] h2 {
+  color: #4a2202 !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+}
+
+/* כתר זהב מעל הלוח */
+.crown-top {
+  position: absolute;
+  top: -38px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 42px;
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
+  z-index: 6;
+}
+
+/* הגדרה כללית לכפתורי 3D */
+button, .btn, [class*="btn"], [id*="btn"], [role="button"] {
+  position: relative !important;
+  z-index: 5 !important;
+  border-radius: 20px !important;
+  font-weight: 900 !important;
+  font-size: 1.15rem !important;
+  padding: 12px 20px !important;
+  cursor: pointer !important;
+  border: 3px solid rgba(255, 255, 255, 0.4) !important;
+  color: #ffffff !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+  transition: all 0.05s ease !important;
+  transform-style: preserve-3d !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+
+/* אפקט לחיצה שמוריד את הכפתור מטה */
+button:active, .btn:active, [class*="btn"]:active {
+  transform: translateY(4px) !important;
+}
+
+/* כפתור סגול (המשתתף) */
+.btn-purple, [class*="purple"], [id*="purple"] {
+  background: linear-gradient(180deg, #d05ce3 0%, #9c27b0 100%) !important;
+  box-shadow: 0 6px 0 #6a1b9a, 0 10px 15px rgba(0, 0, 0, 0.4) !important;
+}
+.btn-purple:active, [class*="purple"]:active {
+  box-shadow: 0 2px 0 #6a1b9a, 0 4px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* כפתור ירוק (השחקן / מנצח) */
+.btn-green, [class*="green"], [id*="green"] {
+  background: linear-gradient(180deg, #66bb6a 0%, #2e7d32 100%) !important;
+  box-shadow: 0 6px 0 #1b5e20, 0 10px 15px rgba(0, 0, 0, 0.4) !important;
+}
+.btn-green:active, [class*="green"]:active {
+  box-shadow: 0 2px 0 #1b5e20, 0 4px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* כפתור כחול (שותף / משחק) */
+.btn-blue, [class*="blue"], [id*="blue"] {
+  background: linear-gradient(180deg, #29b6f6 0%, #0277bd 100%) !important;
+  box-shadow: 0 6px 0 #01579b, 0 10px 15px rgba(0, 0, 0, 0.4) !important;
+}
+.btn-blue:active, [class*="blue"]:active {
+  box-shadow: 0 2px 0 #01579b, 0 4px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* שורת האלמנטים התחתונה וההגדרות (כמו 15 שניות, הצטרפות מהירה) */
+.bottom-bar-item, .pill, [class*="pill"], [class*="badge"], .pill-item {
+  background: #1b3860 !important;
+  border: 2px solid #3b6ba5 !important;
+  border-radius: 24px !important;
+  padding: 6px 14px !important;
+  font-size: 0.85rem !important;
+  font-weight: bold !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 0 #0f223d !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+/* כפתורי אייקונים קומפקטיים בסרגל עליון */
+.top-icon-btn {
+  padding: 4px 8px !important;
+  font-size: 1rem !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  min-width: unset !important;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -39,7 +223,7 @@
     transform: translateY(0px) rotate(0deg) scale(1);
   }
   50% {
-    transform: translateY(-26px) rotate(10deg) scale(1.08);
+    transform: translateY(-24px) rotate(8deg) scale(1.06);
   }
 }
 
@@ -48,7 +232,7 @@
     transform: translateY(0px) rotate(0deg) scale(1);
   }
   50% {
-    transform: translateY(-36px) rotate(-14deg) scale(0.94);
+    transform: translateY(-32px) rotate(-10deg) scale(0.96);
   }
 }
 
@@ -57,10 +241,10 @@
     transform: translateY(0px) translateX(0px) rotate(0deg);
   }
   33% {
-    transform: translateY(-20px) translateX(14px) rotate(8deg);
+    transform: translateY(-16px) translateX(12px) rotate(6deg);
   }
   66% {
-    transform: translateY(-40px) translateX(-12px) rotate(-10deg);
+    transform: translateY(-34px) translateX(-10px) rotate(-8deg);
   }
 }
 
@@ -69,7 +253,7 @@
     transform: translateY(0px) rotate(0deg) scale(1);
   }
   50% {
-    transform: translateY(-28px) rotate(180deg) scale(1.15);
+    transform: translateY(-26px) rotate(180deg) scale(1.12);
   }
   100% {
     transform: translateY(0px) rotate(360deg) scale(1);
@@ -78,41 +262,39 @@
 
 @keyframes pulseGlowQM {
   0%, 100% {
-    transform: scale(0.92);
-    filter: drop-shadow(0 0 8px currentColor);
-    opacity: 0.28;
+    transform: scale(0.94);
+    opacity: 0.75;
   }
   50% {
-    transform: scale(1.16);
-    filter: drop-shadow(0 0 26px currentColor);
-    opacity: 0.65;
+    transform: scale(1.12);
+    opacity: 1;
   }
 }
 
 @keyframes wobbleQM {
   0%, 100% {
-    transform: translateY(0px) rotate(-18deg);
+    transform: translateY(0px) rotate(-14deg);
   }
   50% {
-    transform: translateY(-24px) rotate(18deg);
+    transform: translateY(-22px) rotate(14deg);
   }
 }
 
 @keyframes driftWaveQM {
   0% {
-    transform: translateY(0px) translateX(0px) scale(0.96);
+    transform: translateY(0px) translateX(0px) scale(0.98);
   }
   25% {
-    transform: translateY(-18px) translateX(20px) scale(1.06) rotate(12deg);
+    transform: translateY(-16px) translateX(16px) scale(1.05) rotate(8deg);
   }
   50% {
-    transform: translateY(-34px) translateX(0px) scale(1.14) rotate(-8deg);
+    transform: translateY(-30px) translateX(0px) scale(1.1) rotate(-6deg);
   }
   75% {
-    transform: translateY(-16px) translateX(-20px) scale(1.02) rotate(10deg);
+    transform: translateY(-14px) translateX(-16px) scale(1.02) rotate(8deg);
   }
   100% {
-    transform: translateY(0px) translateX(0px) scale(0.96);
+    transform: translateY(0px) translateX(0px) scale(0.98);
   }
 }
 
@@ -131,6 +313,19 @@
   animation: whatsappPulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+@keyframes hotPinkPulse {
+  0%, 100% {
+    box-shadow: 0 8px 0 #4C0519, 0 16px 32px rgba(225, 29, 72, 0.55), 0 0 20px rgba(244, 63, 94, 0.4), inset 0 1px 1px rgba(255,255,255,0.6);
+  }
+  50% {
+    box-shadow: 0 8px 0 #4C0519, 0 20px 42px rgba(225, 29, 72, 0.8), 0 0 35px rgba(244, 63, 94, 0.75), inset 0 1px 1px rgba(255,255,255,0.8);
+  }
+}
+
+.animate-hotpink-pulse {
+  animation: hotPinkPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);
@@ -138,6 +333,176 @@
   100% {
     transform: translateX(100%);
   }
+}
+
+/* ============================================================
+   AAA 3D TACTILE CASUAL GAMING BUTTONS (UNREAL ENGINE 5 STYLE)
+   ============================================================ */
+
+/* 1. Heavy 3D Golden-Orange Upgrade Button */
+.btn-3d-tactile-gold {
+  background: linear-gradient(180deg, #ffc837 0%, #ff9500 50%, #d97706 100%) !important;
+  border-top: 2.5px solid #fff5a5 !important;
+  border-bottom: 3.5px solid #78350f !important;
+  border-left: 2px solid #fde047 !important;
+  border-right: 2px solid #fde047 !important;
+  box-shadow: 0 6px 0 #92400e, 0 12px 25px rgba(245, 158, 11, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.75), inset 0 -3px 4px rgba(120, 53, 15, 0.6) !important;
+  color: #fff !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease !important;
+}
+.btn-3d-tactile-gold:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 7px 0 #92400e, 0 16px 30px rgba(245, 158, 11, 0.6), inset 0 2px 2px rgba(255, 255, 255, 0.9) !important;
+}
+.btn-3d-tactile-gold:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 2px 0 #92400e, 0 5px 12px rgba(245, 158, 11, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* 2. Heavy 3D Royal Purple Host Button */
+.btn-3d-tactile-purple {
+  background: linear-gradient(180deg, #a855f7 0%, #7e22ce 50%, #4c1d95 100%) !important;
+  border-top: 2.5px solid #f3e8ff !important;
+  border-bottom: 3.5px solid #2e1065 !important;
+  border-left: 2px solid #c084fc !important;
+  border-right: 2px solid #c084fc !important;
+  box-shadow: 0 7px 0 #2e1065, 0 14px 28px rgba(126, 34, 206, 0.55), inset 0 2px 2px rgba(255, 255, 255, 0.75), inset 0 -3px 4px rgba(46, 16, 101, 0.6) !important;
+  color: #fff !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease !important;
+}
+.btn-3d-tactile-purple:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 8px 0 #2e1065, 0 18px 32px rgba(126, 34, 206, 0.7), inset 0 2px 2px rgba(255, 255, 255, 0.9) !important;
+}
+.btn-3d-tactile-purple:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 2px 0 #2e1065, 0 5px 12px rgba(126, 34, 206, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* 3. Heavy 3D Pulsing Hot-Pink Participant Button */
+.btn-3d-tactile-pink {
+  background: linear-gradient(180deg, #ff2a7a 0%, #e11d48 50%, #9f1239 100%) !important;
+  border-top: 2.5px solid #ffe4e6 !important;
+  border-bottom: 3.5px solid #4c0519 !important;
+  border-left: 2px solid #fb7185 !important;
+  border-right: 2px solid #fb7185 !important;
+  box-shadow: 0 8px 0 #4c0519, 0 16px 32px rgba(225, 29, 72, 0.55), 0 0 24px rgba(255, 42, 122, 0.4), inset 0 2px 2px rgba(255, 255, 255, 0.8), inset 0 -3px 4px rgba(76, 5, 25, 0.6) !important;
+  color: #fff !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease !important;
+}
+.btn-3d-tactile-pink:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 9px 0 #4c0519, 0 20px 38px rgba(225, 29, 72, 0.7), 0 0 30px rgba(255, 42, 122, 0.6), inset 0 2px 2px rgba(255, 255, 255, 0.95) !important;
+}
+.btn-3d-tactile-pink:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 2px 0 #4c0519, 0 6px 14px rgba(225, 29, 72, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ============================================================
+   3D CASUAL JELLY GAMING BUTTONS SYSTEM (CANDY / MEMORY MATCH STYLE)
+   ============================================================ */
+
+/* 1. Pill Jelly Purple Gem (Start / Journey) */
+.btn-jelly-purple {
+  background: radial-gradient(ellipse at 50% 15%, #E9D5FF 0%, #A855F7 35%, #7E22CE 70%, #4C1D95 100%) !important;
+  border-top: 2px solid rgba(255, 255, 255, 0.9) !important;
+  border-bottom: 3px solid rgba(59, 7, 100, 0.9) !important;
+  border-left: 2px solid rgba(216, 180, 254, 0.5) !important;
+  border-right: 2px solid rgba(216, 180, 254, 0.5) !important;
+  box-shadow: 0 7px 0 #3B0764, 0 14px 25px rgba(126, 34, 206, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.8), inset 0 -3px 6px rgba(59, 7, 100, 0.8) !important;
+}
+.btn-jelly-purple:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 0 #3B0764, 0 18px 30px rgba(126, 34, 206, 0.75), inset 0 2px 4px rgba(255, 255, 255, 0.9) !important;
+}
+.btn-jelly-purple:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 3px 0 #3B0764, 0 6px 12px rgba(126, 34, 206, 0.4) !important;
+}
+
+/* 2. Pill Jelly Emerald Green (Play Online / Multiplayer) */
+.btn-jelly-green {
+  background: radial-gradient(ellipse at 50% 15%, #DCFCE7 0%, #4ADE80 30%, #16A34A 70%, #14532D 100%) !important;
+  border-top: 2px solid rgba(255, 255, 255, 0.9) !important;
+  border-bottom: 3px solid rgba(20, 83, 45, 0.9) !important;
+  border-left: 2px solid rgba(187, 247, 208, 0.5) !important;
+  border-right: 2px solid rgba(187, 247, 208, 0.5) !important;
+  box-shadow: 0 7px 0 #052E16, 0 14px 25px rgba(22, 163, 74, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.85), inset 0 -3px 6px rgba(5, 46, 22, 0.8) !important;
+}
+.btn-jelly-green:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 0 #052E16, 0 18px 30px rgba(22, 163, 74, 0.75), inset 0 2px 4px rgba(255, 255, 255, 0.9) !important;
+}
+.btn-jelly-green:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 3px 0 #052E16, 0 6px 12px rgba(22, 163, 74, 0.4) !important;
+}
+
+/* 3. Pill Jelly Amber Gold (Store / Upgrade Packs) */
+.btn-jelly-gold {
+  background: radial-gradient(ellipse at 50% 15%, #FEF9C3 0%, #FBBF24 30%, #D97706 70%, #78350F 100%) !important;
+  border-top: 2px solid rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 3px solid rgba(120, 53, 15, 0.9) !important;
+  border-left: 2px solid rgba(254, 240, 138, 0.5) !important;
+  border-right: 2px solid rgba(254, 240, 138, 0.5) !important;
+  box-shadow: 0 7px 0 #451A03, 0 14px 25px rgba(217, 119, 6, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.9), inset 0 -3px 6px rgba(69, 26, 3, 0.8) !important;
+}
+.btn-jelly-gold:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 0 #451A03, 0 18px 30px rgba(217, 119, 6, 0.75), inset 0 2px 4px rgba(255, 255, 255, 0.95) !important;
+}
+.btn-jelly-gold:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 3px 0 #451A03, 0 6px 12px rgba(217, 119, 6, 0.4) !important;
+}
+
+/* 4. Pill Jelly Sapphire / Cyan Blue (2 Players / Multiplayer) */
+.btn-jelly-blue {
+  background: radial-gradient(ellipse at 50% 15%, #E0F2FE 0%, #38BDF8 30%, #0284C7 70%, #0C4A6E 100%) !important;
+  border-top: 2px solid rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 3px solid rgba(12, 74, 110, 0.9) !important;
+  border-left: 2px solid rgba(186, 230, 253, 0.5) !important;
+  border-right: 2px solid rgba(186, 230, 253, 0.5) !important;
+  box-shadow: 0 7px 0 #082F49, 0 14px 25px rgba(2, 132, 199, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.9), inset 0 -3px 6px rgba(8, 47, 73, 0.8) !important;
+}
+.btn-jelly-blue:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 0 #082F49, 0 18px 30px rgba(2, 132, 199, 0.75), inset 0 2px 4px rgba(255, 255, 255, 0.95) !important;
+}
+.btn-jelly-blue:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 3px 0 #082F49, 0 6px 12px rgba(2, 132, 199, 0.4) !important;
+}
+
+/* 5. Pill Jelly Magenta / Hot Pink (Join Game Pulsing) */
+.btn-jelly-pink {
+  background: radial-gradient(ellipse at 50% 15%, #FFE4E6 0%, #FB7185 30%, #E11D48 70%, #881337 100%) !important;
+  border-top: 2px solid rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 3px solid rgba(136, 19, 55, 0.9) !important;
+  border-left: 2px solid rgba(254, 205, 211, 0.5) !important;
+  border-right: 2px solid rgba(254, 205, 211, 0.5) !important;
+  box-shadow: 0 7px 0 #4C0519, 0 14px 25px rgba(225, 29, 72, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.9), inset 0 -3px 6px rgba(76, 5, 25, 0.8) !important;
+}
+.btn-jelly-pink:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 0 #4C0519, 0 18px 30px rgba(225, 29, 72, 0.75), inset 0 2px 4px rgba(255, 255, 255, 0.95) !important;
+}
+.btn-jelly-pink:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 3px 0 #4C0519, 0 6px 12px rgba(225, 29, 72, 0.4) !important;
+}
+
+/* Specular Crystal Facets Overlay for Jelly Buttons */
+.jelly-gloss {
+  position: absolute;
+  top: 2px;
+  left: 12px;
+  right: 12px;
+  height: 44%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.15) 60%, transparent 100%);
+  border-radius: 9999px;
+  pointer-events: none;
 }
 
 /* ============================================================

@@ -8,7 +8,13 @@
 
     <linearGradient id="innerFill" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#180F33" />
-      <stop offset="100%" stop-color="#110B22" />
+      <stop offset="100%" stop-color="#0b061d" />
+    </linearGradient>
+
+    <linearGradient id="ttgTextGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="50%" stop-color="#FFF1F2" />
+      <stop offset="100%" stop-color="#F472B6" />
     </linearGradient>
 
     <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
@@ -34,22 +40,29 @@
         stroke="rgba(255, 255, 255, 0.12)"
         stroke-width="1.5" />
 
-  <!-- Centered 'TTG' in clean, bold white font -->
-  <text x="256" y="248"
-        font-family="system-ui, -apple-system, Liberation Sans, FreeSans, Arial, sans-serif"
+  <!-- Centered 'TTG' in bold white-to-pink gradient font -->
+  <text x="256" y="240"
+        font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
         font-weight="900"
-        font-size="116"
-        letter-spacing="-2"
-        fill="#FFFFFF"
+        font-size="124"
+        letter-spacing="-3"
+        fill="url(#ttgTextGrad)"
         text-anchor="middle"
         dominant-baseline="central">TTG</text>
 
-  <!-- Below 'TTG': 'TIME TO GUESS' in thin, spaced English letters -->
-  <text x="256" y="330"
-        font-family="system-ui, -apple-system, Liberation Sans, FreeSans, Arial, sans-serif"
-        font-weight="400"
-        font-size="19"
-        letter-spacing="8"
-        fill="#E2E8F0"
-        text-anchor="middle">TIME TO GUESS</text>
+  <!-- Below 'TTG': 'TIME TO' and 'GUESS' in bold golden yellow -->
+  <text x="256" y="322"
+        font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        font-weight="800"
+        font-size="26"
+        letter-spacing="7"
+        fill="#FDE047"
+        text-anchor="middle">TIME TO</text>
+  <text x="256" y="362"
+        font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        font-weight="800"
+        font-size="28"
+        letter-spacing="9"
+        fill="#FDE047"
+        text-anchor="middle">GUESS</text>
 </svg>

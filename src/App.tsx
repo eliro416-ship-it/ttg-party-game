@@ -95,13 +95,28 @@ export default function App() {
     return CLOUDINARY_DEFAULT_INTRO;
   });
 
-  // Regular entry (no PIN) -> always show full intro video with Skip option.
+  // Regular entry -> default to false so the main RoleSelectScreen is immediately visible.
   // Direct PIN entry (?pin=XXXX) -> skip video directly to participant join screen.
-  const [isIntroVideoOpen, setIsIntroVideoOpen] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const pinInUrl = getPinFromUrl();
-    return !pinInUrl;
+  const [isIntroVideoOpen, setIsIntroVideoOpen] = useState<boolean>(false);
+
+  // 3D Cartoon Casual vs Dark Cosmic UI Theme state
+  const [uiTheme, setUiTheme] = useState<'sky-3d' | 'cosmic-dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ttg_ui_theme');
+      if (saved === 'cosmic-dark' || saved === 'sky-3d') return saved;
+    }
+    return 'sky-3d';
   });
+
+  const handleToggleUiTheme = () => {
+    setUiTheme((prev) => {
+      const next = prev === 'sky-3d' ? 'cosmic-dark' : 'sky-3d';
+      try {
+        localStorage.setItem('ttg_ui_theme', next);
+      } catch {}
+      return next;
+    });
+  };
 
   // Priority 1: Instant URL parameter detection on initial mount (Direct Join by PIN vs Regular entry)
   useEffect(() => {
@@ -1317,12 +1332,22 @@ export default function App() {
   const activePlayer = players[activePlayerIndex] || players[0] || { id: 'p-host', name: 'מארח', avatar: '👑', score: 0, streak: 0, isHost: true, isOnline: true };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-3 sm:p-5 bg-gradient-to-br from-[#120E2E] via-[#2A1045] to-[#0A0D1A] text-white relative overflow-hidden">
+    <div className="screen-container min-h-screen w-full flex flex-col items-center justify-center p-3 sm:p-5 text-white relative overflow-hidden">
       {/* Colorful Animated Question Marks Background */}
-      <AnimatedQuestionMarksBackground />
+      <AnimatedQuestionMarksBackground theme={uiTheme} />
 
       {/* Main glassmorphic card container */}
-      <div className={`relative z-10 w-full ${joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[460px]'} ${screen === 'host' ? 'p-3 sm:p-5 max-h-[98dvh] sm:max-h-none flex flex-col justify-between overflow-hidden' : 'p-4 sm:p-6'} bg-white/[0.07] backdrop-blur-2xl border border-white/20 rounded-[28px] sm:rounded-[32px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] transition-all`}>
+      <div
+        className={`relative z-10 w-full ${
+          joinedRoom && screen === 'game' ? 'max-w-[500px]' : 'max-w-[420px]'
+        } ${
+          screen === 'host'
+            ? 'p-3 sm:p-5 max-h-[98dvh] sm:max-h-none flex flex-col justify-between overflow-hidden rounded-[28px] border border-purple-500/40 bg-[#120E2E]/85 backdrop-blur-2xl text-white'
+            : screen === 'welcome'
+            ? 'p-1 sm:p-2 bg-transparent border-0 shadow-none'
+            : 'p-4 sm:p-6 rounded-[28px] sm:rounded-[32px] border border-white/20 bg-white/[0.07] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] backdrop-blur-2xl text-white'
+        } transition-all`}
+      >
         {/* Welcome / Role Select screen */}
         {screen === 'welcome' && !joinedRoom && (
           <RoleSelectScreen
@@ -1357,6 +1382,8 @@ export default function App() {
             onToggleMute={handleToggleMute}
             language={language}
             onToggleLanguage={handleToggleLanguage}
+            theme={uiTheme}
+            onToggleTheme={handleToggleUiTheme}
           />
         )}
 
