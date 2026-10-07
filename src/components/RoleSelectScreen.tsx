@@ -69,102 +69,95 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
   return (
     <div className="w-full flex flex-col items-center text-center animate-fadeIn select-none relative" dir={isEn ? 'ltr' : 'rtl'}>
-      {/* Top Header Bar */}
-      <div className="w-full flex items-center justify-between gap-1 px-1 pt-0 pb-1.5 z-20 max-w-[420px]">
-        {/* Left: 🌐 Language Toggle */}
-        <button
-          type="button"
-          onClick={() => {
-            sounds.soundKeypress();
-            onToggleLanguage();
-          }}
-          className="pill-item flex items-center gap-1.5 cursor-pointer hover:scale-105 active:translate-y-0.5 transition-all text-xs font-black text-cyan-200 select-none py-1.5 px-3"
-          title={isEn ? 'עבור לעברית' : 'Switch to English'}
-        >
-          <span className="text-sm">🌐</span>
-          <span>{isEn ? 'עברית' : 'English'}</span>
-        </button>
-
-        {/* Right: 3D Icons (Diamonds, Video, Gallery, Share, Audio SFX, Music) */}
-        <div className="flex items-center gap-1.5">
-          {/* Store Diamonds */}
-          {onOpenStore && (
-            <button
-              type="button"
-              onClick={() => {
-                sounds.soundKeypress();
-                onOpenStore();
-              }}
-              className="top-icon-btn cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-              title={isEn ? 'Store' : 'חנות קלפים'}
-            >
-              💎
-            </button>
-          )}
-
-          {/* Intro Video */}
-          {onOpenVideo && (
-            <button
-              type="button"
-              onClick={() => {
-                sounds.soundKeypress();
-                onOpenVideo();
-              }}
-              className="top-icon-btn cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-              title={isEn ? 'Watch intro video' : 'צפייה בסרטון הפתיחה'}
-            >
-              <span className="text-base">🎬</span>
-            </button>
-          )}
-
-          {/* Gallery */}
-          {onOpenCardsGallery && (
-            <button
-              type="button"
-              onClick={() => {
-                sounds.soundKeypress();
-                onOpenCardsGallery();
-              }}
-              className="top-icon-btn cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-              title={isEn ? 'Gallery' : 'מאגר תמונות'}
-            >
-              🖼️
-            </button>
-          )}
-
-          {/* WhatsApp Share */}
+      {/* סרגל עליון משודרג */}
+      <div className="top-nav-bar">
+        <div className="top-icons-group">
           <button
+            className="top-btn"
+            id="musicBtn"
+            aria-label="Music"
             type="button"
-            onClick={handleWhatsAppShare}
-            className="top-icon-btn cursor-pointer hover:scale-110 active:scale-95 transition-transform text-cyan-400"
-            title={isEn ? 'Share' : 'שיתוף'}
+            onClick={handleToggleMusic}
+            title={isMusicPlaying ? 'Mute Music' : 'Play Music'}
           >
-            <Share2 className="w-4 h-4 text-cyan-400" strokeWidth={2.6} />
+            🎵
           </button>
-
-          {/* Audio SFX */}
           <button
+            className="top-btn"
+            id="soundBtn"
+            aria-label="Sound"
             type="button"
             onClick={() => {
               sounds.soundKeypress();
               onToggleMute();
             }}
-            className="top-icon-btn cursor-pointer hover:scale-110 active:scale-95 transition-transform text-sm"
-            title={isMuted ? (isEn ? 'Unmute SFX' : 'הפעל אפקטים') : (isEn ? 'Mute SFX' : 'השתק אפקטים')}
+            title={isMuted ? 'Unmute Sound' : 'Mute Sound'}
           >
-            <span>{isMuted ? '🔇' : '🔊'}</span>
+            {isMuted ? '🔇' : '🔊'}
           </button>
-
-          {/* Background Music */}
           <button
+            className="top-btn"
+            id="shareBtn"
+            aria-label="Share"
             type="button"
-            onClick={handleToggleMusic}
-            className="top-icon-btn cursor-pointer hover:scale-110 active:scale-95 transition-transform text-sm"
-            title={isMusicPlaying ? 'Mute Music' : 'Play Music'}
+            onClick={handleWhatsAppShare}
+            title={isEn ? 'Share' : 'שיתוף'}
           >
-            <Music className={`w-3.5 h-3.5 ${isMusicPlaying ? 'text-pink-400' : 'text-slate-400'}`} />
+            🔗
+          </button>
+          <button
+            className="top-btn"
+            id="galleryBtn"
+            aria-label="Gallery"
+            type="button"
+            onClick={() => {
+              sounds.soundKeypress();
+              if (onOpenCardsGallery) onOpenCardsGallery();
+            }}
+            title={isEn ? 'Gallery' : 'מאגר תמונות'}
+          >
+            🖼️
+          </button>
+          <button
+            className="top-btn"
+            id="videoBtn"
+            aria-label="Video"
+            type="button"
+            onClick={() => {
+              sounds.soundKeypress();
+              if (onOpenVideo) onOpenVideo();
+            }}
+            title={isEn ? 'Video' : 'סרטון פתיחה'}
+          >
+            🎬
+          </button>
+          <button
+            className="top-btn"
+            id="gemsBtn"
+            aria-label="Gems"
+            type="button"
+            onClick={() => {
+              sounds.soundKeypress();
+              if (onOpenStore) onOpenStore();
+            }}
+            title={isEn ? 'Store' : 'חנות יהלומים'}
+          >
+            💎
           </button>
         </div>
+        <button
+          className="lang-pill"
+          id="langBtn"
+          type="button"
+          onClick={() => {
+            sounds.soundKeypress();
+            onToggleLanguage();
+          }}
+          title={isEn ? 'עבור לעברית' : 'Switch to English'}
+        >
+          <span>🌐</span>
+          <span>{isEn ? 'English' : 'עברית'}</span>
+        </button>
       </div>
 
       {/* 3D Title "TTG TIME TO GUESS" */}
@@ -309,52 +302,59 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
         </ul>
       </div>
 
-      {/* 3. כפתורי 3D Bubble קשיחים עם שולי לחיצה */}
-      <div className="w-full max-w-[420px] mt-1 mb-2">
-        <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
-          {/* כפתור סגול: השתתף */}
-          <button
-            type="button"
-            id="btn-purple"
-            onClick={() => {
-              sounds.soundKeypress();
-              onOpenPlayer();
-            }}
-            className="btn btn-3d btn-purple flex items-center justify-center text-center"
-          >
-            <span>{isEn ? 'Join' : 'השתתף'}</span>
-          </button>
+      {/* שני כפתורי אבני חן */}
+      <div className="dual-gem-container">
+        <button
+          className="gem-btn gem-emerald btn-green"
+          id="hostBtn"
+          type="button"
+          onClick={() => {
+            sounds.soundKeypress();
+            onOpenHost();
+          }}
+          title={isEn ? 'Host Game' : 'פתח משחק כמארח'}
+        >
+          <span className="gem-facet" />
+          <span className="gem-label">👑 {isEn ? 'Host' : 'מארח'}</span>
+        </button>
+        <button
+          className="gem-btn gem-amethyst btn-purple"
+          id="joinBtn"
+          type="button"
+          onClick={() => {
+            sounds.soundKeypress();
+            onOpenPlayer();
+          }}
+          title={isEn ? 'Join as Player' : 'הצטרף כשחקן'}
+        >
+          <span className="gem-facet" />
+          <span className="gem-label">🎮 {isEn ? 'Join' : 'משתתף'}</span>
+        </button>
+      </div>
 
-          {/* כפתור ירוק: השחקן 🎮 */}
-          <button
-            type="button"
-            id="btn-green"
-            onClick={() => {
-              sounds.soundKeypress();
-              onOpenHost();
-            }}
-            className="btn btn-3d btn-green flex items-center justify-center gap-1 text-center"
-          >
-            <span>{isEn ? 'Host' : 'השחקן'}</span>
-            <span>🎮</span>
-          </button>
+      {/* כפתור זהב יחיד למאגר הקלפים */}
+      <div className="bottom-gold-container">
+        <button
+          className="gold-shop-btn btn-blue"
+          id="cardStoreBtn"
+          type="button"
+          onClick={() => {
+            sounds.soundKeypress();
+            if (onOpenCardsGallery) {
+              onOpenCardsGallery();
+            } else if (onOpenStore) {
+              onOpenStore();
+            }
+          }}
+          title={isEn ? 'Card Gallery & Shop' : 'למאגר ולחנות הקלפים'}
+        >
+          <span className="gold-shine" />
+          <span className="gold-text">🎴 {isEn ? 'Card Gallery & Shop 🛒' : 'למאגר ולחנות הקלפים 🛒'}</span>
+        </button>
+      </div>
 
-          {/* כפתור תכלת: שותף */}
-          <button
-            type="button"
-            id="btn-blue"
-            onClick={() => {
-              sounds.soundKeypress();
-              if (onOpenStore) onOpenStore();
-              else onOpenHost();
-            }}
-            className="btn btn-3d btn-blue flex items-center justify-center text-center"
-          >
-            <span>{isEn ? 'Share' : 'שותף'}</span>
-          </button>
-        </div>
-
-        {/* PWA Install Banner */}
+      {/* PWA Install Banner */}
+      <div className="w-full max-w-[420px] mb-2">
         <PWAInstallBanner language={language} />
       </div>
 
