@@ -76,13 +76,15 @@ export const PlayerLobbyScreen: React.FC<PlayerLobbyScreenProps> = ({
         <div className="flex items-center gap-2">
           {onToggleLanguage && (
             <button
+              id="langBtn"
               onClick={() => {
                 sounds.soundKeypress();
                 onToggleLanguage();
               }}
-              className="bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+              className="lang-btn flex items-center gap-1 cursor-pointer"
+              title={isEn ? 'עבור לעברית' : 'Switch to English'}
             >
-              <Globe className="w-3 h-3 text-pink-400" />
+              <Globe className="w-3.5 h-3.5 text-pink-300 shrink-0" />
               <span>{t.langBtn}</span>
             </button>
           )}
