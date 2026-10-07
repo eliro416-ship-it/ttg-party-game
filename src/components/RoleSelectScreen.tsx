@@ -169,7 +169,8 @@ export const RoleSelectScreen: React.FC<RoleSelectScreenProps> = ({
 
       {/* 3D Title "TTG TIME TO GUESS" */}
       <div className="relative mx-auto mt-0.5 mb-1 select-none flex flex-col items-center">
-        <div className="flex items-center justify-center -space-x-1">
+        {/* תיקון סדר אותיות הלוגו למניעת היפוך */}
+        <div className="logo-title" style={{ direction: 'ltr', display: 'inline-flex', gap: '2px', alignItems: 'center', justifyContent: 'center' }}>
           <span
             className="text-[56px] sm:text-[64px] font-black leading-none select-none tracking-normal text-transparent bg-clip-text bg-gradient-to-b from-[#FFA7C4] via-[#F43F5E] to-[#9F1239]"
             style={{
